@@ -51,15 +51,20 @@ cd dsh-kanban
 # 2. 构建前端（仓库已提交 dist，可跳过）
 npm --prefix web install && npm --prefix web run build
 
-# 3. 安装到你的 DSH profile（桌面版用 desktop，Web 版用 web）
-dsh plugin --profile desktop add "$(pwd)"
+# 3. 安装
+#    Web / 自建 profile：用官方 CLI
+dsh plugin --profile web add "$(pwd)"
+#    桌面版：desktop profile 由 Electron 应用独占管理，CLI 会拒绝；用随附脚本：
+node scripts/install-desktop.mjs --dry-run   # 先看将要改什么
+node scripts/install-desktop.mjs             # 写入 profile（自动备份 package.json）
 
-# 4. 重启 DSH
+# 4. 重启 DSH（或在桌面应用里刷新一次页面）
 ```
 
 重启后侧栏出现「看板」图标，点击进入全屏看板。首次启动会写入一组示例卡片；删除 `~/.dsh-kanban/data.json` 后重启即可恢复为空看板（或调用 `POST /api/kanban/seed`）。
 
-> 安装机制：`dsh plugin add` 把本包加入 profile 的 `dsh.profile.bundles`，`cordis.patch.yml` 再把插件行挂到 profile 根。数据不会写进插件目录。
+> 安装机制：插件加入 profile 的 `dsh.profile.bundles`，`cordis.patch.yml` 再把插件行挂到 profile 根。桌面版脚本做的事与 CLI 相同（link 依赖 + bundles 条目 + node_modules 符号链接），只是绕过了「desktop 由应用管理」的限制；写前会备份 `package.json`。
+> 移除：`node scripts/install-desktop.mjs --remove`（桌面版）或 `dsh plugin --profile web remove dsh-kanban`（Web 版）。
 
 ### 配置
 
