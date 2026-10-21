@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN" data-kanban-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>DSH 看板</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230f1115'/%3E%3Crect x='5' y='6' width='5' height='12' rx='1.6' fill='%23f9fafb'/%3E%3Crect x='12' y='6' width='5' height='8' rx='1.6' fill='%23f9fafb'/%3E%3C/svg%3E"
+    />
+    <script>
+      // 首帧前先定独立模式的主题，避免闪白；嵌入 DSH 后父页面会覆盖。
+      (function () {
+        try {
+          if (window.parent !== window) return;
+          var stored = localStorage.getItem('dsh-kanban.theme');
+          var dark =
+            stored === 'dark' ||
+            (stored !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.kanbanTheme = dark ? 'dark' : 'light';
+          var storedLang = localStorage.getItem('dsh-kanban.lang');
+          if (storedLang === 'en' || storedLang === 'zh') document.documentElement.lang = storedLang === 'en' ? 'en' : 'zh-CN';
+        } catch (error) {
+          /* 忽略 */
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/index-BMWhoaLR.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Ciu5uHaY.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

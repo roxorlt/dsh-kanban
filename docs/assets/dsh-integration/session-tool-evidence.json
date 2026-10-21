@@ -1,0 +1,108 @@
+{
+  "sessionId": "session-bebf8bb9-16c7-4b3c-aada-ec9d74dc8ace",
+  "note": "从 ~/.dsh/sessions/.../session.v3.jsonl.zstd 解压后截取的 agent 可见性证据",
+  "requestHeaderTools": {
+    "count": 29,
+    "kanban": [
+      {
+        "name": "kanban_spike_add_card",
+        "description": "在 DSH Kanban spike 看板上新增一张卡片（写入后侧栏看板 iframe 会通过 SSE/轮询看到数量变化）。用户要求往看板加任务时使用。",
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "卡片标题，1-200 字符"
+            },
+            "column": {
+              "type": "string",
+              "enum": [
+                "todo",
+                "doing",
+                "done"
+              ],
+              "description": "所在列，默认 todo"
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      },
+      {
+        "name": "kanban_spike_cards",
+        "description": "只读查看 DSH Kanban spike 看板当前的所有卡片及数量。需要确认看板上有什么任务时使用；不修改看板。",
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {},
+          "required": []
+        }
+      }
+    ],
+    "allNames": [
+      "ask_user_question",
+      "bash",
+      "create_goal",
+      "edit",
+      "exit_plan_mode",
+      "get_goal",
+      "glob",
+      "grep",
+      "interrupt_agent",
+      "job_kill",
+      "job_list",
+      "job_output",
+      "kanban_spike_add_card",
+      "kanban_spike_cards",
+      "list_agents",
+      "present",
+      "ralph",
+      "read",
+      "read_image",
+      "send_message",
+      "skill",
+      "subagent",
+      "subagent_fork",
+      "todo_write",
+      "update_goal",
+      "web_fetch",
+      "web_search",
+      "workflow",
+      "write"
+    ]
+  },
+  "toolCall": {
+    "turn": 1,
+    "step": 1,
+    "callId": "call_00_ET_G8l2TYpYIpdtbjV7iv1P1766",
+    "name": "kanban_spike_add_card",
+    "arguments": "{\"title\": \"看板冒烟：iframe 触发\", \"column\": \"todo\"}"
+  },
+  "toolResult": {
+    "turn": 1,
+    "step": 1,
+    "message": {
+      "source": {
+        "kind": "tool",
+        "callId": "call_00_ET_G8l2TYpYIpdtbjV7iv1P1766"
+      },
+      "content": [
+        {
+          "type": "tool-result",
+          "toolCallId": "call_00_ET_G8l2TYpYIpdtbjV7iv1P1766",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"ok\":true,\"card\":{\"id\":\"card-101\",\"title\":\"看板冒烟：iframe 触发\",\"column\":\"todo\",\"source\":\"agent-tool\",\"createdAt\":1792544081025},\"count\":4}"
+            }
+          ],
+          "isError": false
+        }
+      ],
+      "role": "user",
+      "id": "ca15b619-794b-460b-a697-b480cb222b72"
+    }
+  }
+}

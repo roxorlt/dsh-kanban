@@ -1,0 +1,8 @@
+# dsh-kanban bundle patch
+# 通过官方 CLI 安装（dsh plugin --profile <profile> add <绝对路径或 npm 包名>）后，
+# profile 启动时合并此 patch，自动挂载看板插件行。
+- insert:
+    - id: kanban
+      name: dsh-kanban
+      config:
+        seed: demo

@@ -1,0 +1,335 @@
+/* lint-tokens-ignore: global-sheet */
+/* 应用外壳：顶栏、工具条、状态栏、筛选浮层 */
+
+.kb-topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 var(--kb-pad-x);
+  border-bottom: 0.5px solid var(--kb-hairline);
+}
+
+.kb-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-crumb {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+  white-space: nowrap;
+}
+
+.kb-crumb-sep {
+  display: inline-flex;
+  color: var(--dsw-alias-label-caption);
+}
+
+.kb-crumb-current {
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kb-crumb-tag {
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+  font: var(--dsw-font-xxxs-strong-11);
+  white-space: nowrap;
+}
+
+.kb-topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kb-lang-btn {
+  width: auto;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-lang-label {
+  font: var(--dsw-font-xxxs-strong-11);
+}
+
+.kb-new-btn__text {
+  display: inline;
+}
+
+/* ------------------------------------------------------------------ 工具条 */
+
+.kb-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px var(--kb-pad-x);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.kb-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: clamp(180px, 26vw, 300px);
+  height: 32px;
+  padding: 0 6px 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-specific-input-major);
+  transition: border-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-search:hover {
+  border-color: var(--dsw-alias-border-l3);
+}
+
+.kb-search:focus-within {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.kb-search__icon {
+  color: var(--dsw-alias-label-caption);
+}
+
+.kb-search__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+}
+
+.kb-search__input::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
+.kb-search__input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.kb-search__clear {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+}
+
+.kb-search__clear .kb-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.kb-filter-btn {
+  height: 32px;
+  padding: 0 10px;
+  gap: 6px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kb-filter-btn .kb-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.kb-filter-count {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+  font: var(--dsw-font-xxxs-strong-11);
+}
+
+.kb-filter-caret {
+  width: 12px;
+  height: 12px;
+  color: var(--dsw-alias-label-caption);
+}
+
+.kb-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.kb-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 4px 0 6px;
+  border-radius: 5px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.kb-filter-chip__x {
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-filter-chip__x:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-filter-chip__x .kb-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.kb-toolbar-spacer {
+  flex: 1;
+}
+
+.kb-agent-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.kb-agent-live .kb-dot {
+  width: 6px;
+  height: 6px;
+}
+
+/* -------------------------------------------------------------- 筛选浮层 */
+
+.kb-filter-panel {
+  position: fixed;
+  z-index: 80;
+  width: 280px;
+  max-height: min(70dvh, 520px);
+  overflow-y: auto;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--kb-r-card);
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-elevation-panel);
+  animation: kb-pop var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-filter-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 6px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-filter-group {
+  padding: 4px 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.kb-filter-group__label {
+  display: block;
+  padding: 4px 8px 2px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-strong-11);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kb-filter-group__empty {
+  padding: 2px 8px 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-filter-panel__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 4px 2px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+/* ------------------------------------------------------------------ 主区 */
+
+.kb-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.kb-main__centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------- 状态栏 */
+
+.kb-statusbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 var(--kb-pad-x);
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-statusbar .kb-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.kb-statusbar__spacer {
+  flex: 1;
+}
+
+.kb-statusbar__mock {
+  color: var(--dsw-alias-label-caption);
+}
+
+.kb-statusbar .kb-kbd {
+  height: 16px;
+  min-width: 16px;
+}

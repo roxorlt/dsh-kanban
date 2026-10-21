@@ -1,0 +1,8 @@
+# dsh-kanban-spike bundle patch
+#
+# 由 `dsh plugin --profile <name> add <本目录>` 安装后，profile 的
+# dsh.profile.bundles 会追加 dsh-kanban-spike；启动时本文件作为 bundle 层
+# 合并进配置树，把插件行挂到 profile 根。无需手改任何 profile 文件。
+- insert:
+    - id: kanban-spike
+      name: 'dsh-kanban-spike'

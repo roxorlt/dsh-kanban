@@ -1,0 +1,2789 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light" data-layout="wide">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>看板 · DSH · 设计稿</title>
+<script>
+  /* 首帧防闪：仅演示用；真实插件由宿主 ui-theme 决定主题与主区宽度 */
+  (function () {
+    var p = new URLSearchParams(location.search);
+    var dark = p.get('theme') ? p.get('theme') === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    var w = window.innerWidth;
+    document.documentElement.dataset.layout = w < 720 ? 'narrow' : w < 1100 ? 'scroll' : w < 1440 ? 'compact' : 'wide';
+  })();
+</script>
+
+<!-- =========================================================================
+     DSH 令牌替身（仅 standalone mockup 使用，不属于组件样式）
+     真实 DSH 插件里这些值由 ui-theme 注入，组件 CSS 不得复制本块。
+     取值逐条来自 dsh-ui-spec/reference/dsh-tokens.md（dsh-v0.1.5-rc.2）。
+     ========================================================================= -->
+<style id="dsh-token-shadow">
+  :root {
+    color-scheme: light;
+    --dsw-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --ds-font-family-code: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, 'Liberation Mono', Menlo, Courier, 'PingFang SC', 'Microsoft YaHei';
+    --dsw-font-xxxs-11: 11px/14px var(--dsw-font-family);
+    --dsw-font-xxxs-strong-11: 500 11px/14px var(--dsw-font-family);
+    --dsw-font-xxs-12: 12px/18px var(--dsw-font-family);
+    --dsw-font-xxs-strong-12: 500 12px/18px var(--dsw-font-family);
+    --dsw-font-xs-13: 13px/20px var(--dsw-font-family);
+    --dsw-font-xs-strong-13: 500 13px/20px var(--dsw-font-family);
+    --dsw-font-s-14: 14px/22px var(--dsw-font-family);
+    --dsw-font-s-strong-14: 500 14px/22px var(--dsw-font-family);
+    --dsw-font-base-16: 16px/24px var(--dsw-font-family);
+    --dsw-font-base-strong-16: 500 16px/24px var(--dsw-font-family);
+    --dsw-font-l-20: 500 20px/28px var(--dsw-font-family);
+    --dsw-font-markdown-code-block: 11px/19px var(--ds-font-family-code);
+    --ds-transition-duration: 0.2s;
+    --ds-transition-duration-fast: 0.1s;
+    --ds-transition-duration-slow: 0.3s;
+    --ds-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --dsw-elevation-panel: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 3px 8px 0 rgba(0, 0, 0, 0.03), 0 0 16px 0 rgba(0, 0, 0, 0.02);
+    --dsw-elevation-prominent: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 3px 8px 0 rgba(0, 0, 0, 0.04), 0 0 20px 0 rgba(0, 0, 0, 0.05);
+    --dsw-elevation-soft: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 4px 16px 0 rgba(0, 0, 0, 0.03), 0 0 24px 0 rgba(0, 0, 0, 0.03);
+    --dsw-shadow-lv1: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+    --dsw-mask-blur: blur(2px);
+    --dsw-corner-shape: superellipse(1.5);
+
+    --dsw-alias-bg-base: rgb(255, 255, 255);
+    --dsw-alias-bg-layer-1: rgb(255, 255, 255);
+    --dsw-alias-bg-layer-2: rgb(255, 255, 255);
+    --dsw-alias-bg-layer-3: rgb(255, 255, 255);
+    --dsw-alias-bg-module-platform: rgb(245, 246, 247);
+    --dsw-alias-bg-skeleton: rgba(0, 0, 0, 0.04);
+    --dsw-alias-bg-mask-2: rgba(0, 0, 0, 0.12);
+    --dsw-alias-bg-mask-3: rgba(0, 0, 0, 0.48);
+    --dsw-alias-label-primary: rgb(15, 17, 21);
+    --dsw-alias-label-secondary: rgb(97, 102, 107);
+    --dsw-alias-label-tertiary: rgb(129, 133, 140);
+    --dsw-alias-label-caption: rgb(173, 178, 184);
+    --dsw-alias-label-dimmed: rgb(225, 229, 238);
+    --dsw-alias-label-primary-foreground: rgb(255, 255, 255);
+    --dsw-alias-border-l1: rgba(0, 0, 0, 0.04);
+    --dsw-alias-border-l2: rgba(0, 0, 0, 0.1);
+    --dsw-alias-border-l3: rgba(0, 0, 0, 0.12);
+    --dsw-alias-border-l4: rgba(0, 0, 0, 0.16);
+    --dsw-alias-interactive-bg-hover: rgba(38, 49, 72, 0.06);
+    --dsw-alias-interactive-bg-active: rgba(38, 49, 72, 0.1);
+    --dsw-alias-interactive-bg-hover-solid: rgb(241, 243, 245);
+    --dsw-alias-interactive-bg-hover-danger: rgba(236, 19, 19, 0.05);
+    --dsw-alias-state-error-primary: rgb(236, 19, 19);
+    --dsw-alias-state-error-secondary: rgb(242, 90, 90);
+    --dsw-alias-state-warn-primary: rgb(245, 158, 11);
+    --dsw-alias-state-warn-secondary: rgb(247, 173, 49);
+    --dsw-alias-state-warn-tertiary: rgb(254, 245, 231);
+    --dsw-alias-state-warn-label: rgb(221, 134, 41);
+    --dsw-alias-state-success-primary: rgb(34, 197, 94);
+    --dsw-alias-state-success-secondary: rgb(78, 209, 126);
+    --dsw-alias-state-success-tertiary: rgb(230, 250, 237);
+    --dsw-alias-state-business-primary: rgb(65, 118, 230);
+    --dsw-alias-state-business-tertiary: rgb(228, 237, 253);
+    --dsw-alias-button-primary-fill: rgb(15, 17, 21);
+    --dsw-alias-button-primary-hover: rgb(67, 69, 74);
+    --dsw-alias-button-primary-dimmed: rgb(235, 238, 242);
+    --dsw-alias-button-ghost-active-fill: rgb(235, 238, 242);
+    --dsw-alias-button-ghost-active-border: rgb(151, 157, 166);
+    --dsw-alias-button-elevated-fill: rgb(255, 255, 255);
+    --dsw-alias-link: rgb(65, 118, 230);
+    --dsw-specific-sidebar-fill: rgb(249, 250, 251);
+    --dsw-specific-sidebar-nav-item-active: rgb(235, 238, 242);
+    --dsw-specific-sidebar-nav-item-hover: rgb(241, 243, 245);
+    --dsw-specific-menu: rgb(255, 255, 255);
+    --dsw-specific-input-major: rgb(255, 255, 255);
+    --dsw-specific-selector: rgb(245, 246, 247);
+    --dsw-specific-tip: rgb(245, 246, 247);
+    --dsw-alias-markdown-code-block: rgb(249, 250, 251);
+  }
+
+  html[data-theme="dark"] {
+    color-scheme: dark;
+    --dsw-alias-bg-base: rgb(21, 21, 23);
+    --dsw-alias-bg-layer-1: rgb(35, 35, 36);
+    --dsw-alias-bg-layer-2: rgb(44, 44, 46);
+    --dsw-alias-bg-layer-3: rgb(53, 54, 56);
+    --dsw-alias-bg-module-platform: rgb(53, 54, 56);
+    --dsw-alias-bg-skeleton: rgba(255, 255, 255, 0.08);
+    --dsw-alias-bg-mask-2: rgba(0, 0, 0, 0.2);
+    --dsw-alias-label-primary: rgb(249, 250, 251);
+    --dsw-alias-label-secondary: rgb(207, 211, 214);
+    --dsw-alias-label-tertiary: rgb(173, 178, 184);
+    --dsw-alias-label-caption: rgb(129, 133, 140);
+    --dsw-alias-label-dimmed: rgb(67, 69, 74);
+    --dsw-alias-label-primary-foreground: rgb(15, 17, 21);
+    --dsw-alias-border-l1: rgba(255, 255, 255, 0.06);
+    --dsw-alias-border-l2: rgba(255, 255, 255, 0.12);
+    --dsw-alias-border-l3: rgba(255, 255, 255, 0.16);
+    --dsw-alias-border-l4: rgba(255, 255, 255, 0.2);
+    --dsw-alias-interactive-bg-hover: rgba(255, 255, 255, 0.08);
+    --dsw-alias-interactive-bg-active: rgba(255, 255, 255, 0.14);
+    --dsw-alias-interactive-bg-hover-solid: rgb(53, 54, 56);
+    --dsw-alias-interactive-bg-hover-danger: rgba(242, 90, 90, 0.15);
+    --dsw-alias-state-error-primary: rgb(242, 90, 90);
+    --dsw-alias-state-warn-tertiary: rgb(39, 36, 31);
+    --dsw-alias-state-success-tertiary: rgb(35, 60, 44);
+    --dsw-alias-state-business-primary: rgb(103, 158, 254);
+    --dsw-alias-state-business-tertiary: rgb(52, 65, 91);
+    --dsw-alias-button-primary-fill: rgb(249, 250, 251);
+    --dsw-alias-button-primary-hover: rgb(235, 238, 242);
+    --dsw-alias-button-primary-dimmed: rgb(67, 69, 74);
+    --dsw-alias-button-ghost-active-fill: rgb(67, 69, 74);
+    --dsw-alias-button-ghost-active-border: rgb(129, 133, 140);
+    --dsw-alias-button-elevated-fill: rgb(67, 69, 74);
+    --dsw-alias-link: rgb(103, 158, 254);
+    --dsw-specific-sidebar-fill: rgb(27, 27, 28);
+    --dsw-specific-sidebar-nav-item-active: rgb(67, 69, 74);
+    --dsw-specific-sidebar-nav-item-hover: rgb(44, 44, 46);
+    --dsw-specific-menu: rgb(53, 54, 56);
+    --dsw-specific-input-major: rgb(44, 44, 46);
+    --dsw-specific-selector: rgb(53, 54, 56);
+    --dsw-specific-tip: rgb(53, 54, 56);
+    --dsw-alias-markdown-code-block: rgb(27, 27, 28);
+  }
+</style>
+
+<!-- =========================================================================
+     看板组件样式：只消费 --dsw-alias-* / --dsw-font-* / elevation / legacy motion
+     机械规则：0.5px 中性实线；浮层 border:0 + elevation；全圆配 corner-shape:round
+     ========================================================================= -->
+<style id="kanban-styles">
+  *, *::before, *::after {
+    box-sizing: border-box;
+    corner-shape: superellipse(1.5);
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: var(--dsw-alias-bg-base);
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xs-13);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  [hidden] { display: none !important; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { -webkit-tap-highlight-color: transparent; }
+  h1, h2, h3, p, ol, dl, dd, dt { margin: 0; }
+  :focus-visible {
+    outline: 2px solid var(--dsw-alias-state-business-primary);
+    outline-offset: 2px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .ic { width: 16px; height: 16px; display: block; flex: none; }
+
+  /* ------------------------------------------------------------------ shell */
+  .app {
+    --kb-rail-w: 52px;
+    --kb-r-card: 12px;
+    --kb-r-col: 14px;
+    --kb-r-ctl: 8px;
+    --kb-gap: 16px;
+    --kb-pad-x: 20px;
+    --kb-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+    /* 看板语义 → 真实 DSH alias 令牌（对应 docs/03-design-system.md 映射表） */
+    --kb-status-backlog: var(--dsw-alias-label-caption);
+    --kb-status-running: var(--dsw-alias-state-business-primary);
+    --kb-status-needs: var(--dsw-alias-state-warn-primary);
+    --kb-status-needs-text: var(--dsw-alias-state-warn-label);
+    --kb-status-done: var(--dsw-alias-state-success-primary);
+    --kb-status-blocked: var(--dsw-alias-state-warn-label);
+    --kb-status-failed: var(--dsw-alias-state-error-primary);
+    --kb-agent-active: var(--dsw-alias-state-business-primary);
+    --kb-surface-column: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, var(--dsw-alias-bg-base));
+    --kb-surface-card: var(--dsw-alias-bg-layer-1);
+    --kb-hairline: var(--dsw-alias-border-l2);
+
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--kb-rail-w) minmax(0, 1fr);
+    height: 100dvh;
+    overflow: hidden;
+    background: var(--dsw-alias-bg-base);
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xs-13);
+  }
+
+  .rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 0 12px;
+    background: var(--dsw-specific-sidebar-fill);
+    border-right: 0.5px solid var(--dsw-alias-border-l2);
+  }
+  .rail-logo {
+    width: 30px;
+    height: 30px;
+    margin-bottom: 6px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    background: var(--dsw-alias-button-primary-fill);
+    color: var(--dsw-alias-label-primary-foreground);
+    font: var(--dsw-font-xs-strong-13);
+    letter-spacing: -0.03em;
+  }
+  .rail-btn {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--dsw-alias-label-tertiary);
+    cursor: pointer;
+    transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out), color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+  }
+  .rail-btn:hover { background: var(--dsw-specific-sidebar-nav-item-hover); color: var(--dsw-alias-label-primary); }
+  .rail-btn.is-active { background: var(--dsw-specific-sidebar-nav-item-active); color: var(--dsw-alias-label-primary); }
+  .rail-spacer { flex: 1; }
+  .rail-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    corner-shape: round;
+    background: var(--dsw-alias-state-business-tertiary);
+    color: var(--dsw-alias-state-business-primary);
+    display: grid;
+    place-items: center;
+    font: var(--dsw-font-xxs-strong-12);
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--dsw-alias-bg-base);
+  }
+
+  /* ----------------------------------------------------------------- topbar */
+  .topbar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 56px;
+    padding: 0 var(--kb-pad-x);
+    border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  }
+  .crumbs { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .crumb { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xs-13); white-space: nowrap; }
+  .crumb-sep { color: var(--dsw-alias-label-caption); }
+  .crumb-current { color: var(--dsw-alias-label-primary); font: var(--dsw-font-xs-strong-13); white-space: nowrap; }
+  .crumb-tag {
+    margin-left: 4px;
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: var(--dsw-alias-state-business-tertiary);
+    color: var(--dsw-alias-state-business-primary);
+    font: var(--dsw-font-xxxs-strong-11);
+  }
+  .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  .seg {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 10px;
+    background: var(--dsw-specific-selector);
+  }
+  .seg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxs-strong-12);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out), color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+  }
+  .seg-btn:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+  .seg-btn.is-active {
+    background: var(--dsw-alias-button-ghost-active-fill);
+    color: var(--dsw-alias-label-primary);
+    box-shadow: var(--dsw-shadow-lv1);
+  }
+
+  /* ----------------------------------------------------------------- button */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xxs-strong-12);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out), color var(--ds-transition-duration-fast) var(--ds-ease-in-out), border-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+  }
+  .btn:focus-visible { outline-offset: 2px; }
+  .btn-primary {
+    height: 34px;
+    padding: 0 14px;
+    background: var(--dsw-alias-button-primary-fill);
+    color: var(--dsw-alias-label-primary-foreground);
+  }
+  .btn-primary:hover { background: var(--dsw-alias-button-primary-hover); }
+  .btn-primary:active { background: var(--dsw-alias-button-primary-hover); }
+  .btn-secondary {
+    background: var(--dsw-alias-bg-layer-1);
+    border: 0.5px solid var(--dsw-alias-border-l2);
+  }
+  .btn-secondary:hover { background: var(--dsw-alias-interactive-bg-hover-solid); }
+  .btn-ghost { color: var(--dsw-alias-label-secondary); }
+  .btn-ghost:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+  .btn-danger { color: var(--dsw-alias-state-error-primary); }
+  .btn-danger:hover { background: var(--dsw-alias-interactive-bg-hover-danger); }
+  .btn-sm { height: 28px; padding: 0 10px; }
+  .btn .btn-en {
+    font: var(--dsw-font-xxxs-11);
+    letter-spacing: 0.02em;
+    color: var(--dsw-alias-label-tertiary);
+  }
+  .btn-primary .btn-en { color: var(--dsw-alias-label-primary-foreground); opacity: 0.7; }
+  .btn-text { display: inline; }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--dsw-alias-label-tertiary);
+    cursor: pointer;
+    transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out), color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+  }
+  .icon-btn:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+  .icon-btn:active { background: var(--dsw-alias-interactive-bg-active); }
+  .icon-btn.is-on { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: 4px;
+    color: var(--dsw-alias-label-caption);
+    font: var(--dsw-font-xxxs-11);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------------------------------------------------------------- toolbar */
+  .toolbar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px var(--kb-pad-x);
+    border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  }
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: clamp(180px, 26vw, 300px);
+    height: 32px;
+    padding: 0 6px 0 10px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: 8px;
+    background: var(--dsw-specific-input-major);
+    transition: border-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+  }
+  .search:hover { border-color: var(--dsw-alias-border-l3); }
+  .search:focus-within { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+  .search .ic { color: var(--dsw-alias-label-caption); }
+  .search input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xs-13);
+  }
+  .search input::placeholder { color: var(--dsw-alias-label-caption); }
+  .search-clear { width: 20px; height: 20px; border-radius: 5px; }
+  .search-clear .ic { width: 13px; height: 13px; }
+
+  .filter-btn { height: 32px; }
+  .filter-btn .ic { width: 14px; height: 14px; }
+  .filter-count {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 5px;
+    background: var(--dsw-alias-state-business-tertiary);
+    color: var(--dsw-alias-state-business-primary);
+    font: var(--dsw-font-xxxs-strong-11);
+    display: inline-grid;
+    place-items: center;
+  }
+  .filter-chips { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 22px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 5px;
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxxs-11);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .filter-chip:hover { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); }
+  .filter-chip .ic { width: 11px; height: 11px; }
+  .toolbar-spacer { flex: 1; }
+
+  .agent-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--dsw-alias-label-tertiary);
+    font: var(--dsw-font-xxxs-11);
+    white-space: nowrap;
+  }
+  .agent-live .dot { color: var(--kb-agent-active); }
+  .agent-live strong { color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-strong-11); }
+
+  /* ------------------------------------------------------------ column tabs */
+  .col-tabs {
+    display: none;
+    flex: none;
+    gap: 2px;
+    padding: 8px 12px;
+    border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  }
+  .col-tab {
+    flex: 1 1 0;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 36px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxs-strong-12);
+    cursor: pointer;
+  }
+  .col-tab .dot { width: 7px; height: 7px; }
+  .col-tab.is-active { background: var(--dsw-specific-selector); color: var(--dsw-alias-label-primary); }
+  .col-tab-count { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); font-variant-numeric: tabular-nums; }
+
+  /* ------------------------------------------------------------------ board */
+  .board-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .board {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(280px, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+    gap: var(--kb-gap);
+    padding: 16px var(--kb-pad-x) 20px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-radius: var(--kb-r-col);
+    background: var(--kb-surface-column);
+    border: 0.5px solid var(--dsw-alias-border-l1);
+  }
+  .column[data-tone="needs"] { background: color-mix(in srgb, var(--kb-status-needs) 5%, var(--kb-surface-column)); }
+  .column[data-tone="running"] { background: color-mix(in srgb, var(--kb-status-running) 3%, var(--kb-surface-column)); }
+  .column.is-drop-target { background: color-mix(in srgb, var(--kb-status-running) 9%, var(--kb-surface-column)); }
+
+  .column-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 10px 8px 8px 12px; }
+  .col-icon { display: grid; place-items: center; color: var(--kb-status-backlog); }
+  .col-icon .ic { width: 17px; height: 17px; }
+  .column[data-tone="running"] .col-icon { color: var(--kb-status-running); }
+  .column[data-tone="needs"] .col-icon { color: var(--kb-status-needs); }
+  .column[data-tone="done"] .col-icon { color: var(--kb-status-done); }
+  .col-title {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    font: var(--dsw-font-xs-strong-13);
+    color: var(--dsw-alias-label-primary);
+  }
+  .col-en {
+    font: var(--dsw-font-xxxs-strong-11);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dsw-alias-label-caption);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .count-pill {
+    flex: none;
+    min-width: 20px;
+    height: 18px;
+    padding: 0 6px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 99px;
+    corner-shape: round;
+    background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxxs-strong-11);
+    font-variant-numeric: tabular-nums;
+  }
+  .col-head-actions { margin-left: auto; display: flex; align-items: center; gap: 0; }
+  .col-head-actions .icon-btn { width: 24px; height: 24px; }
+  .col-head-actions .ic { width: 14px; height: 14px; }
+
+  .column-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 10px 4px;
+  }
+  .column-add {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    width: calc(100% - 20px);
+    margin: 4px 10px 10px;
+    height: 30px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--dsw-alias-label-tertiary);
+    font: var(--dsw-font-xxs-12);
+    cursor: pointer;
+    text-align: left;
+  }
+  .column-add:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+  .column-add .ic { width: 13px; height: 13px; }
+  .column-collapsed {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 16px;
+    color: var(--dsw-alias-label-tertiary);
+    font: var(--dsw-font-xxs-12);
+    text-align: center;
+  }
+  .column-collapsed span { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+
+  /* ------------------------------------------------------------------- card */
+  .card {
+    position: relative;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 10px 9px;
+    border-radius: var(--kb-r-card);
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    background: var(--kb-surface-card);
+    cursor: pointer;
+    transition: background-color var(--ds-transition-duration-fast) var(--ds-ease-in-out), border-color var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+  }
+  .card:hover {
+    background: color-mix(in srgb, var(--dsw-alias-label-primary) 1.5%, var(--kb-surface-card));
+    border-color: var(--dsw-alias-border-l3);
+  }
+  .card.is-selected { border-color: var(--dsw-alias-border-l4); box-shadow: inset 2px 0 0 0 var(--kb-status-running); }
+  .card.is-dragging { opacity: 0.45; }
+  .card.is-drop-before { box-shadow: inset 0 2px 0 0 var(--kb-status-running); }
+  .card[data-status="failed"] { border-color: color-mix(in srgb, var(--kb-status-failed) 26%, var(--dsw-alias-border-l2)); }
+
+  .card-head { display: flex; align-items: flex-start; gap: 7px; }
+  .card-head .dot { margin-top: 6px; }
+  .card-title {
+    flex: 1;
+    min-width: 0;
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-s-strong-14);
+    word-break: break-word;
+  }
+  .card-head .icon-btn { width: 22px; height: 22px; margin-top: -2px; }
+  .card-head .icon-btn .ic { width: 14px; height: 14px; }
+  .card-toggle { color: var(--dsw-alias-label-caption); }
+  .card-menu { opacity: 0; }
+  .card:hover .card-menu, .card:focus-within .card-menu { opacity: 1; }
+
+  .card-summary {
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxs-12);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .card-action {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxs-12);
+  }
+  .card-action .ic { width: 13px; height: 13px; margin-top: 2px; color: var(--kb-agent-active); }
+  .card-action.is-warn { color: var(--kb-status-needs-text); }
+  .card-action.is-warn .ic { color: var(--kb-status-needs); }
+  .card-action.is-error { color: var(--kb-status-failed); }
+  .card-action.is-error .ic { color: var(--kb-status-failed); }
+  .card-action.is-idle .ic { color: var(--dsw-alias-label-caption); }
+  .card-action.is-idle { color: var(--dsw-alias-label-tertiary); }
+
+  .card-props { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; }
+  .priority {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 5px;
+    font: var(--dsw-font-xxxs-strong-11);
+    letter-spacing: 0.02em;
+  }
+  .priority[data-p="P0"] { background: color-mix(in srgb, var(--kb-status-failed) 12%, transparent); color: var(--kb-status-failed); }
+  .priority[data-p="P1"] { background: color-mix(in srgb, var(--kb-status-needs) 14%, transparent); color: var(--kb-status-needs-text); }
+  .priority[data-p="P2"] { background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent); color: var(--dsw-alias-label-tertiary); }
+  .prop-project {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    max-width: 116px;
+    overflow: hidden;
+    color: var(--dsw-alias-label-tertiary);
+    font: var(--dsw-font-xxxs-11);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .prop-project .ic { width: 11px; height: 11px; }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxxs-11);
+    white-space: nowrap;
+  }
+
+  .card-foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 6px;
+    border-top: 0.5px solid var(--dsw-alias-border-l1);
+    color: var(--dsw-alias-label-tertiary);
+    font: var(--dsw-font-xxxs-11);
+    font-variant-numeric: tabular-nums;
+  }
+  .foot-status { display: inline-flex; align-items: center; gap: 5px; min-width: 0; white-space: nowrap; }
+  .foot-status[data-tone="backlog"] { color: var(--dsw-alias-label-tertiary); }
+  .foot-status[data-tone="running"] { color: var(--kb-status-running); }
+  .foot-status[data-tone="needs"] { color: var(--kb-status-needs-text); }
+  .foot-status[data-tone="done"] { color: var(--kb-status-done); }
+  .foot-status[data-tone="blocked"] { color: var(--kb-status-blocked); }
+  .foot-status[data-tone="failed"] { color: var(--kb-status-failed); }
+  .foot-metrics { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; }
+  .metric { display: inline-flex; align-items: center; gap: 3px; color: var(--dsw-alias-label-tertiary); }
+  .metric .ic { width: 12px; height: 12px; }
+  .metric-link { padding: 0; border: 0; background: transparent; color: var(--dsw-alias-link); cursor: pointer; }
+  .metric-link:hover { color: var(--dsw-alias-link); background: var(--dsw-alias-interactive-bg-hover); border-radius: 4px; }
+  .metric-link .ic { width: 13px; height: 13px; }
+  .divider-v { width: 0.5px; height: 10px; background: var(--dsw-alias-border-l2); }
+
+  .dot {
+    position: relative;
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 50%;
+    corner-shape: round;
+    background: var(--dsw-alias-label-caption);
+    display: inline-block;
+  }
+  .dot-sm { width: 6px; height: 6px; }
+  .dot[data-state="idle"] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--dsw-alias-label-caption); }
+  .dot[data-state="ongoing"] { background: var(--kb-status-running); }
+  .dot[data-state="ongoing"]::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    corner-shape: round;
+    border: 1.5px solid var(--kb-status-running);
+    opacity: 0.4;
+    animation: dot-pulse 1.8s var(--ds-ease-in-out) infinite;
+  }
+  .dot[data-state="warning"] { background: var(--kb-status-needs); }
+  .dot[data-state="done"] { background: var(--kb-status-done); }
+  .dot[data-state="error"] { background: var(--kb-status-failed); }
+  @keyframes dot-pulse {
+    0% { transform: scale(0.8); opacity: 0.45; }
+    70% { transform: scale(1.35); opacity: 0; }
+    100% { transform: scale(1.35); opacity: 0; }
+  }
+
+  /* ------------------------------------------------------------- decision */
+  .decision {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 10px;
+    background: var(--dsw-alias-state-warn-tertiary);
+  }
+  .decision-q { display: flex; align-items: flex-start; gap: 5px; color: var(--dsw-alias-label-primary); font: var(--dsw-font-xxs-strong-12); }
+  .decision-q .ic { width: 14px; height: 14px; margin-top: 2px; color: var(--kb-status-needs); }
+  .decision-risk { display: flex; align-items: flex-start; gap: 4px; color: var(--kb-status-needs-text); font: var(--dsw-font-xxxs-11); }
+  .decision-risk .ic { width: 11px; height: 11px; margin-top: 1.5px; }
+  .decision-actions { display: flex; justify-content: flex-end; gap: 6px; padding-top: 1px; }
+  .decision-actions .btn { height: 30px; }
+  .decision-note { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+
+  /* -------------------------------------------------------------- timeline */
+  .card-expanded {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 0.5px solid var(--dsw-alias-border-l1);
+    cursor: default;
+    animation: reveal var(--ds-transition-duration) var(--kb-ease-out);
+  }
+  .exp-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--dsw-alias-label-tertiary);
+    font: var(--dsw-font-xxxs-strong-11);
+    letter-spacing: 0.02em;
+  }
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--dsw-alias-link);
+    font: var(--dsw-font-xxxs-strong-11);
+    cursor: pointer;
+  }
+  .link-btn:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .link-btn .ic { width: 12px; height: 12px; }
+  .timeline { list-style: none; padding: 0 0 0 16px; position: relative; display: flex; flex-direction: column; gap: 6px; }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 4.5px;
+    top: 6px;
+    bottom: 6px;
+    width: 0.5px;
+    background: var(--dsw-alias-border-l2);
+  }
+  .tl-node {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1px 8px;
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxs-12);
+  }
+  .tl-node::before {
+    content: "";
+    position: absolute;
+    left: -15px;
+    top: 5.5px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    corner-shape: round;
+    background: var(--dsw-alias-label-caption);
+  }
+  .tl-node[data-state="done"]::before { background: var(--kb-status-done); }
+  .tl-node[data-state="current"]::before { background: var(--kb-status-running); box-shadow: 0 0 0 3px color-mix(in srgb, var(--kb-status-running) 18%, transparent); }
+  .tl-node[data-state="pending"]::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--dsw-alias-label-caption); }
+  .tl-node[data-state="error"]::before { background: var(--kb-status-failed); }
+  .tl-node[data-state="current"] .tl-text { color: var(--dsw-alias-label-primary); font-weight: 500; }
+  .tl-time { grid-column: 2; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tl-detail { grid-column: 1 / -1; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+
+  .reply {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 2px 2px 8px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: 8px;
+    background: var(--dsw-alias-bg-base);
+  }
+  .reply:focus-within { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+  .reply input {
+    flex: 1;
+    min-width: 0;
+    height: 26px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xxs-12);
+  }
+  .reply input::placeholder { color: var(--dsw-alias-label-caption); }
+  .reply-send { width: 24px; height: 24px; color: var(--dsw-alias-link); border-radius: 6px; }
+  .reply-send .ic { width: 14px; height: 14px; }
+  .reply-hint { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+  .reply-hint .ic { width: 10px; height: 10px; display: inline-block; vertical-align: -1px; }
+
+  /* ---------------------------------------------------------------- empty */
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0 4px;
+    padding: 24px 12px;
+    border: 1px dashed var(--dsw-alias-border-l2);
+    border-radius: 10px;
+    text-align: center;
+  }
+  .empty-icon {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    corner-shape: round;
+    background: color-mix(in srgb, var(--dsw-alias-label-primary) 4%, transparent);
+    color: var(--dsw-alias-label-caption);
+  }
+  .empty-title { color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-strong-12); }
+  .empty-desc { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); max-width: 22em; }
+  .empty .btn { margin-top: 2px; }
+
+  .card-sk {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: var(--kb-r-card);
+    border: 0.5px solid var(--dsw-alias-border-l1);
+    background: var(--kb-surface-card);
+  }
+  .sk-line { height: 10px; border-radius: 4px; background: var(--dsw-alias-bg-skeleton); animation: sk-breathe 1.4s var(--ds-ease-in-out) infinite; }
+  .sk-line.w-60 { width: 60%; }
+  .sk-line.w-90 { width: 90%; }
+  .sk-line.w-40 { width: 40%; }
+  @keyframes sk-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  /* ------------------------------------------------------------ list view */
+  .list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px var(--kb-pad-x) 24px;
+  }
+  .list-group { flex: none; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: var(--kb-r-card); background: var(--kb-surface-card); overflow: hidden; }
+  .list-group-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--dsw-alias-bg-module-platform);
+  }
+  .list-group-head .col-title { font: var(--dsw-font-xxs-strong-12); }
+  .list-row { display: flex; flex-direction: column; }
+  .list-row + .list-row { border-top: 0.5px solid var(--dsw-alias-border-l1); }
+  .list-row-main {
+    display: grid;
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: start;
+    padding: 11px 12px;
+    cursor: pointer;
+  }
+  .list-row-main:hover { background: var(--dsw-alias-interactive-bg-hover); }
+  .list-row-main .dot { margin-top: 6px; }
+  .list-title { color: var(--dsw-alias-label-primary); font: var(--dsw-font-s-strong-14); }
+  .list-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .list-summary { margin-top: 2px; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); }
+  .list-meta { display: flex; align-items: center; gap: 8px; flex: none; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); font-variant-numeric: tabular-nums; }
+  .list-meta .btn { height: 26px; padding: 0 8px; }
+  .list-meta .icon-btn { width: 24px; height: 24px; }
+  .list-meta .ic { width: 13px; height: 13px; }
+  .list-expanded {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px 12px 32px;
+    border-top: 0.5px solid var(--dsw-alias-border-l1);
+    animation: reveal var(--ds-transition-duration) var(--kb-ease-out);
+  }
+  .list-group.is-collapsed .list-row { display: none; }
+
+  /* --------------------------------------------------------------- statusbar */
+  .statusbar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    padding: 0 var(--kb-pad-x);
+    border-top: 0.5px solid var(--dsw-alias-border-l1);
+    color: var(--dsw-alias-label-tertiary);
+    font: var(--dsw-font-xxxs-11);
+  }
+  .statusbar .dot { width: 6px; height: 6px; color: var(--kb-status-done); }
+  .statusbar-spacer { flex: 1; }
+  .statusbar-mock { color: var(--dsw-alias-label-caption); }
+
+  /* ---------------------------------------------------------------- popover */
+  .popover {
+    position: fixed;
+    z-index: 70;
+    min-width: 184px;
+    max-width: calc(100vw - 24px);
+    max-height: min(70dvh, 520px);
+    overflow-y: auto;
+    padding: 4px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--dsw-specific-menu);
+    box-shadow: var(--dsw-elevation-panel);
+    opacity: 0;
+    transform: translateY(-3px);
+    transition: opacity var(--ds-transition-duration-fast) var(--ds-ease-in-out), transform var(--ds-transition-duration-fast) var(--ds-ease-in-out);
+  }
+  .popover.is-open { opacity: 1; transform: none; }
+  .menu-label { padding: 5px 8px 3px; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-strong-11); letter-spacing: 0.04em; }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 30px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xxs-12);
+    text-align: left;
+    cursor: pointer;
+  }
+  .menu-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+  .menu-item .ic { width: 14px; height: 14px; color: var(--dsw-alias-label-tertiary); }
+  .menu-item.is-danger { color: var(--dsw-alias-state-error-primary); }
+  .menu-item.is-danger .ic { color: var(--dsw-alias-state-error-primary); }
+  .menu-item.is-danger:hover { background: var(--dsw-alias-interactive-bg-hover-danger); }
+  .menu-hint { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+  .menu-sep { height: 0.5px; margin: 4px 0; background: var(--dsw-alias-border-l2); }
+  .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    padding: 0 8px;
+    border-radius: 6px;
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xxs-12);
+    cursor: pointer;
+  }
+  .check:hover { background: var(--dsw-alias-interactive-bg-hover); }
+  .check input { width: 14px; height: 14px; margin: 0; accent-color: var(--dsw-alias-state-business-primary); }
+  .help-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 8px; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); }
+  .help-row .keys { display: inline-flex; gap: 3px; }
+  .help-note { padding: 4px 8px 6px; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); max-width: 250px; }
+
+  /* ---------------------------------------------------------- scrim/drawer */
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: var(--dsw-alias-bg-mask-2);
+    -webkit-backdrop-filter: var(--dsw-mask-blur);
+    backdrop-filter: var(--dsw-mask-blur);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+  }
+  .scrim.is-open { opacity: 1; pointer-events: auto; }
+
+  .drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    width: clamp(380px, 34vw, 460px);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border: 0;
+    background: var(--dsw-alias-bg-layer-1);
+    box-shadow: var(--dsw-elevation-prominent);
+    opacity: 0;
+    transform: translateX(18px);
+    pointer-events: none;
+    transition: transform var(--ds-transition-duration-slow) var(--kb-ease-out), opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+  }
+  .drawer.is-open { opacity: 1; transform: none; pointer-events: auto; }
+  .drawer-grabber { display: none; }
+  .drawer-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 12px 0 16px; }
+  .drawer-kicker { flex: 1; min-width: 0; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxs-12); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .drawer-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 16px 16px; }
+  .drawer-title-row { display: flex; align-items: flex-start; gap: 8px; }
+  .drawer-title { flex: 1; min-width: 0; color: var(--dsw-alias-label-primary); font: var(--dsw-font-base-strong-16); word-break: break-word; }
+  .drawer-title:focus { outline: none; }
+  .drawer-title-input {
+    flex: 1;
+    min-width: 0;
+    height: 34px;
+    padding: 4px 8px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: 8px;
+    background: var(--dsw-specific-input-major);
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-base-strong-16);
+  }
+  .drawer-title-input:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+  .drawer-summary { margin-top: 6px; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-s-14); }
+  .drawer-sub { margin-top: 8px; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxs-12); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .drawer-sub .dot { width: 6px; height: 6px; }
+  .attr-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+    margin: 14px 0 4px;
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--dsw-alias-bg-module-platform);
+  }
+  .attr { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .attr dt { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+  .attr dd { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--dsw-alias-label-primary); font: var(--dsw-font-xxs-12); word-break: break-word; flex-wrap: wrap; }
+  .attr dd .dot { width: 6px; height: 6px; }
+  .attr .prop-project, .attr .tag { max-width: 100%; }
+
+  .drawer-tabs { display: flex; align-items: center; gap: 2px; margin: 14px 0 8px; padding: 2px; border-radius: 9px; background: var(--dsw-specific-selector); }
+  .drawer-tabs .seg-btn { flex: 1; justify-content: center; height: 28px; }
+  .drawer-tab-count { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+
+  .sync-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 7px;
+    background: var(--dsw-alias-state-business-tertiary);
+    color: var(--dsw-alias-state-business-primary);
+    font: var(--dsw-font-xxxs-strong-11);
+  }
+  .sync-bar .ic { width: 12px; height: 12px; }
+  .sync-bar .sync-id { font: var(--dsw-font-markdown-code-block); color: var(--dsw-alias-state-business-primary); }
+  .sync-bar .sync-state { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }
+  .sync-dot { width: 5px; height: 5px; border-radius: 50%; corner-shape: round; background: var(--kb-status-done); }
+
+  .thread { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 4px; }
+  .msg { display: flex; flex-direction: column; gap: 3px; max-width: 92%; }
+  .msg-agent { align-self: flex-start; }
+  .msg-you { align-self: flex-end; align-items: flex-end; }
+  .msg-meta { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+  .msg-bubble {
+    padding: 7px 10px;
+    border-radius: 10px;
+    background: var(--dsw-alias-bg-module-platform);
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xxs-12);
+    word-break: break-word;
+  }
+  .msg-you .msg-bubble { background: var(--dsw-alias-state-business-tertiary); }
+  .thread-empty { padding: 20px 8px; text-align: center; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxs-12); }
+
+  .drawer-foot { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px 14px; border-top: 0.5px solid var(--dsw-alias-border-l1); }
+  .drawer-foot-row { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .drawer-foot-row .drawer-note { margin-right: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+  .drawer-form { display: flex; flex-direction: column; gap: 2px; }
+  .drawer-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .drawer-actions .btn { height: 28px; padding: 0 10px; }
+
+  .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+  .field > span { color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-strong-12); }
+  .field input, .field textarea, .field select {
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: 8px;
+    background: var(--dsw-specific-input-major);
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xs-13);
+  }
+  .field textarea { min-height: 60px; resize: vertical; }
+  .field input:focus-visible, .field textarea:focus-visible, .field select:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+  .field-row { display: flex; gap: 10px; }
+  .field-row .field { flex: 1 1 0; min-width: 0; }
+  .form-error { color: var(--dsw-alias-state-error-primary); font: var(--dsw-font-xxs-12); }
+
+  /* ----------------------------------------------------------------- modal */
+  .modal-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: var(--dsw-alias-bg-mask-3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+  }
+  .modal-layer.is-open { opacity: 1; pointer-events: auto; }
+  .modal {
+    width: min(520px, 100%);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    padding: 18px 20px 16px;
+    border: 0;
+    border-radius: 16px;
+    background: var(--dsw-alias-bg-layer-1);
+    box-shadow: var(--dsw-elevation-prominent);
+    transform: translateY(8px) scale(0.99);
+    transition: transform var(--ds-transition-duration) var(--kb-ease-out);
+  }
+  .modal-layer.is-open .modal { transform: none; }
+  .modal-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 14px; }
+  .modal-head h2 { flex: 1; font: var(--dsw-font-base-strong-16); color: var(--dsw-alias-label-primary); }
+  .modal-desc { margin: -8px 0 14px; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxs-12); }
+  .modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  .modal-foot .modal-hint { margin-right: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+
+  /* ----------------------------------------------------------------- toast */
+  .toast-layer {
+    position: fixed;
+    left: 50%;
+    top: 16px;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: min(480px, calc(100vw - 32px));
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--dsw-alias-button-primary-fill);
+    color: var(--dsw-alias-label-primary-foreground);
+    box-shadow: var(--dsw-elevation-panel);
+    font: var(--dsw-font-xxs-12);
+    animation: toast-in var(--ds-transition-duration) var(--kb-ease-out);
+  }
+  .toast .ic { width: 14px; height: 14px; }
+  .toast-action {
+    margin-left: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: var(--dsw-font-xxs-strong-12);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+  @keyframes reveal { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+
+  /* ------------------------------------------------------------- responsive */
+  [data-layout="compact"] .board {
+    --kb-gap: 12px;
+    --kb-pad-x: 16px;
+    grid-template-columns: repeat(4, minmax(240px, 1fr));
+    padding-top: 14px;
+  }
+  [data-layout="compact"] .card-props .tag:nth-of-type(n+2) { display: none; }
+  [data-layout="compact"] .col-en { display: none; }
+  [data-layout="compact"] .statusbar { height: 28px; }
+  [data-layout="compact"] .list-meta .list-project { display: none; }
+
+  [data-layout="scroll"] .board {
+    --kb-gap: 12px;
+    --kb-pad-x: 16px;
+    grid-template-columns: repeat(4, minmax(300px, 1fr));
+    scroll-snap-type: x proximity;
+    padding-top: 12px;
+  }
+  [data-layout="scroll"] .column { scroll-snap-align: start; }
+  [data-layout="scroll"] .col-en { display: none; }
+  [data-layout="scroll"] .statusbar { display: none; }
+  [data-layout="scroll"] .list-meta .list-project { display: none; }
+  [data-layout="scroll"] .filter-chips { display: none; }
+
+  [data-layout="narrow"] .rail { display: none; }
+  [data-layout="narrow"] .app { grid-template-columns: minmax(0, 1fr); }
+  [data-layout="narrow"] .topbar { height: auto; min-height: 52px; padding: 8px 12px; gap: 8px; flex-wrap: nowrap; }
+  [data-layout="narrow"] .crumb:first-child { display: none; }
+  [data-layout="narrow"] .crumb-sep { display: none; }
+  [data-layout="narrow"] .crumb-current { font: var(--dsw-font-s-strong-14); }
+  [data-layout="narrow"] .crumb-tag { display: none; }
+  [data-layout="narrow"] .topbar-actions { gap: 4px; }
+  [data-layout="narrow"] .seg-btn { padding: 0 8px; height: 32px; }
+  [data-layout="narrow"] .seg-btn .seg-label { display: none; }
+  [data-layout="narrow"] .topbar .icon-btn { width: 36px; height: 36px; }
+  [data-layout="narrow"] .new-btn { width: 40px; height: 40px; padding: 0; border-radius: 10px; }
+  [data-layout="narrow"] .new-btn .btn-text { display: none; }
+  [data-layout="narrow"] .toolbar { flex-wrap: wrap; padding: 8px 12px; gap: 6px; }
+  [data-layout="narrow"] .search { width: 100%; height: 40px; order: -1; }
+  [data-layout="narrow"] .search input { font: var(--dsw-font-s-14); }
+  [data-layout="narrow"] .filter-btn { height: 36px; }
+  [data-layout="narrow"] .filter-chips, [data-layout="narrow"] .toolbar-spacer { display: none; }
+  [data-layout="narrow"] .agent-live { margin-left: auto; }
+  [data-layout="narrow"] .col-tabs { display: flex; }
+  [data-layout="narrow"] .board { display: flex; flex-direction: column; padding: 10px 12px 12px; gap: 0; overflow: hidden; }
+  [data-layout="narrow"] .column { display: none; flex: 1; min-height: 0; }
+  [data-layout="narrow"] .column.is-active { display: flex; }
+  [data-layout="narrow"] .column-body { padding: 0 8px 4px; gap: 10px; }
+  [data-layout="narrow"] .card { padding: 12px 12px 10px; }
+  [data-layout="narrow"] .card-menu { opacity: 1; }
+  [data-layout="narrow"] .card-head .icon-btn { width: 30px; height: 30px; }
+  [data-layout="narrow"] .card-summary { -webkit-line-clamp: 3; }
+  [data-layout="narrow"] .decision-actions .btn { height: 40px; flex: 1; }
+  [data-layout="narrow"] .column-add { height: 38px; }
+  [data-layout="narrow"] .statusbar { display: none; }
+  [data-layout="narrow"] .list { padding: 10px 12px 20px; gap: 10px; }
+  [data-layout="narrow"] .list-row-main { grid-template-columns: 10px minmax(0, 1fr); gap: 8px; }
+  [data-layout="narrow"] .list-meta { grid-column: 2; justify-content: flex-start; flex-wrap: wrap; margin-top: 4px; gap: 6px; }
+  [data-layout="narrow"] .list-meta .list-project { display: inline; }
+  [data-layout="narrow"] .list-expanded { padding-left: 26px; }
+  [data-layout="narrow"] .drawer {
+    top: auto;
+    left: 0;
+    right: 0;
+    width: auto;
+    min-height: 42dvh;
+    max-height: 92dvh;
+    border-radius: 16px 16px 0 0;
+    transform: translateY(100%);
+  }
+  [data-layout="narrow"] .drawer.is-open { transform: none; }
+  [data-layout="narrow"] .drawer-grabber {
+    display: block;
+    flex: none;
+    width: 36px;
+    height: 4px;
+    margin: 8px auto 2px;
+    border-radius: 99px;
+    corner-shape: round;
+    background: var(--dsw-alias-label-dimmed);
+  }
+  [data-layout="narrow"] .drawer-head { padding-top: 6px; }
+  [data-layout="narrow"] .attr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-layout="narrow"] .drawer-foot-row .btn { min-height: 40px; }
+  [data-layout="narrow"] .toast-layer { top: auto; bottom: 16px; }
+  [data-layout="narrow"] .modal { border-radius: 16px; }
+  [data-layout="narrow"] .modal-layer { align-items: end; padding: 0; }
+  [data-layout="narrow"] .modal { width: 100%; border-radius: 16px 16px 0 0; max-height: 88dvh; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  [data-layout="narrow"] .help-btn { display: none; }
+  [data-layout="narrow"] .drawer .attr-grid { gap: 9px 12px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    .dot[data-state="ongoing"]::after { display: none; }
+  }
+</style>
+</head>
+
+<body>
+<div class="app" id="app">
+  <!-- DSH 侧栏窄条示意（真实宿主里由 shell 提供） -->
+  <aside class="rail" aria-label="DSH 侧栏">
+    <div class="rail-logo" aria-hidden="true">D</div>
+    <button class="rail-btn" aria-label="对话" title="对话"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a7 7 0 0 1-7 7H8l-4 3v-6.5A7 7 0 0 1 11 5h2a7 7 0 0 1 7 7Z"/></svg></button>
+    <button class="rail-btn is-active" aria-label="看板" title="看板"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="7" height="15" rx="2"/><rect x="13.5" y="4.5" width="7" height="15" rx="2"/></svg></button>
+    <button class="rail-btn" aria-label="任务" title="任务"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></button>
+    <button class="rail-btn" aria-label="设置" title="设置"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h8M18 7h2M4 17h2M10 17h10"/><circle cx="15" cy="7" r="2.2"/><circle cx="7" cy="17" r="2.2"/></svg></button>
+    <div class="rail-spacer"></div>
+    <div class="rail-avatar" title="jason" aria-hidden="true">J</div>
+  </aside>
+
+  <main class="main" id="main">
+    <header class="topbar">
+      <nav class="crumbs" aria-label="面包屑">
+        <span class="crumb">Agents</span>
+        <span class="crumb-sep" aria-hidden="true">/</span>
+        <h1 class="crumb-current">看板</h1>
+        <span class="crumb-tag">11 张卡片</span>
+      </nav>
+      <div class="topbar-actions">
+        <div class="seg" role="tablist" aria-label="视图切换">
+          <button type="button" class="seg-btn is-active" id="viewBoard" role="tab" aria-selected="true" data-action="view" data-view="board" aria-label="看板视图">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="7" height="15" rx="2"/><rect x="13.5" y="4.5" width="7" height="15" rx="2"/></svg>
+            <span class="seg-label">看板</span>
+          </button>
+          <button type="button" class="seg-btn" id="viewList" role="tab" aria-selected="false" data-action="view" data-view="list" aria-label="列表视图">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
+            <span class="seg-label">列表</span>
+          </button>
+        </div>
+        <button type="button" class="icon-btn" id="themeBtn" data-action="theme" aria-label="切换明暗主题" title="切换明暗主题（T）"></button>
+        <button type="button" class="icon-btn help-btn" id="helpBtn" data-action="help" aria-label="键盘快捷键与帮助" title="快捷键（?）"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.5 2.2c-.7.3-1.1.9-1.1 1.7"/><circle cx="12" cy="17" r=".7" fill="currentColor" stroke="none"/></svg></button>
+        <button type="button" class="btn btn-primary new-btn" data-action="new-card" aria-label="新建卡片">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="btn-text">新建卡片</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <label class="search" for="searchInput">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/></svg>
+        <span class="sr-only">搜索卡片</span>
+        <input id="searchInput" type="search" placeholder="搜索卡片、项目或标签…" autocomplete="off">
+        <span class="kbd" aria-hidden="true">⌘K</span>
+        <button type="button" class="icon-btn search-clear" id="searchClear" data-action="clear-search" aria-label="清除搜索" hidden><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </label>
+      <button type="button" class="btn btn-secondary filter-btn" id="filterBtn" data-action="filter" aria-haspopup="dialog" aria-expanded="false">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+        筛选
+        <span class="filter-count" id="filterCount" hidden>0</span>
+      </button>
+      <div class="filter-chips" id="filterChips" aria-label="当前筛选条件"></div>
+      <div class="toolbar-spacer"></div>
+      <span class="agent-live" id="agentLive"></span>
+      <button type="button" class="icon-btn" id="simBtn" data-action="simulate" aria-label="模拟 Agent 自主推进（演示）" title="模拟 Agent 自主推进"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg></button>
+      <button type="button" class="icon-btn" id="refreshBtn" data-action="refresh" aria-label="刷新看板" title="刷新（演示加载态）"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg></button>
+    </div>
+
+    <div class="col-tabs" id="colTabs" role="tablist" aria-label="看板列切换"></div>
+
+    <div class="board-wrap" id="boardWrap">
+      <section class="board" id="board" aria-label="看板视图"></section>
+      <section class="list" id="list" aria-label="列表视图" hidden></section>
+    </div>
+
+    <footer class="statusbar">
+      <span class="dot" data-state="done" aria-hidden="true"></span>
+      <span id="syncStatus">DSH 会话已连接 · Agent 状态同步中</span>
+      <span class="statusbar-spacer"></span>
+      <span class="statusbar-mock" id="mockNote">演示数据 · 设计稿 v1</span>
+      <span aria-hidden="true">·</span>
+      <span><span class="kbd">⌘K</span> 搜索</span>
+      <span><span class="kbd">N</span> 新建</span>
+      <span><span class="kbd">?</span> 快捷键</span>
+    </footer>
+  </main>
+
+  <!-- overlays（放在 .app 内以继承组件局部语义变量） -->
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden></aside>
+  <div id="popoverLayer"></div>
+  <div class="modal-layer" id="modalLayer" hidden></div>
+  <div class="toast-layer" id="toastLayer" role="status" aria-live="polite"></div>
+  <div class="sr-only" id="live" role="status" aria-live="polite"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* --------------------------------------------------------------- helpers */
+  const $ = (sel, root) => (root || document).querySelector(sel);
+  const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const isReduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const motionMs = (ms) => (isReduced() ? 0 : ms);
+  const ICONS = {
+    board: '<rect x="3.5" y="4.5" width="7" height="15" rx="2"/><rect x="13.5" y="4.5" width="7" height="15" rx="2"/>',
+    list: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 4.5 4.5"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    chevronDown: '<path d="m6 9 6 6 6-6"/>',
+    chevronRight: '<path d="m9 6 6 6-6 6"/>',
+    x: '<path d="m6 6 12 12M18 6 6 18"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/>',
+    play: '<path d="M8 5.5v13l10-6.5-10-6.5Z"/>',
+    sparkle: '<path d="M12 3.5 13.7 9l5.5 1.7-5.5 1.7L12 18l-1.7-5.6L4.8 10.7 10.3 9 12 3.5Z"/>',
+    link: '<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
+    tool: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2.5-.5-.5-2.5 2.1-2.1Z"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    kebab: '<circle cx="12" cy="5.5" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="18.5" r="1.2" fill="currentColor" stroke="none"/>',
+    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    checkCircle: '<circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+    alert: '<path d="M12 4 3.5 19h17L12 4Z"/><path d="M12 9v4.5"/><circle cx="12" cy="16.6" r=".7" fill="currentColor" stroke="none"/>',
+    circle: '<circle cx="12" cy="12" r="8"/>',
+    hand: '<path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10.5V5a1.5 1.5 0 0 1 3 0v5.5"/><path d="M14 10.5V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-.5a5 5 0 0 1-4-2L4 14.5a1.6 1.6 0 0 1 2.6-1.8L8 14"/>',
+    message: '<path d="M20 12a7 7 0 0 1-7 7H8l-4 3v-6.5A7 7 0 0 1 11 5h2a7 7 0 0 1 7 7Z"/>',
+    send: '<path d="M20 4 4.5 10.5l6 2.5 2.5 6L20 4Z"/><path d="m10.5 13 4-4"/>',
+    folder: '<path d="M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-10Z"/>',
+    edit: '<path d="M4 20h4l11-11-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>',
+    trash: '<path d="M5 7h14M10 7V5h4v2M6.5 7l.8 12.5h9.4L17.5 7"/><path d="M10 11v5M14 11v5"/>',
+    copy: '<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    arrowRight: '<path d="M4 12h16M14 6l6 6-6 6"/>',
+    refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
+    redo: '<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v5h5"/>'
+  };
+  function icon(name, cls) {
+    return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
+  }
+
+  /* ------------------------------------------------------------- constants */
+  const COLUMNS = [
+    { id: 'backlog', name: '待办', en: 'BACKLOG', short: '待办', tone: 'backlog', icon: 'circle', defaultStatus: 'todo' },
+    { id: 'running', name: '进行中', en: 'RUNNING', short: '进行中', tone: 'running', icon: 'play', defaultStatus: 'running' },
+    { id: 'needs', name: '待你确认', en: 'NEEDS YOU', short: '待确认', tone: 'needs', icon: 'hand', defaultStatus: 'needs' },
+    { id: 'done', name: '已完成', en: 'DONE', short: '已完成', tone: 'done', icon: 'checkCircle', defaultStatus: 'done' }
+  ];
+  const STATUS = {
+    todo: { label: '待办', tone: 'backlog', dot: 'idle' },
+    running: { label: '进行中', tone: 'running', dot: 'ongoing' },
+    blocked: { label: '受阻', tone: 'blocked', dot: 'warning' },
+    needs: { label: '待你确认', tone: 'needs', dot: 'warning' },
+    done: { label: '已完成', tone: 'done', dot: 'done' },
+    failed: { label: '失败', tone: 'failed', dot: 'error' }
+  };
+  const PRIORITY_LABEL = { P0: '紧急', P1: '高', P2: '常规' };
+  const PROJECTS = ['内核', '看板', '插件市场', '运营', '文档', 'CRM'];
+  const FIXED = { view: 'board', theme: 'light', layout: 'wide' };
+
+  /* ------------------------------------------------------------------ data */
+  const cards = [
+    {
+      id: 'c-101', col: 'backlog', title: '补齐筛选结果的空态文案', status: 'todo', priority: 'P2', project: '插件市场', tags: ['前端', '空态'],
+      summary: '把四个筛选条件合并成一个查询，并补上「无结果」时的引导文案。',
+      action: '等待 Agent 领取', tools: 0, searches: 0, elapsed: '—', updated: '12 分钟前', agent: 'K2.5', session: 'dsh-4b1c',
+      nodes: [
+        { ago: '12 分钟前', text: '由你在看板创建卡片', state: 'done' },
+        { ago: '—', text: '等待 Agent 领取', state: 'pending' }
+      ],
+      thread: [{ from: 'agent', text: '收到。领取后我会先跑一遍现有筛选用例，再补空态。', time: '11 分钟前' }]
+    },
+    {
+      id: 'c-102', col: 'backlog', title: '评审 Prompt 缓存方案', status: 'todo', priority: 'P1', project: '内核', tags: ['架构'],
+      summary: '对比本地 LRU 与会话级缓存，给出取舍建议和迁移成本估算。',
+      action: '排队中 · 预计 2 分钟后开始', tools: 0, searches: 1, elapsed: '0m 00s', updated: '8 分钟前', agent: 'Opus 5.5', session: 'dsh-7f3a',
+      nodes: [
+        { ago: '8 分钟前', text: 'Agent 读取需求与相关代码', state: 'done' },
+        { ago: '—', text: '等待上一个任务释放并发槽位', state: 'pending' }
+      ],
+      thread: []
+    },
+    {
+      id: 'c-103', col: 'backlog', title: '拆分看板卡片的属性组件', status: 'todo', priority: 'P2', project: '看板', tags: ['重构', '组件'],
+      summary: '把状态、耗时与工具调用拆成可复用的属性行，减少卡片重复渲染。',
+      action: '等待领取 · 依赖 #482', tools: 0, searches: 0, elapsed: '—', updated: '20 分钟前', agent: '待分配', session: 'dsh-11a0',
+      nodes: [
+        { ago: '20 分钟前', text: '由 Agent 从评审结论拆出任务卡', state: 'done' },
+        { ago: '—', text: '等待领取（依赖 #482 合入）', state: 'pending' }
+      ],
+      thread: []
+    },
+    {
+      id: 'c-201', col: 'running', title: '重写任务卡片的拖拽排序', status: 'running', priority: 'P1', project: '看板', tags: ['交互', '拖拽'],
+      summary: '用 pointer events 统一鼠标与触屏，保留键盘方向键移动。',
+      action: '正在修改 board-drag.ts', tools: 12, searches: 3, elapsed: '6m 48s', updated: '刚刚', agent: 'Opus 5.5', session: 'dsh-7f3a',
+      nodes: [
+        { ago: '6 分钟前', text: '读取拖拽相关代码与现有测试', state: 'done' },
+        { ago: '4 分钟前', text: '替换 HTML5 drag 为 pointer events', state: 'done' },
+        { ago: '2 分钟前', text: '补键盘移动的单测（Alt + 方向键）', state: 'done' },
+        { ago: '刚刚', text: '正在跑交互回归用例', state: 'current' }
+      ],
+      thread: [{ from: 'agent', text: '触屏长按会与看板滚动冲突，我改成 260ms 长按阈值，仍在验证。', time: '3 分钟前' }]
+    },
+    {
+      id: 'c-202', col: 'running', title: '汇总本周三次评审的结论', status: 'running', priority: 'P2', project: '运营', tags: ['数据', '周报'],
+      summary: '从三个项目的会话里抽取决策点，写入 docs/weekly.md。',
+      action: '正在读取第 2/3 个会话', tools: 17, searches: 9, elapsed: '4m 12s', updated: '1 分钟前', agent: 'K2.5', session: 'dsh-2c9e',
+      nodes: [
+        { ago: '4 分钟前', text: '扫描 12 个 DSH 会话', state: 'done' },
+        { ago: '2 分钟前', text: '抽取 36 条决策点', state: 'done' },
+        { ago: '刚刚', text: '读取第 2/3 个项目的补充材料', state: 'current' }
+      ],
+      thread: []
+    },
+    {
+      id: 'c-203', col: 'running', title: '修复暗色模式下卡片描边发亮', status: 'blocked', priority: 'P1', project: '插件市场', tags: ['bug', '主题'],
+      summary: '卡片发丝线在暗色下叠加了两次，定位到主题层的 l3 令牌。',
+      action: '受阻：等待 ui-theme 修复 l3 令牌', tools: 6, searches: 2, elapsed: '12m 05s', updated: '6 分钟前', agent: 'Opus 5.5', session: 'dsh-96b2',
+      nodes: [
+        { ago: '11 分钟前', text: '复现暗色下描边发亮的问题', state: 'done' },
+        { ago: '8 分钟前', text: '定位到 elevation 阴影第一层 + border 叠加', state: 'done' },
+        { ago: '6 分钟前', text: '阻塞：需要 ui-theme 提供 l3 令牌修复', state: 'error', detail: '已在 DSH 会话中向主题维护者提问' }
+      ],
+      thread: [{ from: 'agent', text: '按规范浮层不能同时写 border 和 elevation；但卡片不是浮层，需要主题侧确认。', time: '6 分钟前' }]
+    },
+    {
+      id: 'c-301', col: 'needs', title: '在生产库执行迁移 0042_split_users', status: 'needs', priority: 'P0', project: '内核', tags: ['迁移', '高风险'],
+      summary: '已在 staging 跑通，涉及 3 张表、约 12 万行；等待你授权后在生产执行。',
+      action: '等待你授权 · 生产变更', tools: 14, searches: 9, elapsed: '6m 48s', updated: '1 分钟前', agent: 'Opus 5.5', session: 'dsh-7f3a',
+      approval: { question: '授权在生产库执行 3 条 DDL，预计锁表 40 秒？', risk: '不可逆迁移 · 已生成回滚脚本 0042_down.sql' },
+      nodes: [
+        { ago: '6 分钟前', text: '读取 schema 与 14 个迁移文件', state: 'done' },
+        { ago: '4 分钟前', text: '写入迁移 0042_split_users', state: 'done' },
+        { ago: '2 分钟前', text: '在 staging 演练通过，无报错', state: 'done' },
+        { ago: '1 分钟前', text: '等待你批准后在 production 执行', state: 'current' }
+      ],
+      thread: [{ from: 'agent', text: '迁移脚本已写好并在 staging 跑通。请确认是否在生产执行；批准后我会立刻开始，并在完成时回到看板汇报。', time: '1 分钟前' }]
+    },
+    {
+      id: 'c-302', col: 'needs', title: '确认新版欢迎语的措辞', status: 'needs', priority: 'P2', project: '文档', tags: ['文案'],
+      summary: '给出三个版本，我建议 B；确认后批量替换 6 处文案。',
+      action: '等待你选择方案 B', tools: 5, searches: 2, elapsed: '3m 10s', updated: '3 分钟前', agent: 'K2.5', session: 'dsh-5e18',
+      approval: { question: '采用方案 B「先给结果，再给选项」，替换 6 处文案？', risk: '仅改文档文案，可随时回滚' },
+      nodes: [
+        { ago: '3 分钟前', text: '整理三个候选版本与差异', state: 'done' },
+        { ago: '2 分钟前', text: '在 6 处文档中标注替换点', state: 'done' },
+        { ago: '刚刚', text: '等待你确认方案 B', state: 'current' }
+      ],
+      thread: [{ from: 'agent', text: 'A 更正式、B 更直接、C 更口语。我建议 B，已把 6 处替换点列在会话里。', time: '2 分钟前' }]
+    },
+    {
+      id: 'c-303', col: 'needs', title: '讨论：看板要不要单开「受阻」列', status: 'needs', priority: 'P2', project: '看板', tags: ['设计', '讨论'],
+      summary: '我倾向不单开列，把受阻做成卡片状态；想听你的判断。',
+      action: '等待你参与讨论', tools: 3, searches: 4, elapsed: '2m 05s', updated: '2 分钟前', agent: 'Opus 5.5', session: 'dsh-7f3a',
+      nodes: [
+        { ago: '2 分钟前', text: '对比 3 个看板产品的受阻表达', state: 'done' },
+        { ago: '1 分钟前', text: '给出「状态而非列」的建议', state: 'done' },
+        { ago: '刚刚', text: '等待你回复后继续细化方案', state: 'current' }
+      ],
+      thread: [{ from: 'agent', text: '单开一列会让 4 列变成 5 列，横屏更挤；受阻本质是 running 的子状态。我建议用橙点 + 一行原因，等你拍板。', time: '1 分钟前' }]
+    },
+    {
+      id: 'c-401', col: 'done', title: '周报数字汇总', status: 'done', priority: 'P2', project: '运营', tags: ['数据'],
+      summary: '从 3 个数据源取数并发布到 #metrics，附上口径说明。',
+      action: '已完成 · 结果已发布', tools: 8, searches: 3, elapsed: '4m 12s', updated: '22 分钟前', agent: 'K2.5', session: 'dsh-2c9e',
+      nodes: [
+        { ago: '24 分钟前', text: '读取 3 个数据源', state: 'done' },
+        { ago: '22 分钟前', text: '生成摘要并发布到 #metrics', state: 'done' },
+        { ago: '22 分钟前', text: '回写结果：+12 次浏览、3 条讨论', state: 'done' }
+      ],
+      thread: [{ from: 'agent', text: '已发布，附了口径说明和两个异常值备注。', time: '22 分钟前' }]
+    },
+    {
+      id: 'c-402', col: 'done', title: '归档 v0.9 发布说明', status: 'done', priority: 'P2', project: '文档', tags: ['发布'],
+      summary: '把 23 个合并请求整理成功能与修复两组，已归档。',
+      action: '已完成 · 已归档到 docs/releases', tools: 9, searches: 1, elapsed: '2m 30s', updated: '40 分钟前', agent: 'Opus 5.5', session: 'dsh-4b1c',
+      nodes: [
+        { ago: '42 分钟前', text: '抓取 23 个合并请求', state: 'done' },
+        { ago: '40 分钟前', text: '按功能 / 修复分组并归档', state: 'done' }
+      ],
+      thread: []
+    },
+    {
+      id: 'c-403', col: 'done', title: '清理 CRM 的重复联系人', status: 'failed', priority: 'P1', project: 'CRM', tags: ['数据清理'],
+      summary: '匹配到 1,312 条疑似重复；合并时触发 API 限流，任务中止。',
+      action: '失败 · API 限流（429）', tools: 6, searches: 2, elapsed: '2m 30s', updated: '1 小时前', agent: 'K2.5', session: 'dsh-96b2',
+      nodes: [
+        { ago: '1 小时前', text: '匹配到 1,312 条疑似重复', state: 'done' },
+        { ago: '58 分钟前', text: '开始合并，写入 214 条', state: 'done' },
+        { ago: '56 分钟前', text: '触发 CRM API 限流（429），任务中止', state: 'error', detail: '建议 10 分钟后重试，或降低并发到 2' }
+      ],
+      thread: [{ from: 'agent', text: '限流来自 CRM 侧，已保留断点。重试会从第 215 条继续，不会重复写入。', time: '55 分钟前' }]
+    }
+  ];
+
+  /* ----------------------------------------------------------------- state */
+  const state = {
+    view: 'board',
+    theme: 'light',
+    layout: 'wide',
+    search: '',
+    filters: { projects: new Set(), priorities: new Set() },
+    collapsedCols: new Set(),
+    expanded: new Set(['c-301']),
+    activeCol: 'needs',
+    drawerId: null,
+    drawerTab: 'nodes',
+    editing: false,
+    popover: null,
+    refreshing: false,
+    toast: null,
+    toastTimer: 0
+  };
+
+  const app = $('#app');
+  const board = $('#board');
+  const list = $('#list');
+  const boardWrap = $('#boardWrap');
+  const colTabs = $('#colTabs');
+  const drawer = $('#drawer');
+  const scrim = $('#scrim');
+  const popoverLayer = $('#popoverLayer');
+  const modalLayer = $('#modalLayer');
+  const toastLayer = $('#toastLayer');
+  const live = $('#live');
+  const searchInput = $('#searchInput');
+  const filterBtn = $('#filterBtn');
+  const filterChips = $('#filterChips');
+  const helpBtn = $('#helpBtn');
+
+  const findCard = (id) => cards.find((c) => c.id === id);
+  const colById = (id) => COLUMNS.find((c) => c.id === id);
+  const statusOf = (s) => STATUS[s] || STATUS.todo;
+
+  function visibleCards() {
+    const q = state.search.trim().toLowerCase();
+    return cards.filter((c) => {
+      if (state.filters.projects.size && !state.filters.projects.has(c.project)) return false;
+      if (state.filters.priorities.size && !state.filters.priorities.has(c.priority)) return false;
+      if (q) {
+        const hay = [c.title, c.summary, c.project, c.action, c.tags.join(' '), c.agent, c.session].join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }
+  const isFiltering = () => Boolean(state.search.trim() || state.filters.projects.size || state.filters.priorities.size);
+  const countActiveFilters = () => state.filters.projects.size + state.filters.priorities.size + (state.search.trim() ? 1 : 0);
+
+  function announce(text) {
+    live.textContent = '';
+    requestAnimationFrame(() => { live.textContent = text; });
+  }
+
+  /* -------------------------------------------------------------- controls */
+  function dot(stateName, small) {
+    return '<span class="dot' + (small ? ' dot-sm' : '') + '" data-state="' + stateName + '" aria-hidden="true"></span>';
+  }
+  function priorityChip(p) {
+    return '<span class="priority" data-p="' + esc(p) + '" title="优先级：' + esc(PRIORITY_LABEL[p] || p) + '">' + esc(p) + '</span>';
+  }
+  function projectChip(p) {
+    return '<span class="prop-project" title="所属项目：' + esc(p) + '">' + icon('folder') + esc(p) + '</span>';
+  }
+  function tagsChips(tags) {
+    return tags.map((t) => '<span class="tag">' + esc(t) + '</span>').join('');
+  }
+  function statusFoot(card) {
+    const s = statusOf(card.status);
+    return '<span class="foot-status" data-tone="' + s.tone + '">' + dot(s.dot, true) + esc(s.label) +
+      (card.elapsed && card.elapsed !== '—' ? '<span class="foot-elapsed"> · ' + esc(card.elapsed) + '</span>' : '') + '</span>';
+  }
+  function metrics(card) {
+    return '<span class="foot-metrics">' +
+      '<span class="metric" title="工具调用 ' + card.tools + ' 次">' + icon('tool') + card.tools + '</span>' +
+      '<span class="metric" title="搜索 ' + card.searches + ' 次">' + icon('search') + card.searches + '</span>' +
+      '<span class="divider-v" aria-hidden="true"></span>' +
+      '<button type="button" class="metric metric-link" data-action="session" data-id="' + card.id + '" aria-label="打开 DSH 会话 ' + esc(card.session) + '" title="DSH 会话 ' + esc(card.session) + '">' + icon('link') + '</button>' +
+      '</span>';
+  }
+  function decisionHTML(card) {
+    if (!card.approval || card.status !== 'needs') return '';
+    return '<div class="decision" role="group" aria-label="待你确认">' +
+      '<div class="decision-q">' + icon('alert') + '<span>' + esc(card.approval.question) + '</span></div>' +
+      '<div class="decision-risk">' + icon('clock') + '<span>' + esc(card.approval.risk) + '</span></div>' +
+      '<div class="decision-actions">' +
+        '<button type="button" class="btn btn-secondary" data-action="reject" data-id="' + card.id + '" aria-label="驳回：' + esc(card.title) + '">驳回<span class="btn-en">Reject</span></button>' +
+        '<button type="button" class="btn btn-primary" data-action="approve" data-id="' + card.id + '" aria-label="批准：' + esc(card.title) + '">批准<span class="btn-en">Approve</span></button>' +
+      '</div>' +
+    '</div>';
+  }
+  function timelineHTML(card) {
+    return '<ol class="timeline" aria-label="重要节点">' + card.nodes.map((n) =>
+      '<li class="tl-node" data-state="' + esc(n.state) + '">' +
+        '<span class="tl-text">' + esc(n.text) + '</span>' +
+        '<span class="tl-time">' + esc(n.ago) + '</span>' +
+        (n.detail ? '<span class="tl-detail">' + esc(n.detail) + '</span>' : '') +
+      '</li>'
+    ).join('') + '</ol>';
+  }
+  function replyHTML(card, where) {
+    const id = where + '-' + card.id;
+    return '<form class="reply" data-reply="' + card.id + '" data-reply-where="' + where + '">' +
+      '<label class="sr-only" for="' + id + '">回复 Agent，同步到 DSH 会话</label>' +
+      '<input id="' + id + '" name="reply" type="text" placeholder="回复 Agent，同步到 DSH 会话…" autocomplete="off">' +
+      '<button type="submit" class="icon-btn reply-send" aria-label="发送回复并同步到 DSH 会话">' + icon('send') + '</button>' +
+    '</form>';
+  }
+  function cardHTML(card) {
+    const s = statusOf(card.status);
+    const expanded = state.expanded.has(card.id);
+    const selected = state.drawerId === card.id;
+    const actionTone = card.status === 'needs' ? ' is-warn' : card.status === 'failed' ? ' is-error' : card.status === 'blocked' ? ' is-warn' : card.status === 'todo' ? ' is-idle' : '';
+    const actionIcon = card.status === 'needs' ? 'hand' : card.status === 'blocked' ? 'alert' : card.status === 'failed' ? 'alert' : card.status === 'done' ? 'check' : 'sparkle';
+    return '<article class="card' + (expanded ? ' is-expanded' : '') + (selected ? ' is-selected' : '') + '" data-card-id="' + card.id + '" data-status="' + card.status + '" tabindex="0" role="group" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '，优先级 ' + card.priority + '，项目 ' + esc(card.project) + '">' +
+      '<div class="card-head">' +
+        dot(s.dot) +
+        '<h3 class="card-title">' + esc(card.title) + '</h3>' +
+        '<button type="button" class="icon-btn card-toggle" data-action="expand" data-id="' + card.id + '" aria-expanded="' + expanded + '" aria-controls="exp-' + card.id + '" aria-label="' + (expanded ? '收起重要节点' : '展开重要节点') + '">' + icon(expanded ? 'chevronDown' : 'chevronRight') + '</button>' +
+        '<button type="button" class="icon-btn card-menu" data-action="menu" data-id="' + card.id + '" aria-label="卡片操作：' + esc(card.title) + '" aria-haspopup="menu">' + icon('kebab') + '</button>' +
+      '</div>' +
+      '<p class="card-summary">' + esc(card.summary) + '</p>' +
+      '<div class="card-action' + actionTone + '">' + icon(actionIcon) + '<span>' + esc(card.action) + '</span></div>' +
+      '<div class="card-props">' + priorityChip(card.priority) + projectChip(card.project) + tagsChips(card.tags) + '</div>' +
+      '<div class="card-foot">' + statusFoot(card) + metrics(card) + '</div>' +
+      decisionHTML(card) +
+      (expanded ? '<div class="card-expanded" id="exp-' + card.id + '">' +
+        '<div class="exp-head"><span>重要节点</span><button type="button" class="link-btn" data-action="open" data-id="' + card.id + '">详情' + icon('chevronRight') + '</button></div>' +
+        timelineHTML(card) +
+        (card.status === 'failed' ? '<button type="button" class="btn btn-secondary btn-sm" data-action="retry" data-id="' + card.id + '">' + icon('redo') + '重试任务</button>' : '') +
+        replyHTML(card, 'card') +
+        '<div class="reply-hint">' + icon('link') + '回复会写入 DSH 会话 ' + esc(card.session) + '，并追加一条看板节点</div>' +
+      '</div>' : '') +
+    '</article>';
+  }
+  function emptyHTML(col) {
+    const filtering = isFiltering();
+    return '<div class="empty">' +
+      '<span class="empty-icon">' + icon(filtering ? 'search' : 'plus') + '</span>' +
+      '<span class="empty-title">' + (filtering ? '没有匹配的卡片' : '这一列还没有卡片') + '</span>' +
+      '<span class="empty-desc">' + (filtering ? '换个关键词，或清除筛选条件。' : '从其他列拖入，或让 Agent 领取一个新任务。') + '</span>' +
+      (filtering
+        ? '<button type="button" class="btn btn-ghost btn-sm" data-action="clear-filters">清除筛选</button>'
+        : '<button type="button" class="btn btn-ghost btn-sm" data-action="add-col" data-col="' + col.id + '">' + icon('plus') + '新建卡片</button>') +
+    '</div>';
+  }
+  function skeletonHTML() {
+    return Array.from({ length: 2 }).map(() => '<div class="card-sk" aria-hidden="true">' +
+      '<div class="sk-line w-60"></div><div class="sk-line w-90"></div><div class="sk-line w-40"></div></div>').join('');
+  }
+  function renderColumn(col) {
+    const visible = visibleCards().filter((c) => c.col === col.id);
+    const total = cards.filter((c) => c.col === col.id).length;
+    const collapsed = state.collapsedCols.has(col.id);
+    const active = state.activeCol === col.id;
+    const filtering = isFiltering();
+    const countTitle = filtering ? '筛选命中 ' + visible.length + ' 张，共 ' + total + ' 张' : total + ' 张卡片';
+    return '<section class="column' + (collapsed ? ' is-collapsed' : '') + (active ? ' is-active' : '') + '" data-col="' + col.id + '" data-tone="' + col.tone + '" aria-label="' + col.name + '，' + countTitle + '">' +
+      '<header class="column-head">' +
+        '<span class="col-icon">' + icon(col.icon) + '</span>' +
+        '<h2 class="col-title">' + col.name + '<span class="col-en">' + col.en + '</span></h2>' +
+        '<span class="count-pill" title="' + esc(countTitle) + '">' + visible.length + '</span>' +
+        '<span class="col-head-actions">' +
+          '<button type="button" class="icon-btn" data-action="collapse-col" data-col="' + col.id + '" aria-expanded="' + !collapsed + '" aria-label="' + (collapsed ? '展开' : '折叠') + col.name + '列" title="' + (collapsed ? '展开' : '折叠') + '此列">' + icon(collapsed ? 'chevronRight' : 'chevronDown') + '</button>' +
+          '<button type="button" class="icon-btn" data-action="add-col" data-col="' + col.id + '" aria-label="在' + col.name + '新建卡片" title="在此列新建卡片">' + icon('plus') + '</button>' +
+        '</span>' +
+      '</header>' +
+      (collapsed
+        ? '<div class="column-collapsed">已折叠 · ' + visible.length + ' 张卡片<span>拖入卡片可直接移入</span></div>'
+        : '<div class="column-body">' + (state.refreshing ? skeletonHTML() : (visible.length ? visible.map(cardHTML).join('') : emptyHTML(col))) + '</div>' +
+          '<button type="button" class="column-add" data-action="add-col" data-col="' + col.id + '">' + icon('plus') + '新建卡片</button>') +
+    '</section>';
+  }
+
+  function renderListRow(card) {
+    const s = statusOf(card.status);
+    const expanded = state.expanded.has(card.id);
+    const selected = state.drawerId === card.id;
+    return '<div class="list-row' + (selected ? ' is-selected' : '') + '" data-card-id="' + card.id + '" tabindex="0" role="group" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '">' +
+      '<div class="list-row-main" data-action="expand" data-id="' + card.id + '">' +
+        dot(s.dot) +
+        '<div class="list-main">' +
+          '<div class="list-title-row"><span class="list-title">' + esc(card.title) + '</span>' +
+            (card.approval && card.status === 'needs' ? '<span class="tag">待授权</span>' : '') + '</div>' +
+          '<p class="list-summary">' + esc(card.summary) + '</p>' +
+        '</div>' +
+        '<div class="list-meta">' +
+          priorityChip(card.priority) +
+          '<span class="list-project">' + icon('folder') + esc(card.project) + '</span>' +
+          statusFoot(card) +
+          '<span class="metric" title="工具调用 ' + card.tools + ' 次">' + icon('tool') + card.tools + '</span>' +
+          '<span class="metric" title="搜索 ' + card.searches + ' 次">' + icon('search') + card.searches + '</span>' +
+          '<button type="button" class="icon-btn" data-action="open" data-id="' + card.id + '" aria-label="打开详情：' + esc(card.title) + '">' + icon('chevronRight') + '</button>' +
+          '<button type="button" class="icon-btn" data-action="menu" data-id="' + card.id + '" aria-label="卡片操作：' + esc(card.title) + '">' + icon('kebab') + '</button>' +
+        '</div>' +
+      '</div>' +
+      (expanded ? '<div class="list-expanded">' +
+        '<div class="exp-head"><span>重要节点</span><button type="button" class="link-btn" data-action="open" data-id="' + card.id + '">详情' + icon('chevronRight') + '</button></div>' +
+        timelineHTML(card) + decisionHTML(card) +
+        (card.status === 'failed' ? '<button type="button" class="btn btn-secondary btn-sm" data-action="retry" data-id="' + card.id + '">' + icon('redo') + '重试任务</button>' : '') +
+        replyHTML(card, 'list') + '</div>' : '') +
+    '</div>';
+  }
+
+  function renderBoard() {
+    board.innerHTML = COLUMNS.map(renderColumn).join('');
+    board.hidden = state.view !== 'board';
+    list.hidden = state.view !== 'list';
+  }
+  function renderList() {
+    list.innerHTML = COLUMNS.map((col) => {
+      const visible = visibleCards().filter((c) => c.col === col.id);
+      const total = cards.filter((c) => c.col === col.id).length;
+      const collapsed = state.collapsedCols.has(col.id);
+      return '<section class="list-group' + (collapsed ? ' is-collapsed' : '') + '" data-col="' + col.id + '" aria-label="' + col.name + '分组">' +
+        '<header class="list-group-head">' +
+          '<span class="col-icon">' + icon(col.icon) + '</span>' +
+          '<h2 class="col-title">' + col.name + '<span class="col-en">' + col.en + '</span></h2>' +
+          '<span class="count-pill" title="' + (isFiltering() ? '筛选命中 ' + visible.length + ' 张，共 ' + total + ' 张' : total + ' 张卡片') + '">' + visible.length + '</span>' +
+          '<span class="col-head-actions">' +
+            '<button type="button" class="icon-btn" data-action="collapse-col" data-col="' + col.id + '" aria-expanded="' + !collapsed + '" aria-label="' + (collapsed ? '展开' : '折叠') + col.name + '分组">' + icon(collapsed ? 'chevronRight' : 'chevronDown') + '</button>' +
+            '<button type="button" class="icon-btn" data-action="add-col" data-col="' + col.id + '" aria-label="在' + col.name + '新建卡片">' + icon('plus') + '</button>' +
+          '</span>' +
+        '</header>' +
+        (visible.length ? visible.map(renderListRow).join('') : '<div class="empty" style="margin:12px">' +
+          '<span class="empty-title">' + (isFiltering() ? '没有匹配的卡片' : '这一列还没有卡片') + '</span>' +
+          '<span class="empty-desc">' + (isFiltering() ? '换个关键词，或清除筛选条件。' : '从其他列拖入，或新建一张卡片。') + '</span></div>') +
+      '</section>';
+    }).join('');
+    list.hidden = state.view !== 'list';
+    board.hidden = state.view !== 'board';
+  }
+
+  function renderTabs() {
+    colTabs.innerHTML = COLUMNS.map((col) => {
+      const n = visibleCards().filter((c) => c.col === col.id).length;
+      const active = state.activeCol === col.id;
+      return '<button type="button" class="col-tab' + (active ? ' is-active' : '') + '" role="tab" aria-selected="' + active + '" data-action="tab" data-col="' + col.id + '">' +
+        dot(col.tone === 'backlog' ? 'idle' : col.tone === 'running' ? 'ongoing' : col.tone === 'needs' ? 'warning' : 'done', true) +
+        '<span>' + col.short + '</span><span class="col-tab-count">' + n + '</span></button>';
+    }).join('');
+  }
+
+  function renderToolbar() {
+    const active = countActiveFilters();
+    $('#filterCount').hidden = !active;
+    $('#filterCount').textContent = String(active);
+    $('#searchClear').hidden = !state.search.trim();
+    filterChips.innerHTML = '';
+    state.filters.projects.forEach((p) => {
+      filterChips.insertAdjacentHTML('beforeend', '<button type="button" class="filter-chip" data-action="remove-project" data-value="' + esc(p) + '" aria-label="移除项目筛选 ' + esc(p) + '">' + esc(p) + icon('x') + '</button>');
+    });
+    state.filters.priorities.forEach((p) => {
+      filterChips.insertAdjacentHTML('beforeend', '<button type="button" class="filter-chip" data-action="remove-priority" data-value="' + esc(p) + '" aria-label="移除优先级筛选 ' + p + '">' + p + icon('x') + '</button>');
+    });
+    if (state.search.trim()) {
+      filterChips.insertAdjacentHTML('beforeend', '<button type="button" class="filter-chip" data-action="clear-search" aria-label="清除搜索">搜索：' + esc(state.search.trim()) + icon('x') + '</button>');
+    }
+    const running = cards.filter((c) => c.col === 'running').length;
+    $('#agentLive').innerHTML = '<span class="dot" data-state="ongoing" aria-hidden="true"></span><strong>' + running + '</strong> 个 Agent 运行中';
+    $('#viewBoard').classList.toggle('is-active', state.view === 'board');
+    $('#viewList').classList.toggle('is-active', state.view === 'list');
+    $('#viewBoard').setAttribute('aria-selected', String(state.view === 'board'));
+    $('#viewList').setAttribute('aria-selected', String(state.view === 'list'));
+    const themeBtn = $('#themeBtn');
+    themeBtn.innerHTML = icon(state.theme === 'dark' ? 'sun' : 'moon');
+    themeBtn.setAttribute('aria-pressed', String(state.theme === 'dark'));
+    themeBtn.setAttribute('aria-label', state.theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题');
+    $('#syncStatus').textContent = 'DSH 会话已连接 · ' + cards.filter((c) => c.col === 'running').length + ' 个 Agent 运行中 · 最后同步刚刚';
+    const visibleCount = visibleCards().length;
+    $('.crumb-tag').textContent = visibleCount < cards.length ? visibleCount + ' / ' + cards.length + ' 张卡片' : cards.length + ' 张卡片';
+  }
+
+  function captureScroll() {
+    const map = {};
+    COLUMNS.forEach((col) => {
+      const el = $('.column[data-col="' + col.id + '"] .column-body');
+      if (el) map[col.id] = el.scrollTop;
+    });
+    return { cols: map, list: list.scrollTop };
+  }
+  function restoreScroll(snap) {
+    COLUMNS.forEach((col) => {
+      const el = $('.column[data-col="' + col.id + '"] .column-body');
+      if (el && snap.cols[col.id] != null) el.scrollTop = snap.cols[col.id];
+    });
+    list.scrollTop = snap.list || 0;
+  }
+  function renderAll(opts) {
+    const snap = captureScroll();
+    renderBoard();
+    renderList();
+    renderTabs();
+    renderToolbar();
+    restoreScroll(snap);
+    if (state.drawerId) renderDrawer();
+    if (opts && opts.focus) {
+      const el = $('.card[data-card-id="' + opts.focus + '"], .list-row[data-card-id="' + opts.focus + '"]');
+      if (el) el.focus({ preventScroll: false });
+    }
+  }
+  function focusCard(id) {
+    const el = $('.card[data-card-id="' + id + '"], .list-row[data-card-id="' + id + '"]');
+    if (el) el.focus({ preventScroll: false });
+  }
+
+  /* --------------------------------------------------------------- actions */
+  function setView(view) {
+    state.view = view;
+    if (view === 'list' && state.layout === 'narrow') state.activeCol = 'needs';
+    renderAll();
+    announce(view === 'board' ? '已切换到看板视图' : '已切换到列表视图');
+    searchInput.focus({ preventScroll: true });
+  }
+  function toggleTheme() {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = state.theme;
+    renderToolbar();
+    announce(state.theme === 'dark' ? '已切换到暗色主题' : '已切换到亮色主题');
+  }
+  function toggleExpand(id) {
+    if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
+    const card = findCard(id);
+    renderBoard(); renderList();
+    const el = $('.card[data-card-id="' + id + '"], .list-row[data-card-id="' + id + '"]');
+    if (el) {
+      const toggleBtn = el.querySelector('[data-action="expand"]');
+      if (toggleBtn) toggleBtn.focus({ preventScroll: true });
+    }
+    announce((state.expanded.has(id) ? '已展开' : '已收起') + (card ? card.title : '卡片') + '的重要节点');
+  }
+  function setActiveCol(colId) {
+    state.activeCol = colId;
+    renderTabs();
+    renderBoard();
+    const col = colById(colId);
+    if (col) announce('已切换到' + col.name + '列');
+  }
+
+  function moveCard(id, colId, index) {
+    const card = findCard(id);
+    if (!card) return false;
+    const from = card.col;
+    if (from === colId && index == null) return false;
+    const fromCol = colById(from);
+    const toCol = colById(colId);
+    const others = cards.filter((c) => c !== card);
+    const colCards = others.filter((c) => c.col === colId);
+    let insertAt;
+    if (index == null || index >= colCards.length) {
+      const last = colCards[colCards.length - 1];
+      insertAt = last ? others.indexOf(last) + 1 : others.length;
+    } else {
+      insertAt = others.indexOf(colCards[index]);
+    }
+    if (from === colId && index == null) return false;
+    card.col = colId;
+    if (from !== colId) {
+      card.status = toCol.defaultStatus;
+      if (colId === 'needs' && !card.approval) {
+        card.approval = { question: '确认是否继续：' + card.title + '？', risk: '由 Agent 发起的人工确认 · 变更前可回滚' };
+      }
+      if (colId !== 'needs' && card.status !== 'needs') card.approval = null;
+      card.action = colId === 'backlog' ? '已回到待办 · 等待重新领取'
+        : colId === 'running' ? '已被 Agent 接收 · 正在执行'
+        : colId === 'needs' ? '等待你确认'
+        : '已完成 · 由看板移入';
+      card.updated = '刚刚';
+      card.nodes.push({ ago: '刚刚', text: '看板列变更：' + fromCol.name + ' → ' + toCol.name, state: 'done' });
+    } else {
+      card.nodes.push({ ago: '刚刚', text: '在看板中调整了顺序', state: 'done' });
+    }
+    others.splice(insertAt, 0, card);
+    cards.length = 0;
+    Array.prototype.push.apply(cards, others);
+    renderAll({ focus: id });
+    announce('卡片已移到' + toCol.name + (index != null ? '第 ' + (index + 1) + ' 位' : ''));
+    toast('已移到「' + toCol.name + '」· 已同步到 DSH 会话', { icon: 'check' });
+    return true;
+  }
+
+  function approveCard(id) {
+    const card = findCard(id);
+    if (!card) return;
+    card.col = 'done'; card.status = 'done';
+    card.action = '已完成 · 你已批准执行'; card.elapsed = card.elapsed === '—' ? '0m 32s' : card.elapsed;
+    card.updated = '刚刚';
+    card.nodes.push({ ago: '刚刚', text: '你批准了授权请求，Agent 继续执行', state: 'done' });
+    card.thread.push({ from: 'you', text: '批准，继续执行。', time: '刚刚' });
+    card.thread.push({ from: 'agent', text: '收到批准，已经开始执行；完成后会在看板汇报结果。', time: '刚刚' });
+    renderAll({ focus: id });
+    toast('已批准 · 卡片已移到「已完成」并同步 DSH 会话', { icon: 'check' });
+    announce('已批准' + card.title + '，卡片移到已完成');
+  }
+  function rejectCard(id) {
+    const card = findCard(id);
+    if (!card) return;
+    card.col = 'backlog'; card.status = 'todo';
+    card.action = '已驳回 · 等待新的方案'; card.approval = null; card.updated = '刚刚';
+    card.nodes.push({ ago: '刚刚', text: '你驳回了授权请求，卡片回到待办', state: 'done' });
+    card.thread.push({ from: 'you', text: '先不要执行，给我一个更小步的方案。', time: '刚刚' });
+    card.thread.push({ from: 'agent', text: '明白。我会拆成先只迁移 accounts 表，再单独评审。', time: '刚刚' });
+    renderAll({ focus: id });
+    toast('已驳回 · 卡片已回到「待办」', { icon: 'redo' });
+    announce('已驳回' + card.title + '，卡片回到待办');
+  }
+  function retryCard(id) {
+    const card = findCard(id);
+    if (!card) return;
+    card.col = 'running'; card.status = 'running';
+    card.action = '正在重试 · 已跳过限流批次'; card.updated = '刚刚';
+    card.nodes.push({ ago: '刚刚', text: '你点了重试，Agent 从第 215 条继续', state: 'current' });
+    renderAll({ focus: id });
+    toast('已重试 · Agent 从断点继续（演示）', { icon: 'refresh' });
+    announce('已重试' + card.title);
+  }
+  function sendReply(id, text) {
+    const card = findCard(id);
+    const value = (text || '').trim();
+    if (!card || !value) return;
+    card.thread.push({ from: 'you', text: value, time: '刚刚' });
+    card.nodes.push({ ago: '刚刚', text: '你在 DSH 会话中回复：' + value, state: 'done' });
+    card.updated = '刚刚';
+    if (card.status === 'needs' && !card.approval) {
+      card.col = 'running'; card.status = 'running';
+      card.action = '已收到你的讨论回复，Agent 继续执行';
+      card.nodes.push({ ago: '刚刚', text: 'Agent 继续执行（人工讨论已结束）', state: 'current' });
+      toast('回复已同步 DSH 会话 · 卡片自动移到「进行中」', { icon: 'link' });
+      announce('回复已同步，卡片自动移到进行中');
+    } else {
+      card.action = '已收到你的回复，Agent 继续执行';
+      toast('回复已同步到 DSH 会话 ' + card.session, { icon: 'link' });
+      announce('回复已同步到 DSH 会话');
+    }
+    renderAll({ focus: id });
+    if (state.drawerId === id) {
+      state.drawerTab = 'thread';
+      renderDrawer();
+      const input = $('#drawer [data-drawer-reply] input');
+      if (input) input.focus({ preventScroll: true });
+    }
+  }
+  function deleteCard(id) {
+    const idx = cards.findIndex((c) => c.id === id);
+    if (idx < 0) return;
+    const backup = cards[idx];
+    const wasDrawer = state.drawerId === id;
+    if (wasDrawer) closeDrawer(true);
+    cards.splice(idx, 1);
+    state.expanded.delete(id);
+    renderAll();
+    toast('卡片已删除', {
+      icon: 'trash',
+      actionLabel: '撤销',
+      onAction: function () {
+        cards.splice(idx, 0, backup);
+        renderAll({ focus: id });
+        toast('已恢复卡片', { icon: 'redo' });
+        announce('已恢复卡片' + backup.title);
+      }
+    });
+    announce('已删除卡片' + backup.title);
+  }
+  function simulateAgent() {
+    const backlogCard = cards.find((c) => c.col === 'backlog');
+    const runningCard = cards.find((c) => c.col === 'running' && c.id !== 'c-203');
+    if (backlogCard) {
+      backlogCard.col = 'running'; backlogCard.status = 'running';
+      backlogCard.action = 'Agent 自主领取 · 正在读取上下文';
+      backlogCard.agent = backlogCard.agent === '待分配' ? 'Opus 5.5' : backlogCard.agent;
+      backlogCard.nodes.push({ ago: '刚刚', text: 'Agent 自主领取任务（无需人工）', state: 'current' });
+      backlogCard.updated = '刚刚';
+      renderAll({ focus: backlogCard.id });
+      toast('Agent 自主推进：' + backlogCard.title + ' → 进行中', { icon: 'sparkle' });
+      announce('Agent 自主领取任务，卡片移到进行中');
+      return;
+    }
+    if (runningCard) {
+      runningCard.col = 'done'; runningCard.status = 'done';
+      runningCard.action = '已完成 · 等待你查看结果';
+      runningCard.nodes.push({ ago: '刚刚', text: '任务完成，Agent 自动归档到已完成', state: 'done' });
+      runningCard.updated = '刚刚';
+      renderAll({ focus: runningCard.id });
+      toast('Agent 自主推进：' + runningCard.title + ' → 已完成', { icon: 'sparkle' });
+      announce('Agent 完成任务，卡片移到已完成');
+      return;
+    }
+    toast('没有可推进的卡片，先新建一张待办吧', { icon: 'alert' });
+  }
+
+  /* ---------------------------------------------------------------- toast */
+  function toast(text, opts) {
+    const o = opts || {};
+    clearTimeout(state.toastTimer);
+    toastLayer.innerHTML = '<div class="toast" role="status">' + icon(o.icon || 'check') + '<span>' + esc(text) + '</span>' +
+      (o.actionLabel ? '<button type="button" class="toast-action" data-action="toast-undo">' + esc(o.actionLabel) + '</button>' : '') + '</div>';
+    state.toast = o;
+    state.toastTimer = setTimeout(function () {
+      toastLayer.innerHTML = '';
+      state.toast = null;
+    }, 4200);
+  }
+
+  /* ----------------------------------------------------------------- menu */
+  function positionPopover(el, anchor, align) {
+    el.style.visibility = 'hidden';
+    el.style.left = '0px';
+    el.style.top = '0px';
+    const r = anchor.getBoundingClientRect();
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    let left = align === 'end' ? r.right - w : r.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - w - 12));
+    let top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+    el.style.visibility = '';
+  }
+  function openPopover(kind, anchor, html, label) {
+    closePopover();
+    popoverLayer.innerHTML = '<div class="popover" role="dialog" aria-label="' + esc(label) + '">' + html + '</div>';
+    const el = popoverLayer.firstElementChild;
+    state.popover = { kind: kind, anchor: anchor, el: el };
+    if (anchor.getAttribute('aria-haspopup')) anchor.setAttribute('aria-expanded', 'true');
+    requestAnimationFrame(function () {
+      positionPopover(el, anchor, kind === 'menu' ? 'end' : 'start');
+      el.classList.add('is-open');
+      const first = el.querySelector('button, input');
+      if (first) first.focus({ preventScroll: true });
+    });
+  }
+  function closePopover() {
+    if (state.popover && state.popover.anchor) state.popover.anchor.setAttribute('aria-expanded', 'false');
+    state.popover = null;
+    popoverLayer.innerHTML = '';
+  }
+  function cardMenuHTML(card) {
+    return '<div class="menu-label">卡片</div>' +
+      '<button type="button" class="menu-item" data-menu="open:' + card.id + '">' + icon('link') + '打开详情<span class="menu-hint">O</span></button>' +
+      '<div class="menu-sep"></div>' +
+      '<div class="menu-label">移到</div>' +
+      COLUMNS.filter((c) => c.id !== card.col).map((c) =>
+        '<button type="button" class="menu-item" data-menu="move:' + card.id + ':' + c.id + '">' + icon('arrowRight') + '移到「' + c.name + '」</button>').join('') +
+      '<div class="menu-sep"></div>' +
+      '<button type="button" class="menu-item" data-menu="copy:' + card.id + '">' + icon('copy') + '复制会话链接</button>' +
+      '<button type="button" class="menu-item is-danger" data-menu="delete:' + card.id + '">' + icon('trash') + '删除卡片</button>';
+  }
+  function filterHTML() {
+    return '<div class="menu-label">所属项目</div>' +
+      PROJECTS.map((p) => '<label class="check"><input type="checkbox" data-filter="project" value="' + esc(p) + '"' + (state.filters.projects.has(p) ? ' checked' : '') + '><span>' + esc(p) + '</span></label>').join('') +
+      '<div class="menu-sep"></div>' +
+      '<div class="menu-label">优先级</div>' +
+      ['P0', 'P1', 'P2'].map((p) => '<label class="check"><input type="checkbox" data-filter="priority" value="' + p + '"' + (state.filters.priorities.has(p) ? ' checked' : '') + '><span>' + p + ' · ' + PRIORITY_LABEL[p] + '</span></label>').join('') +
+      '<div class="menu-sep"></div>' +
+      '<button type="button" class="menu-item" data-filter-clear>' + icon('x') + '清除全部筛选</button>';
+  }
+  function helpHTML() {
+    const rows = [
+      ['搜索卡片', ['⌘K', '/']], ['新建卡片', ['N']], ['看板 / 列表', ['B', 'L']],
+      ['明暗主题', ['T']], ['展开重要节点', ['Enter']], ['打开详情', ['O']],
+      ['卡片换列', ['Alt', '←/→']], ['列内排序', ['Alt', '↑/↓']], ['关闭浮层', ['Esc']]
+    ];
+    return '<div class="menu-label">键盘快捷键</div>' +
+      rows.map((r) => '<div class="help-row"><span>' + r[0] + '</span><span class="keys">' + r[1].map((k) => '<span class="kbd">' + k + '</span>').join('') + '</span></div>').join('') +
+      '<div class="menu-sep"></div>' +
+      '<div class="help-note">拖拽卡片可换列；触屏用卡片菜单「移到…」。所有操作都会同步到 DSH 会话。</div>';
+  }
+  function openFilter() {
+    openPopover('filter', filterBtn, filterHTML(), '筛选卡片');
+  }
+  function openCardMenu(id, anchor) {
+    const card = findCard(id);
+    if (!card) return;
+    openPopover('menu', anchor, cardMenuHTML(card), '卡片操作');
+  }
+
+  /* ---------------------------------------------------------------- drawer */
+  function attrHTML(card) {
+    const s = statusOf(card.status);
+    return '<dl class="attr-grid">' +
+      '<div class="attr"><dt>状态</dt><dd>' + dot(s.dot, true) + esc(s.label) + '</dd></div>' +
+      '<div class="attr"><dt>优先级</dt><dd>' + priorityChip(card.priority) + esc(PRIORITY_LABEL[card.priority] || '') + '</dd></div>' +
+      '<div class="attr"><dt>所属项目</dt><dd>' + projectChip(card.project) + '</dd></div>' +
+      '<div class="attr"><dt>标签</dt><dd>' + (card.tags.length ? tagsChips(card.tags) : '<span style="color:inherit">—</span>') + '</dd></div>' +
+      '<div class="attr"><dt>工具调用</dt><dd>' + icon('tool') + card.tools + ' 次</dd></div>' +
+      '<div class="attr"><dt>搜索</dt><dd>' + icon('search') + card.searches + ' 次</dd></div>' +
+      '<div class="attr"><dt>耗时</dt><dd>' + icon('clock') + esc(card.elapsed) + '</dd></div>' +
+      '<div class="attr"><dt>更新时间</dt><dd>' + esc(card.updated) + '</dd></div>' +
+      '<div class="attr"><dt>负责 Agent</dt><dd>' + esc(card.agent) + '</dd></div>' +
+      '<div class="attr"><dt>DSH 会话</dt><dd><span class="prop-project">' + icon('link') + esc(card.session) + '</span></dd></div>' +
+    '</dl>';
+  }
+  function editFormHTML(card) {
+    return '<form class="drawer-form" data-edit-form>' +
+      '<label class="field"><span>标题</span><input name="title" value="' + esc(card.title) + '" required maxlength="60" autocomplete="off"></label>' +
+      '<label class="field"><span>一句话摘要</span><textarea name="summary" rows="2" maxlength="160">' + esc(card.summary) + '</textarea></label>' +
+      '<div class="field-row">' +
+        '<label class="field"><span>状态</span><select name="status">' + Object.keys(STATUS).map((k) => '<option value="' + k + '"' + (card.status === k ? ' selected' : '') + '>' + STATUS[k].label + '</option>').join('') + '</select></label>' +
+        '<label class="field"><span>优先级</span><select name="priority">' + Object.keys(PRIORITY_LABEL).map((p) => '<option value="' + p + '"' + (card.priority === p ? ' selected' : '') + '>' + p + ' · ' + PRIORITY_LABEL[p] + '</option>').join('') + '</select></label>' +
+      '</div>' +
+      '<label class="field"><span>所属项目</span><select name="project">' + PROJECTS.map((p) => '<option' + (card.project === p ? ' selected' : '') + '>' + esc(p) + '</option>').join('') + '</select></label>' +
+      '<label class="field"><span>标签（逗号分隔）</span><input name="tags" value="' + esc(card.tags.join('，')) + '" autocomplete="off"></label>' +
+      '<p class="form-error" data-edit-error hidden>标题不能为空。</p>' +
+      '<div class="drawer-foot-row"><button type="button" class="btn btn-secondary" data-action="cancel-edit">取消</button><button type="submit" class="btn btn-primary">保存修改</button></div>' +
+    '</form>';
+  }
+  function threadHTML(card) {
+    return '<div class="sync-bar">' + icon('link') + '<span>已连接 DSH 会话</span><span class="sync-id">' + esc(card.session) + '</span><span class="sync-state"><span class="sync-dot" aria-hidden="true"></span>实时同步</span></div>' +
+      '<div class="thread">' + (card.thread.length ? card.thread.map((m) =>
+        '<div class="msg msg-' + (m.from === 'you' ? 'you' : 'agent') + '"><div class="msg-meta">' + (m.from === 'you' ? '你' : 'Agent · ' + esc(card.agent)) + ' · ' + esc(m.time) + '</div><div class="msg-bubble">' + esc(m.text) + '</div></div>').join('')
+        : '<div class="thread-empty">还没有会话消息。第一条回复会同时写入看板与 DSH 会话。</div>') + '</div>' +
+      '<form class="reply" data-drawer-reply style="margin-top:8px">' +
+        '<label class="sr-only" for="drawer-reply-input">回复 Agent，同步到 DSH 会话</label>' +
+        '<input id="drawer-reply-input" name="reply" type="text" placeholder="回复 Agent，同步到 DSH 会话…" autocomplete="off">' +
+        '<button type="submit" class="icon-btn reply-send" aria-label="发送回复并同步">' + icon('send') + '</button>' +
+      '</form>' +
+      '<p class="reply-hint" style="margin-top:6px">' + icon('link') + '回复会写入 DSH 会话，并追加一条看板节点</p>';
+  }
+  function renderDrawer() {
+    const card = state.drawerId ? findCard(state.drawerId) : null;
+    if (!card) {
+      drawer.innerHTML = '';
+      return;
+    }
+    const s = statusOf(card.status);
+    const isApproval = card.approval && card.status === 'needs';
+    const tab = state.drawerTab;
+    drawer.innerHTML = '<div class="drawer-grabber" aria-hidden="true"></div>' +
+      '<header class="drawer-head">' + dot(s.dot) +
+        '<span class="drawer-kicker">看板 / ' + colById(card.col).name + ' / ' + esc(card.id.toUpperCase()) + '</span>' +
+        '<button type="button" class="icon-btn" data-action="close-drawer" aria-label="关闭详情">' + icon('x') + '</button>' +
+      '</header>' +
+      '<div class="drawer-scroll">' +
+        (state.editing ? editFormHTML(card) : '<div class="drawer-title-row"><h2 class="drawer-title" id="drawerTitle" tabindex="-1">' + esc(card.title) + '</h2>' +
+          '<button type="button" class="icon-btn" data-action="edit" aria-label="编辑卡片">' + icon('edit') + '</button></div>' +
+          '<p class="drawer-summary">' + esc(card.summary) + '</p>' +
+          '<div class="drawer-sub">' + dot(s.dot, true) + '<span>' + esc(s.label) + '</span><span aria-hidden="true">·</span><span>' + esc(card.agent) + '</span><span aria-hidden="true">·</span><span>更新于 ' + esc(card.updated) + '</span></div>' +
+          '<div class="drawer-actions">' +
+            '<button type="button" class="btn btn-secondary" data-action="session-tab">' + icon('message') + 'DSH 会话</button>' +
+            '<button type="button" class="btn btn-ghost" data-action="open-dsh">' + icon('link') + '在 DSH 中打开</button>' +
+          '</div>' +
+          attrHTML(card) +
+          '<div class="drawer-tabs" role="tablist" aria-label="详情分区">' +
+            '<button type="button" class="seg-btn' + (tab === 'nodes' ? ' is-active' : '') + '" role="tab" aria-selected="' + (tab === 'nodes') + '" data-action="drawer-tab" data-tab="nodes">重要节点<span class="drawer-tab-count">' + card.nodes.length + '</span></button>' +
+            '<button type="button" class="seg-btn' + (tab === 'thread' ? ' is-active' : '') + '" role="tab" aria-selected="' + (tab === 'thread') + '" data-action="drawer-tab" data-tab="thread">' + icon('message') + '会话<span class="drawer-tab-count">' + card.thread.length + '</span></button>' +
+          '</div>' +
+          '<div class="drawer-body">' + (tab === 'nodes' ? timelineHTML(card) : threadHTML(card)) + '</div>') +
+      '</div>' +
+      '<footer class="drawer-foot">' +
+        (isApproval ? decisionHTML(card) + '<div class="decision-note">批准后 Agent 继续执行，卡片自动移到「已完成」；驳回则回到「待办」。</div>' : '') +
+        (state.editing ? '' : '<div class="drawer-foot-row"><span class="drawer-note">回复与操作会同步到 DSH 会话</span><button type="button" class="btn btn-ghost" data-action="close-drawer">关闭</button></div>') +
+      '</footer>';
+    const thread = drawer.querySelector('.thread');
+    if (thread) thread.scrollTop = thread.scrollHeight;
+  }
+
+  function openDrawer(id, tab) {
+    const card = findCard(id);
+    if (!card) return;
+    state.drawerId = id;
+    state.drawerTab = tab || 'nodes';
+    state.editing = false;
+    closePopover();
+    scrim.hidden = false;
+    drawer.hidden = false;
+    renderAll({ focus: id });
+    const opened = drawer.classList.contains('is-open');
+    scrim.classList.add('is-open');
+    if (!opened) {
+      requestAnimationFrame(function () {
+        drawer.classList.add('is-open');
+        const close = drawer.querySelector('[data-action="close-drawer"]');
+        if (close) close.focus({ preventScroll: true });
+      });
+    }
+    announce('已打开' + card.title + '的详情');
+  }
+  function closeDrawer(instant) {
+    if (!state.drawerId) return;
+    const id = state.drawerId;
+    state.drawerId = null;
+    state.editing = false;
+    scrim.classList.remove('is-open');
+    drawer.classList.remove('is-open');
+    const done = function () {
+      drawer.hidden = true;
+      drawer.innerHTML = '';
+      scrim.hidden = true;
+      renderBoard(); renderList();
+      focusCard(id);
+    };
+    if (instant) done(); else setTimeout(done, motionMs(260));
+    announce('已关闭详情');
+  }
+
+  /* ----------------------------------------------------------------- modal */
+  function newCardFormHTML(presetCol) {
+    return '<div class="modal-head"><h2 id="modalTitle">新建卡片</h2><button type="button" class="icon-btn" data-action="close-modal" aria-label="关闭">' + icon('x') + '</button></div>' +
+      '<p class="modal-desc">创建后会立即写入看板；Agent 领取后会自动移动列，只有授权、方案或讨论才需要你。</p>' +
+      '<form data-new-form>' +
+        '<label class="field"><span>标题</span><input name="title" required maxlength="60" placeholder="给 Agent 一个明确的任务" autocomplete="off"></label>' +
+        '<label class="field"><span>一句话摘要</span><textarea name="summary" rows="2" maxlength="160" placeholder="目标、边界与验收方式…"></textarea></label>' +
+        '<div class="field-row">' +
+          '<label class="field"><span>放入列</span><select name="col">' + COLUMNS.map((c) => '<option value="' + c.id + '"' + (presetCol === c.id ? ' selected' : '') + '>' + c.name + '</option>').join('') + '</select></label>' +
+          '<label class="field"><span>优先级</span><select name="priority"><option value="P2" selected>P2 · 常规</option><option value="P1">P1 · 高</option><option value="P0">P0 · 紧急</option></select></label>' +
+        '</div>' +
+        '<label class="field"><span>所属项目</span><select name="project">' + PROJECTS.map((p) => '<option>' + esc(p) + '</option>').join('') + '</select></label>' +
+        '<label class="field"><span>标签（逗号分隔）</span><input name="tags" placeholder="如：前端，空态" autocomplete="off"></label>' +
+        '<p class="form-error" data-new-error hidden>请填写标题。</p>' +
+        '<div class="modal-foot"><span class="modal-hint">Enter 创建 · Esc 取消</span><button type="button" class="btn btn-secondary" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">创建卡片</button></div>' +
+      '</form>';
+  }
+  function openNewModal(presetCol) {
+    modalLayer.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">' + newCardFormHTML(presetCol || 'backlog') + '</div>';
+    modalLayer.hidden = false;
+    closePopover();
+    requestAnimationFrame(function () {
+      modalLayer.classList.add('is-open');
+      const input = modalLayer.querySelector('input[name="title"]');
+      if (input) input.focus({ preventScroll: true });
+    });
+  }
+  function closeModal(instant) {
+    modalLayer.classList.remove('is-open');
+    const done = function () {
+      modalLayer.hidden = true;
+      modalLayer.innerHTML = '';
+    };
+    if (instant) done(); else setTimeout(done, motionMs(200));
+  }
+  function createCard(form) {
+    const data = new FormData(form);
+    const title = String(data.get('title') || '').trim();
+    if (!title) {
+      const err = $('[data-new-error]', form);
+      if (err) err.hidden = false;
+      const input = $('input[name="title"]', form);
+      if (input) input.focus();
+      return;
+    }
+    const colId = String(data.get('col') || 'backlog');
+    const col = colById(colId);
+    const card = {
+      id: 'c-' + Math.floor(500 + Math.random() * 400),
+      col: colId,
+      title: title,
+      status: col.defaultStatus,
+      priority: String(data.get('priority') || 'P2'),
+      project: String(data.get('project') || PROJECTS[0]),
+      tags: String(data.get('tags') || '').split(/[,，、]/).map((s) => s.trim()).filter(Boolean).slice(0, 3),
+      summary: String(data.get('summary') || '').trim() || '（未填写摘要）',
+      action: col.defaultStatus === 'todo' ? '等待 Agent 领取' : col.defaultStatus === 'needs' ? '等待你确认' : '已创建 · 等待开始',
+      tools: 0, searches: 0, elapsed: '—', updated: '刚刚', agent: '待分配', session: 'dsh-' + Math.random().toString(16).slice(2, 6),
+      nodes: [{ ago: '刚刚', text: '由你在看板创建卡片', state: 'done' }, { ago: '—', text: '等待 Agent 领取', state: 'pending' }],
+      thread: []
+    };
+    if (colId === 'needs') card.approval = { question: '确认是否开始：' + title + '？', risk: '由你创建，等待 Agent 确认范围' };
+    const firstOfCol = cards.find((c) => c.col === colId);
+    const idx = firstOfCol ? cards.indexOf(firstOfCol) : cards.length;
+    cards.splice(idx, 0, card);
+    state.expanded.add(card.id);
+    if (state.layout === 'narrow') state.activeCol = colId;
+    closeModal(true);
+    renderAll({ focus: card.id });
+    toast('卡片已创建 · 已同步到 DSH 会话', { icon: 'check' });
+    announce('已创建卡片' + title);
+  }
+  function saveEdit(form) {
+    const card = findCard(state.drawerId);
+    if (!card) return;
+    const data = new FormData(form);
+    const title = String(data.get('title') || '').trim();
+    if (!title) {
+      const err = $('[data-edit-error]', form);
+      if (err) err.hidden = false;
+      return;
+    }
+    card.title = title;
+    card.summary = String(data.get('summary') || '').trim();
+    card.priority = String(data.get('priority') || card.priority);
+    card.project = String(data.get('project') || card.project);
+    card.tags = String(data.get('tags') || '').split(/[,，、]/).map((s) => s.trim()).filter(Boolean).slice(0, 3);
+    const nextStatus = String(data.get('status') || card.status);
+    if (nextStatus !== card.status) {
+      const map = { todo: 'backlog', running: 'running', blocked: 'running', needs: 'needs', done: 'done', failed: 'done' };
+      const nextCol = map[nextStatus];
+      card.status = nextStatus;
+      card.col = nextCol;
+      if (nextStatus === 'needs' && !card.approval) card.approval = { question: '确认是否继续：' + title + '？', risk: '由看板编辑发起的人工确认' };
+      if (nextStatus !== 'needs') card.approval = null;
+      card.nodes.push({ ago: '刚刚', text: '你在详情中把状态改为「' + STATUS[nextStatus].label + '」', state: 'done' });
+    }
+    card.updated = '刚刚';
+    state.editing = false;
+    renderAll();
+    renderDrawer();
+    toast('修改已保存 · 已同步到 DSH 会话', { icon: 'check' });
+    announce('已保存卡片修改');
+  }
+
+  /* ------------------------------------------------------------------ tabs */
+  document.addEventListener('click', function (e) {
+    const tab = e.target.closest('[data-action="view"]');
+    if (tab) { setView(tab.dataset.view); return; }
+  });
+
+  /* --------------------------------------------------------------- delegation */
+  function handleAction(e) {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return false;
+    const action = btn.dataset.action;
+    const id = btn.dataset.id;
+    if (action === 'theme') { toggleTheme(); return true; }
+    if (action === 'help') { openPopover('help', helpBtn, helpHTML(), '键盘快捷键'); return true; }
+    if (action === 'filter') { openFilter(); return true; }
+    if (action === 'new-card') { openNewModal('backlog'); return true; }
+    if (action === 'add-col') { openNewModal(btn.dataset.col); return true; }
+    if (action === 'clear-search') { state.search = ''; searchInput.value = ''; renderAll(); return true; }
+    if (action === 'clear-filters') {
+      state.filters.projects.clear(); state.filters.priorities.clear(); state.search = ''; searchInput.value = '';
+      closePopover(); renderAll(); toast('已清除筛选条件', { icon: 'check' }); return true;
+    }
+    if (action === 'remove-project') { state.filters.projects.delete(btn.dataset.value); renderAll(); return true; }
+    if (action === 'remove-priority') { state.filters.priorities.delete(btn.dataset.value); renderAll(); return true; }
+    if (action === 'simulate') { simulateAgent(); return true; }
+    if (action === 'refresh') { refreshBoard(); return true; }
+    if (action === 'expand') { toggleExpand(id); return true; }
+    if (action === 'open') { openDrawer(id); return true; }
+    if (action === 'menu') { openCardMenu(id, btn); return true; }
+    if (action === 'session') { openDrawer(id, 'thread'); return true; }
+    if (action === 'collapse-col') {
+      const colId = btn.dataset.col;
+      if (state.collapsedCols.has(colId)) state.collapsedCols.delete(colId); else state.collapsedCols.add(colId);
+      renderAll();
+      announce((state.collapsedCols.has(colId) ? '已折叠' : '已展开') + colById(colId).name + '列');
+      return true;
+    }
+    if (action === 'tab') { setActiveCol(btn.dataset.col); return true; }
+    if (action === 'approve') { approveCard(id); return true; }
+    if (action === 'reject') { rejectCard(id); return true; }
+    if (action === 'retry') { retryCard(id); return true; }
+    if (action === 'close-drawer') { closeDrawer(); return true; }
+    if (action === 'edit') { state.editing = true; renderDrawer(); const input = drawer.querySelector('input[name="title"]'); if (input) input.focus(); return true; }
+    if (action === 'cancel-edit') { state.editing = false; renderDrawer(); return true; }
+    if (action === 'drawer-tab') { state.drawerTab = btn.dataset.tab; renderDrawer(); return true; }
+    if (action === 'session-tab') { state.drawerTab = 'thread'; renderDrawer(); const input = $('#drawer [data-drawer-reply] input'); if (input) input.focus(); return true; }
+    if (action === 'open-dsh') {
+      const card = findCard(state.drawerId);
+      toast('正在 DSH 会话中打开 ' + (card ? card.session : '') + '（演示）', { icon: 'link' });
+      return true;
+    }
+    if (action === 'close-modal') { closeModal(); return true; }
+    if (action === 'toast-undo') {
+      if (state.toast && state.toast.onAction) state.toast.onAction();
+      clearTimeout(state.toastTimer);
+      toastLayer.innerHTML = '';
+      return true;
+    }
+    return false;
+  }
+
+  document.addEventListener('click', function (e) {
+    if (handleAction(e)) return;
+    // 点击卡片 / 列表行：展开 / 收起（不含内部按钮、输入、链接）
+    if (e.target.closest('button, a, input, textarea, select, label')) return;
+    const cardEl = e.target.closest('.card, .list-row');
+    if (cardEl && cardEl.dataset.cardId) toggleExpand(cardEl.dataset.cardId);
+  });
+
+  // 卡片菜单与筛选浮层
+  popoverLayer.addEventListener('click', function (e) {
+    const menu = e.target.closest('[data-menu]');
+    if (menu) {
+      const parts = menu.dataset.menu.split(':');
+      const kind = parts[0]; const id = parts[1]; const value = parts[2];
+      closePopover();
+      if (kind === 'open') openDrawer(id);
+      else if (kind === 'move') moveCard(id, value, null);
+      else if (kind === 'copy') {
+        const card = findCard(id);
+        const text = 'dsh://session/' + (card ? card.session : '') + '#' + id;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { toast('会话链接已复制', { icon: 'copy' }); }, function () { toast('会话链接：' + text, { icon: 'copy' }); });
+        } else {
+          toast('会话链接：' + text, { icon: 'copy' });
+        }
+      } else if (kind === 'delete') deleteCard(id);
+      return;
+    }
+    if (e.target.closest('[data-filter-clear]')) {
+      state.filters.projects.clear(); state.filters.priorities.clear();
+      renderAll(); closePopover(); toast('已清除筛选条件', { icon: 'check' });
+    }
+  });
+  popoverLayer.addEventListener('change', function (e) {
+    const input = e.target.closest('[data-filter]');
+    if (!input) return;
+    const set = input.dataset.filter === 'project' ? state.filters.projects : state.filters.priorities;
+    if (input.checked) set.add(input.value); else set.delete(input.value);
+    renderBoard(); renderList(); renderTabs(); renderToolbar();
+  });
+  document.addEventListener('click', function (e) {
+    if (!state.popover) return;
+    if (e.target.closest('.popover')) return;
+    if (e.target.closest('[data-action="filter"], [data-action="help"], [data-action="menu"]')) return;
+    closePopover();
+  });
+
+  // 回复表单（卡片内 / 列表内 / 抽屉内）
+  document.addEventListener('submit', function (e) {
+    const replyForm = e.target.closest('[data-reply]');
+    if (replyForm) {
+      e.preventDefault();
+      const input = replyForm.querySelector('input[name="reply"]');
+      const value = input ? input.value : '';
+      sendReply(replyForm.dataset.reply, value);
+      return;
+    }
+    const drawerReply = e.target.closest('[data-drawer-reply]');
+    if (drawerReply) {
+      e.preventDefault();
+      const input = drawerReply.querySelector('input[name="reply"]');
+      sendReply(state.drawerId, input ? input.value : '');
+      return;
+    }
+    const newForm = e.target.closest('[data-new-form]');
+    if (newForm) { e.preventDefault(); createCard(newForm); return; }
+    const editForm = e.target.closest('[data-edit-form]');
+    if (editForm) { e.preventDefault(); saveEdit(editForm); return; }
+  });
+
+  // 搜索
+  searchInput.addEventListener('input', function () {
+    state.search = searchInput.value;
+    renderBoard(); renderList(); renderTabs(); renderToolbar();
+  });
+
+  // 刷新（加载态演示）
+  function refreshBoard() {
+    if (state.refreshing) return;
+    state.refreshing = true;
+    renderBoard();
+    toast('正在同步 Agent 状态…', { icon: 'refresh' });
+    setTimeout(function () {
+      state.refreshing = false;
+      renderAll();
+      toast('已同步 · ' + cards.length + ' 张卡片', { icon: 'check' });
+      announce('看板已刷新');
+    }, motionMs(900));
+  }
+
+  /* --------------------------------------------------------------- drawer UI */
+  drawer.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    const focusables = $$('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])', drawer).filter(function (el) { return !el.disabled && el.offsetParent !== null; });
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+  modalLayer.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    const focusables = $$('button, [href], input, select, textarea', modalLayer).filter(function (el) { return !el.disabled && el.offsetParent !== null; });
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+  scrim.addEventListener('click', function () { closeDrawer(); });
+
+  /* ------------------------------------------------------------------- drag */
+  let dragId = null;
+  board.addEventListener('dragstart', function (e) {
+    const cardEl = e.target.closest('.card');
+    if (!cardEl) return;
+    dragId = cardEl.dataset.cardId;
+    cardEl.classList.add('is-dragging');
+    board.classList.add('is-dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', dragId); } catch (err) { /* noop */ }
+    }
+  });
+  board.addEventListener('dragend', function () {
+    dragId = null;
+    board.classList.remove('is-dragging');
+    $$('.card.is-dragging, .card.is-drop-before', board).forEach(function (el) { el.classList.remove('is-dragging', 'is-drop-before'); });
+    $$('.column.is-drop-target', board).forEach(function (el) { el.classList.remove('is-drop-target'); });
+  });
+  function clearDropHints() {
+    $$('.card.is-drop-before', board).forEach(function (el) { el.classList.remove('is-drop-before'); });
+    $$('.column.is-drop-target', board).forEach(function (el) { el.classList.remove('is-drop-target'); });
+  }
+  board.addEventListener('dragover', function (e) {
+    if (!dragId) return;
+    const colEl = e.target.closest('.column');
+    if (!colEl) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    clearDropHints();
+    colEl.classList.add('is-drop-target');
+    if (colEl.classList.contains('is-collapsed')) return;
+    const cardEls = $$('.card', colEl).filter(function (el) { return el.dataset.cardId !== dragId; });
+    let before = null;
+    for (let i = 0; i < cardEls.length; i += 1) {
+      const r = cardEls[i].getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { before = cardEls[i]; break; }
+    }
+    if (before) before.classList.add('is-drop-before');
+  });
+  board.addEventListener('drop', function (e) {
+    if (!dragId) return;
+    const colEl = e.target.closest('.column');
+    if (!colEl) return;
+    e.preventDefault();
+    const colId = colEl.dataset.col;
+    const cardEls = $$('.card', colEl).filter(function (el) { return el.dataset.cardId !== dragId; });
+    let index = cardEls.length;
+    for (let i = 0; i < cardEls.length; i += 1) {
+      const r = cardEls[i].getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) { index = i; break; }
+    }
+    const id = dragId;
+    dragId = null;
+    clearDropHints();
+    if (state.collapsedCols.has(colId)) state.collapsedCols.delete(colId);
+    moveCard(id, colId, index);
+  });
+
+  /* -------------------------------------------------------------- keyboard */
+  function closeTop() {
+    if (state.popover) { closePopover(); return true; }
+    if (!modalLayer.hidden) { closeModal(); return true; }
+    if (state.drawerId) { closeDrawer(); return true; }
+    return false;
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { if (closeTop()) e.preventDefault(); return; }
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    const inField = /INPUT|TEXTAREA|SELECT/.test(tag) || (document.activeElement && document.activeElement.isContentEditable);
+    const meta = e.metaKey || e.ctrlKey;
+    if (meta && e.key.toLowerCase() === 'k') { e.preventDefault(); searchInput.focus(); searchInput.select(); return; }
+    if (meta || e.altKey) {
+      // Alt + 方向键：卡片换列 / 列内排序（见下方卡片处理）
+      if (e.altKey) { /* fallthrough到卡片处理 */ }
+      else return;
+    }
+    if (inField) return;
+    const cardEl = document.activeElement && document.activeElement.closest && document.activeElement.closest('.card, .list-row');
+    if (cardEl && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      const colId = cardEl.classList.contains('card')
+        ? (cardEl.closest('.column') || {}).dataset && cardEl.closest('.column').dataset.col
+        : (cardEl.closest('.list-group') || {}).dataset && cardEl.closest('.list-group').dataset.col;
+      const idx = COLUMNS.findIndex(function (c) { return c.id === colId; });
+      const next = COLUMNS[idx + (e.key === 'ArrowRight' ? 1 : -1)];
+      if (next) moveCard(cardEl.dataset.cardId, next.id, null);
+      return;
+    }
+    if (cardEl && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const card = findCard(cardEl.dataset.cardId);
+      if (!card) return;
+      const colCards = cards.filter(function (c) { return c.col === card.col; });
+      const cur = colCards.indexOf(card);
+      const next = cur + (e.key === 'ArrowDown' ? 1 : -1);
+      if (next >= 0 && next < colCards.length) moveCard(card.id, card.col, next);
+      return;
+    }
+    if (cardEl && (e.key === 'Enter' || e.key === ' ')) {
+      if (e.target.closest('button, a, input, textarea, select')) return;
+      e.preventDefault(); toggleExpand(cardEl.dataset.cardId); return;
+    }
+    if (e.key === '/') { e.preventDefault(); searchInput.focus(); return; }
+    if (e.key === '?') { e.preventDefault(); openPopover('help', helpBtn, helpHTML(), '键盘快捷键'); return; }
+    const k = e.key.toLowerCase();
+    if (k === 'n') { e.preventDefault(); openNewModal('backlog'); }
+    else if (k === 'b') { e.preventDefault(); setView('board'); }
+    else if (k === 'l') { e.preventDefault(); setView('list'); }
+    else if (k === 't') { e.preventDefault(); toggleTheme(); }
+    else if (k === 'o') {
+      const el = document.activeElement && document.activeElement.closest && document.activeElement.closest('.card, .list-row');
+      if (el) { e.preventDefault(); openDrawer(el.dataset.cardId); }
+    }
+  });
+
+  /* ------------------------------------------------------- resize / layout */
+  const ro = new ResizeObserver(function (entries) {
+    const w = entries[0].contentRect.width;
+    const next = w < 720 ? 'narrow' : w < 1100 ? 'scroll' : w < 1440 ? 'compact' : 'wide';
+    if (next === state.layout) return;
+    state.layout = next;
+    document.documentElement.dataset.layout = next;
+    if (next === 'narrow' && !state.activeCol) state.activeCol = 'needs';
+    renderAll();
+  });
+  ro.observe(app);
+
+  /* ---------------------------------------------------------------- init */
+  function init() {
+    const params = new URLSearchParams(location.search);
+    state.theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+    state.layout = document.documentElement.dataset.layout || 'wide';
+    if (params.get('view') === 'list') state.view = 'list';
+    if (params.get('collapsed') === '1') state.expanded.clear();
+    if (params.get('expanded')) {
+      state.expanded.clear();
+      params.get('expanded').split(',').forEach(function (id) { if (findCard(id)) state.expanded.add(id); });
+    }
+    if (params.get('col')) state.activeCol = params.get('col');
+    renderAll();
+    if (params.get('drawer')) {
+      openDrawer(params.get('drawer'), params.get('tab') || 'nodes');
+    }
+    window.addEventListener('resize', function () { if (state.popover) closePopover(); });
+  }
+
+  // 顶部视图按钮的点击（复用统一 action）
+  $('#viewBoard').addEventListener('click', function () { setView('board'); });
+  $('#viewList').addEventListener('click', function () { setView('list'); });
+
+  init();
+})();
+</script>
+</body>
+</html>

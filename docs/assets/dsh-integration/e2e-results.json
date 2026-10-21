@@ -1,0 +1,142 @@
+{
+  "url": "http://127.0.0.1:55444/?token=neDGLhEab_mX4EvLEd9J-MhxvwmcQmEXpMqRVq-ZP0o",
+  "dismissed_beta_notice": true,
+  "sidebar": {
+    "count": 1,
+    "label": "看板",
+    "rect": {
+      "x": 12,
+      "y": 120,
+      "width": 256,
+      "height": 36,
+      "top": 120,
+      "right": 268,
+      "bottom": 156,
+      "left": 12
+    }
+  },
+  "panel": {
+    "present": true,
+    "rect": {
+      "x": 280,
+      "y": 0,
+      "width": 1160,
+      "height": 900,
+      "top": 0,
+      "right": 1440,
+      "bottom": 900,
+      "left": 280
+    }
+  },
+  "frame_initial": {
+    "bridgeReady": true,
+    "mode": "light",
+    "tokens": 23,
+    "count": 3,
+    "cwd": "/Users/roxor/Desktop/dsh/dsh kanban",
+    "sessionId": "session-4b3bfc0d-8872-4343-aab6-2707bb557dff"
+  },
+  "theme_parent": {
+    "bg": "rgb(255, 255, 255)",
+    "color": "rgb(15, 17, 21)",
+    "dark": false,
+    "dsTheme": null,
+    "bgBase": "#fff"
+  },
+  "theme_frame": {
+    "bg": "rgb(255, 255, 255)",
+    "color": "rgb(15, 17, 21)",
+    "mode": "light",
+    "tokens": 23,
+    "bgBase": "#fff"
+  },
+  "prompt_result": {
+    "sessionId": "session-bebf8bb9-16c7-4b3c-aada-ec9d74dc8ace",
+    "created": true,
+    "text": "请调用 kanban_spike_add_card 工具，添加一张标题为「看板冒烟：iframe 触发」的卡片，然后用一句话确认。"
+  },
+  "session_id": "session-bebf8bb9-16c7-4b3c-aada-ec9d74dc8ace",
+  "count_after_tool": 4,
+  "cards": [
+    {
+      "id": "card-1",
+      "title": "侧栏入口 + main keyed 面板",
+      "column": "doing",
+      "source": "seed"
+    },
+    {
+      "id": "card-2",
+      "title": "同源 iframe + 主题令牌桥",
+      "column": "doing",
+      "source": "seed"
+    },
+    {
+      "id": "card-3",
+      "title": "iframe → 父页面 → session.prompt",
+      "column": "todo",
+      "source": "seed"
+    },
+    {
+      "id": "card-101",
+      "title": "看板冒烟：iframe 触发",
+      "column": "todo",
+      "source": "agent-tool",
+      "createdAt": 1792544081025
+    }
+  ],
+  "conversation": {
+    "hasTextarea": 0,
+    "mentionsTool": true,
+    "excerpt": "看板冒烟卡片添加确认\n标准模式\n对话\n轨迹\n系统提示词\n请调用 kanban_spike_add_card 工具，添加一张标题为「看板冒烟：iframe 触发」的卡片，然后用一句话确认。\n08:54\n1 次工具调用\n\n卡片「看板冒烟：iframe 触发」已添加到看板的待办列（ID: card-101），看板现在共有 4 张卡片。\n\n用量 43.1K tok\n用时 2秒\n08:54\n发消息或创建任务, / 调用指令, @ 文件或对话\n工作区内修改\nDeepSeek-V41-Flash\nHigh\n1 轮 2 步·373 tok/s\n43.1K tok·缓存命中 50%"
+  },
+  "server_state": {
+    "ok": true,
+    "plugin": "dsh-kanban-spike",
+    "pid": 5584,
+    "cwd": "/Users/roxor/Desktop/dsh/dsh kanban",
+    "count": 4,
+    "cards": [
+      {
+        "id": "card-1",
+        "title": "侧栏入口 + main keyed 面板",
+        "column": "doing",
+        "source": "seed"
+      },
+      {
+        "id": "card-2",
+        "title": "同源 iframe + 主题令牌桥",
+        "column": "doing",
+        "source": "seed"
+      },
+      {
+        "id": "card-3",
+        "title": "iframe → 父页面 → session.prompt",
+        "column": "todo",
+        "source": "seed"
+      },
+      {
+        "id": "card-101",
+        "title": "看板冒烟：iframe 触发",
+        "column": "todo",
+        "source": "agent-tool",
+        "createdAt": 1792544081025
+      }
+    ],
+    "serverTime": 1792544086299
+  },
+  "overlay": {
+    "present": true,
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 900,
+      "top": 0,
+      "right": 1440,
+      "bottom": 900,
+      "left": 0
+    }
+  },
+  "client_errors": [],
+  "console_errors": []
+}

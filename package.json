@@ -1,0 +1,49 @@
+{
+  "name": "dsh-kanban",
+  "version": "0.1.0",
+  "description": "DSH 看板：以卡片为控制面、以 DSH 会话为执行面的任务看板插件。",
+  "license": "MIT",
+  "author": "roxorlt",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/store.js",
+    "lib/domain.js",
+    "lib/routes.js",
+    "lib/tools.js",
+    "lib/static.js",
+    "lib/client.js",
+    "web/dist",
+    "skills",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "dev:server": "node scripts/dev-server.mjs --port 4599",
+    "dev:web": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-api-session-controller"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

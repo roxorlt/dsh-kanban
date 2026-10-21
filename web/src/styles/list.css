@@ -1,0 +1,216 @@
+/* lint-tokens-ignore: global-sheet */
+/* 列表视图：按列分组的行式列表 */
+
+.kb-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px var(--kb-pad-x) 24px;
+}
+
+.kb-list__group {
+  flex: none;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-card);
+  background: var(--kb-surface-card);
+  overflow: hidden;
+}
+
+.kb-list__group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-list__group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-list__group-add {
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-list__group:hover .kb-list__group-add,
+.kb-list__group-add:focus-visible {
+  opacity: 1;
+}
+
+.kb-list__items {
+  display: flex;
+  flex-direction: column;
+}
+
+.kb-list__empty {
+  padding: 18px 12px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxs-12);
+  text-align: center;
+}
+
+.kb-list__item {
+  display: flex;
+  flex-direction: column;
+}
+
+.kb-list__item + .kb-list__item {
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.kb-list__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  transition: background-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-list__row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-list__title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-s-strong-14);
+  text-align: left;
+}
+
+.kb-list__title .kb-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.kb-list__title:hover .kb-list__title-text {
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-underline-offset: 3px;
+}
+
+.kb-list__title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-list__row-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-list__row-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kb-list__row-meta .kb-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.kb-list__row-meta .kb-icon-btn {
+  width: 24px;
+  height: 24px;
+}
+
+.kb-list__chevron {
+  transition: transform var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-list__item--expanded .kb-list__chevron {
+  transform: rotate(180deg);
+}
+
+.kb-list__summary-line {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 0 12px 11px 29px;
+}
+
+.kb-list__summary {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-list__status-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.kb-list__status-line .kb-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.kb-list__labels {
+  display: flex;
+  gap: 4px;
+}
+
+.kb-list__expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px 12px 29px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  animation: kb-reveal var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-list__action {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-list__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kb-list__section-title {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-strong-11);
+  letter-spacing: 0.02em;
+}
+
+.kb-list__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}

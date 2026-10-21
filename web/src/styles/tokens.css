@@ -1,0 +1,195 @@
+/* lint-tokens-ignore: global-sheet */
+/*
+ * DSH 主题令牌的本地兜底值。
+ *
+ * 只有「独立模式」（直接打开页面、没有 DSH 父页面）才会用到这里的值；
+ * 嵌入 DSH 后父页面通过 postMessage(kanban:theme) 把真实令牌写到 :root 的行内样式，
+ * 行内样式优先级更高，会覆盖本文件。
+ *
+ * 取值照抄 DSH v0.1.5 主题表（docs/ui 规范 dsh-tokens.md），只覆盖看板用到的令牌子集。
+ * 亮/暗切换由 html[data-kanban-theme] 控制（由 bridge.ts 设置），
+ * 不写 prefers-color-scheme 选择器，避免与宿主主题机制冲突。
+ *
+ * lint-tokens 对本文件的 literal-color / reserved-prefix 属于预期：
+ * 这是主题兜底值镜像，不是组件样式。
+ */
+
+:root {
+  color-scheme: light;
+
+  /* 背景与表面 */
+  --dsw-alias-bg-base: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-1: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-2: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-3: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-module-platform: rgb(245, 246, 247); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-skeleton: rgba(0, 0, 0, 0.04); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-1: rgba(0, 0, 0, 0.24); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-2: rgba(0, 0, 0, 0.12); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-3: rgba(0, 0, 0, 0.48); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-overlay: rgb(233, 236, 242); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 文字 */
+  --dsw-alias-label-primary: rgb(15, 17, 21); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-secondary: rgb(97, 102, 107); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-tertiary: rgb(129, 133, 140); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-caption: rgb(173, 178, 184); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-dimmed: rgb(225, 229, 238); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-inverted: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-foreground: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-dimmed: rgb(21, 21, 23); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 品牌与按钮（DSH 主按钮是黑底，不是蓝底） */
+  --dsw-alias-brand-primary: rgb(15, 17, 21); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-brand-text: rgb(15, 17, 21); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-fill: rgb(15, 17, 21); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-hover: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-dimmed: rgb(235, 238, 242); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-contrast-fill: rgb(97, 102, 107); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-elevated-fill: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-floating-fill: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-floating-hover: rgb(241, 243, 245); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-ghost-active-fill: rgb(235, 238, 242); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 描边（中性实线一律 0.5px） */
+  --dsw-alias-border-l1: rgba(0, 0, 0, 0.04); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l2: rgba(0, 0, 0, 0.1); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l3: rgba(0, 0, 0, 0.12); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l4: rgba(0, 0, 0, 0.16); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 交互底色 */
+  --dsw-alias-interactive-bg-hover: rgba(38, 49, 72, 0.06); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-active: rgba(38, 49, 72, 0.1); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-solid: rgb(241, 243, 245); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-danger: rgba(236, 19, 19, 0.05); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-accent: rgba(38, 49, 72, 0.14); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 状态色 */
+  --dsw-alias-state-error-primary: rgb(236, 19, 19); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-error-secondary: rgb(242, 90, 90); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-success-primary: rgb(34, 197, 94); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-success-secondary: rgb(78, 209, 126); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-success-tertiary: rgb(230, 250, 237); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-warn-primary: rgb(245, 158, 11); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-warn-secondary: rgb(247, 173, 49); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-warn-label: rgb(221, 134, 41); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-warn-tertiary: rgb(254, 245, 231); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-business-primary: rgb(65, 118, 230); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-business-tertiary: rgb(228, 237, 253); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-link: rgb(65, 118, 230); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 代码与工具表面 */
+  --dsw-alias-markdown-code-block: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-markdown-inline-code: rgb(250, 250, 250); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-markdown-tag: rgb(241, 243, 245); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-toast-bg: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-tooltip-bg: rgb(44, 44, 46); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 产品专用表面 */
+  --dsw-specific-menu: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-input-major: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-sidebar-fill: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-selector: rgb(245, 246, 247); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-tip: rgb(245, 246, 247); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 高度/阴影 */
+  --dsw-elevation-panel: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 3px 8px 0 rgba(0, 0, 0, 0.03), /* lint-tokens-ignore: literal-color,reserved-prefix */
+    0 0 16px 0 rgba(0, 0, 0, 0.02);
+  --dsw-elevation-prominent: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 3px 8px 0 rgba(0, 0, 0, 0.04), /* lint-tokens-ignore: literal-color,reserved-prefix */
+    0 0 20px 0 rgba(0, 0, 0, 0.05);
+  --dsw-elevation-soft: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 4px 16px 0 rgba(0, 0, 0, 0.03), /* lint-tokens-ignore: literal-color,reserved-prefix */
+    0 0 24px 0 rgba(0, 0, 0, 0.03);
+  --dsw-shadow-lv2: 0 4px 12px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.04); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-mask-blur: blur(2px); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 排版（复合简写自带行高） */
+  --dsw-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-xs-13: 13px/20px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-xxs-12: 12px/18px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-xxxs-11: 11px/14px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-s-14: 14px/22px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-xs-strong-13: 500 13px/20px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-s-strong-14: 500 14px/22px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-l-20: 500 20px/28px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --ds-font-family-code: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, 'Liberation Mono', Menlo,
+    Courier, 'PingFang SC', 'Microsoft YaHei';
+
+  /* 动效（看板 120–220ms） */
+  --ds-transition-duration: 0.2s;
+  --ds-transition-duration-fast: 0.1s;
+  --ds-transition-duration-slow: 0.3s;
+  --ds-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-kanban-theme='dark'] {
+  color-scheme: dark;
+
+  --dsw-alias-bg-base: rgb(21, 21, 23); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-1: rgb(35, 35, 36); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-2: rgb(44, 44, 46); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-3: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-module-platform: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-skeleton: rgba(255, 255, 255, 0.08); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-1: rgba(0, 0, 0, 0.5); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-2: rgba(0, 0, 0, 0.2); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-3: rgba(0, 0, 0, 0.48); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-overlay: rgb(97, 102, 107); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-label-primary: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-secondary: rgb(207, 211, 214); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-tertiary: rgb(173, 178, 184); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-caption: rgb(129, 133, 140); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-dimmed: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-inverted: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-foreground: rgb(15, 17, 21); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-dimmed: rgb(235, 238, 242); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-brand-primary: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-brand-text: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-fill: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-hover: rgb(235, 238, 242); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-dimmed: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-contrast-fill: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-elevated-fill: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-floating-fill: rgb(44, 44, 46); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-floating-hover: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-ghost-active-fill: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-border-l1: rgba(255, 255, 255, 0.06); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l2: rgba(255, 255, 255, 0.12); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l3: rgba(255, 255, 255, 0.16); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l4: rgba(255, 255, 255, 0.2); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-interactive-bg-hover: rgba(255, 255, 255, 0.08); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-active: rgba(255, 255, 255, 0.14); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-solid: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-danger: rgba(242, 90, 90, 0.15); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-accent: rgba(255, 255, 255, 0.24); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-state-error-primary: rgb(242, 90, 90); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-success-tertiary: rgb(35, 60, 44); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-warn-tertiary: rgb(39, 36, 31); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-business-primary: rgb(103, 158, 254); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-business-tertiary: rgb(52, 65, 91); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-link: rgb(103, 158, 254); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-markdown-code-block: rgb(27, 27, 28); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-markdown-inline-code: rgb(41, 41, 41); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-markdown-tag: rgb(44, 44, 46); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-toast-bg: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-tooltip-bg: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-specific-menu: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-input-major: rgb(44, 44, 46); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-sidebar-fill: rgb(27, 27, 28); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-selector: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-tip: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+}

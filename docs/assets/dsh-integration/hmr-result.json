@@ -1,0 +1,12 @@
+{
+  "hmr": {
+    "version_before": 1,
+    "nav_mark_before": "first-load",
+    "version_after": 2,
+    "swapped_without_reload": true,
+    "nav_mark_after": "first-load",
+    "sidebar_entry_still_visible": 1,
+    "version_reverted": 1,
+    "nav_mark_after_revert": "first-load"
+  }
+}

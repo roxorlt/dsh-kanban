@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSH 看板（spike）</title>
+    <link rel="stylesheet" href="/kanban-spike-static/style.css" />
+  </head>
+  <body>
+    <header class="kb-head">
+      <div class="kb-brand">
+        <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+          <rect x="1.5" y="2.5" width="4" height="11" rx="1" />
+          <rect x="6.25" y="2.5" width="4" height="7" rx="1" />
+          <rect x="11" y="2.5" width="3.5" height="9" rx="1" />
+        </svg>
+        <strong>DSH 看板</strong>
+        <span class="kb-tag">spike · iframe</span>
+      </div>
+      <div class="kb-status" id="bridge-status" role="status">等待父页面主题桥…</div>
+    </header>
+
+    <section class="kb-summary">
+      <div class="kb-metric">
+        <span class="kb-metric-value" id="card-count">–</span>
+        <span class="kb-metric-label">卡片数（/api/kanban-spike/state）</span>
+      </div>
+      <div class="kb-metric">
+        <span class="kb-metric-value" id="theme-mode">–</span>
+        <span class="kb-metric-label">主题（父页面 postMessage）</span>
+      </div>
+      <div class="kb-metric">
+        <span class="kb-metric-value" id="token-count">0</span>
+        <span class="kb-metric-label">同步到的 --dsw-* 令牌数</span>
+      </div>
+    </section>
+
+    <section class="kb-actions">
+      <button type="button" id="refresh">刷新 API</button>
+      <button type="button" id="send-new" class="primary">发送到新会话</button>
+      <button type="button" id="send-current">发送到当前会话</button>
+      <button type="button" id="open-session" hidden>查看新会话 ›</button>
+    </section>
+
+    <section class="kb-columns" id="columns" aria-label="看板"></section>
+
+    <section class="kb-log-wrap">
+      <div class="kb-log-title">桥接日志（父页面 ↔ iframe）</div>
+      <pre class="kb-log" id="log"></pre>
+    </section>
+
+    <script src="/kanban-spike-static/app.js"></script>
+  </body>
+</html>

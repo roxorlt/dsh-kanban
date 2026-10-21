@@ -1,0 +1,43 @@
+# curl 验证记录  2026-10-21T08:56:13+08:00
+# BASE=http://127.0.0.1:56084
+
+$ curl -s -D - -o /dev/null "$BASE/?token=$TOKEN"
+HTTP/1.1 303 See Other
+cache-control: no-store
+location: /
+referrer-policy: no-referrer
+set-cookie: dsh-auth-jniZa_kFM_nKZQ4-jH7vXPwRL9rhv-hGxWv-MZhwArI=v1.eyJ2ZXJzaW9uIjoxLCJhdXRob3JpdHkiOiIxMjcuMC4wLjE6NTYwODQiLCJpc3N1ZWRBdCI6MTc5MjU0NDE3Mzg4MSwiZXhwaXJlc0F0IjoxNzk1MTM2MTczODgxfQ.P5H8cZGKioxb1NH9HQijQXCVXd2ZqrlKqSowS7_oeO8; Max-Age=2592000; Path=/; Expires=Fri, 20 Nov 2026 00:56:13 GMT; HttpOnly; SameSite=Strict
+Date: Wed, 21 Oct 2026 00:56:13 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+
+$ curl -c c2.txt -o /dev/null "$BASE/?token=$TOKEN" && curl -b c2.txt -s "$BASE/" | grep dsh-kanban-spike
+dsh-kanban-spike/client.js
+
+$ curl -s "$BASE/api/kanban-spike/state"
+{"ok":true,"plugin":"dsh-kanban-spike","pid":7166,"cwd":"/Users/roxor/Desktop/dsh/dsh kanban","count":3,"cards":[{"id":"card-1","title":"侧栏入口 + main keyed 面板","column":"doing","source":"seed"},{"id":"card-2","title":"同源 iframe + 主题令牌桥","column":"doing","source":"seed"},{"id":"card-3","title":"iframe → 父页面 → session.prompt","column":"todo","source":"seed"}],"serverTime":1792544173904}
+$ curl -s -D - -o /dev/null "$BASE/kanban-spike"
+HTTP/1.1 200 OK
+content-type: text/html; charset=utf-8
+cache-control: no-store
+x-content-type-options: nosniff
+Vary: Accept-Encoding
+Date: Wed, 21 Oct 2026 00:56:13 GMT
+
+$ curl -s -D - -o /dev/null "$BASE/kanban-spike-static/app.js"
+HTTP/1.1 200 OK
+content-type: application/javascript; charset=utf-8
+cache-control: no-store
+content-length: 8746
+x-content-type-options: nosniff
+Vary: Accept-Encoding
+
+$ curl --path-as-is -o /dev/null -w "%{http_code}" "$BASE/kanban-spike-static/%2e%2e%2f..%2findex.js"
+403
+
+$ curl -s -o /dev/null -w "%{http_code}" -X POST -H "Origin: http://evil.example" -H "content-type: application/json" --data "{\"title\":\"x\"}" "$BASE/api/kanban-spike/cards"
+403
+
+$ curl -s -N --max-time 2 "$BASE/plugins/events" | head -2
+: connected
+
