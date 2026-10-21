@@ -53,7 +53,8 @@ test('kanban_boards / kanban_cards：只读查询与过滤', async t => {
   assert.equal(parse(await cardsTool.execute({ project: 'dsh-kanban' }, EXEC)).total, 6)
   assert.equal(parse(await cardsTool.execute({ project: 'other' }, EXEC)).total, 0)
   assert.ok(parse(await cardsTool.execute({ q: '看板' }, EXEC)).total >= 1)
-  assert.equal(parse(await cardsTool.execute({ sessionId: 'session-kanban-demo' }, EXEC)).total >= 2, true)
+  // 种子卡片不再伪造会话绑定；会话过滤在下面 link_session 流程里覆盖。
+  assert.equal(parse(await cardsTool.execute({ sessionId: 'session-kanban-demo' }, EXEC)).total, 0)
   const limited = parse(await cardsTool.execute({ limit: 2 }, EXEC))
   assert.equal(limited.cards.length, 2)
   assert.ok(limited.total > 2)

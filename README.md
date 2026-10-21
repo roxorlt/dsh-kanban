@@ -57,7 +57,7 @@ dsh plugin --profile desktop add "$(pwd)"
 # 4. 重启 DSH
 ```
 
-重启后侧栏出现「看板」图标，点击进入全屏看板。首次启动会写入一组示例卡片，可在看板设置里清空。
+重启后侧栏出现「看板」图标，点击进入全屏看板。首次启动会写入一组示例卡片；删除 `~/.dsh-kanban/data.json` 后重启即可恢复为空看板（或调用 `POST /api/kanban/seed`）。
 
 > 安装机制：`dsh plugin add` 把本包加入 profile 的 `dsh.profile.bundles`，`cordis.patch.yml` 再把插件行挂到 profile 根。数据不会写进插件目录。
 
