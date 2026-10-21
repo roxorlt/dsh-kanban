@@ -114,8 +114,8 @@
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 8px 16px 16px;
+  gap: 12px;
+  padding: 8px 16px 14px;
 }
 
 .kb-drawer__chips {
@@ -237,7 +237,7 @@
   text-decoration: line-through;
 }
 
-.kb-check {
+.kb-checkbox {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -252,7 +252,7 @@
   line-height: 1;
 }
 
-.kb-check--done {
+.kb-checkbox--done {
   background: var(--kb-status-done);
   border-color: var(--kb-status-done);
 }

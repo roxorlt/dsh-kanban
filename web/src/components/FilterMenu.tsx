@@ -4,6 +4,7 @@ import type { CardFilters } from '../lib/filter';
 import { hasActiveFilters } from '../lib/filter';
 import { useI18n } from '../i18n';
 import { IconCheck, IconChevronDown, IconClose, IconFilter } from './Icons';
+import { pushOverlay } from '../lib/overlayStack';
 
 interface FilterMenuProps {
   filters: CardFilters;
@@ -36,6 +37,11 @@ export function FilterMenu({ filters, projects, labels, onChange }: FilterMenuPr
     const first = panelRef.current?.querySelector<HTMLElement>('button, input');
     first?.focus();
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    return pushOverlay(() => close());
+  }, [open, close]);
 
   useEffect(() => {
     if (!open) return;
@@ -108,6 +114,7 @@ export function FilterMenu({ filters, projects, labels, onChange }: FilterMenuPr
 
               <div className="kb-filter-group">
                 <span className="kb-filter-group__label">{t('app.filterProject')}</span>
+                <div className="kb-filter-group__list">
                 <label className={`kb-check${!filters.project ? ' kb-check--on' : ''}`}>
                   <input
                     type="radio"
@@ -115,7 +122,7 @@ export function FilterMenu({ filters, projects, labels, onChange }: FilterMenuPr
                     checked={!filters.project}
                     onChange={() => onChange({ ...filters, project: null })}
                   />
-                  <span>{t('app.allProjects')}</span>
+                  <span className="kb-check__label">{t('app.allProjects')}</span>
                   {!filters.project ? <span className="kb-icon" aria-hidden="true"><IconCheck /></span> : null}
                 </label>
                 {projects.map((project) => (
@@ -126,15 +133,19 @@ export function FilterMenu({ filters, projects, labels, onChange }: FilterMenuPr
                       checked={filters.project === project}
                       onChange={() => onChange({ ...filters, project })}
                     />
-                    <span>{project}</span>
+                    <span className="kb-check__label" title={project}>{project}</span>
                     {filters.project === project ? <span className="kb-icon" aria-hidden="true"><IconCheck /></span> : null}
                   </label>
                 ))}
-                {!projects.length ? <p className="kb-filter-group__empty">{t('common.none')}</p> : null}
+                {!projects.length ? (
+                  <p className="kb-filter-group__empty">{t('filter.noProjects')}</p>
+                ) : null}
+                </div>
               </div>
 
               <div className="kb-filter-group">
                 <span className="kb-filter-group__label">{t('app.filterLabel')}</span>
+                <div className="kb-filter-group__list">
                 <label className={`kb-check${!filters.label ? ' kb-check--on' : ''}`}>
                   <input
                     type="radio"
@@ -142,7 +153,7 @@ export function FilterMenu({ filters, projects, labels, onChange }: FilterMenuPr
                     checked={!filters.label}
                     onChange={() => onChange({ ...filters, label: null })}
                   />
-                  <span>{t('app.allLabels')}</span>
+                  <span className="kb-check__label">{t('app.allLabels')}</span>
                   {!filters.label ? <span className="kb-icon" aria-hidden="true"><IconCheck /></span> : null}
                 </label>
                 {labels.map((label) => (
@@ -153,11 +164,12 @@ export function FilterMenu({ filters, projects, labels, onChange }: FilterMenuPr
                       checked={filters.label === label}
                       onChange={() => onChange({ ...filters, label })}
                     />
-                    <span>{label}</span>
+                    <span className="kb-check__label" title={label}>{label}</span>
                     {filters.label === label ? <span className="kb-icon" aria-hidden="true"><IconCheck /></span> : null}
                   </label>
                 ))}
-                {!labels.length ? <p className="kb-filter-group__empty">{t('common.none')}</p> : null}
+                {!labels.length ? <p className="kb-filter-group__empty">{t('filter.noLabels')}</p> : null}
+                </div>
               </div>
 
               <div className="kb-filter-panel__foot">

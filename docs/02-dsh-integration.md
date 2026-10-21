@@ -346,3 +346,20 @@ sequenceDiagram
 7. **`prompt` 没有「等待 agent 完成」的返回值**：只能事件/轮询观察。
 8. **`dsh plugin remove` 不清理 profile 层的手工 patch**：若在 profile `cordis.patch.yml` 里按 id 覆盖过插件行，remove
    不会删那些条目，需人工清理（本 spike 全用 bundle 层内 patch，故无此问题）。
+
+
+## 15. DSH 0.2.1-rc.2 兼容（桌面应用实际版本）
+
+> 重要：桌面 App（`0.2.1-rc.2`）的会话 API 与 0.1.5-rc.2 CLI **不同**。插件必须特性检测，不能假设 `sessions.open` / `list.current` 存在。
+
+| 能力 | 0.1.5-rc.2 | 0.2.1-rc.2 | 插件策略 |
+| --- | --- | --- | --- |
+| 选中/打开会话 | `sessions.open(id)` | **无**；`ctx.uiWorkspace.openSession(target)` | 先试 `uiWorkspace.openSession`，回退 `sessions.open` |
+| 会话列表选择态 | `list.getSnapshot().current` | **无**（选择归导航层） | `current ?? null`，不依赖当前会话 |
+| 列表行字段 | `byId[id] = {id, displayTitle…}` | `byId[id] = {id, sessionId, displayTitle…}`，`SessionSummary.sessionId` | `id = row.id ?? row.sessionId` |
+| 取会话 face | `sessions.binding(id)` 可直接用 | `binding(id)` **只借用已 retain 的 generation** | 用 `sessions.using(id,{source:'gateway'},op)`，回退 `binding` |
+| 新建会话 | `create({cwd,workspaceId})` | 追加 `agentPreset`；创建后无需 `open` | 创建后只 `refresh()`，prompt 时再 retain |
+| 主题 | `ctx.theme` | `ctx.theme.setTheme/overrideTokens` | 看板自绘主题，不写宿主主题 |
+| 宿主安全区 | 无 | `--dsh-frame-overlay-top` / `--dsh-frame-leading-clearance`（macOS 悬浮按钮） | 通过 `kanban:host.insets` 传给 iframe |
+
+实测方式：`npm i @deepseek-ai/dsh@0.2.1-rc.2` 到临时目录，建独立 profile 启动 web（与桌面 App 同版本），验证「打开会话 / 回复 / 审批」。

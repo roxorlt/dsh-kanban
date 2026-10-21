@@ -221,6 +221,35 @@ export const IconSession = (props: IconProps) => (
   </Svg>
 );
 
+export const IconSun = (props: IconProps) => (
+  <Svg {...props}>
+    <circle cx="8" cy="8" r="3" />
+    <path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1" />
+  </Svg>
+);
+
+export const IconMoon = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="M13.4 9.6A5.8 5.8 0 0 1 6.4 2.6 5.8 5.8 0 1 0 13.4 9.6Z" />
+  </Svg>
+);
+
+export const IconAuto = (props: IconProps) => (
+  <Svg {...props}>
+    <rect x="2" y="3.2" width="12" height="8" rx="1.4" />
+    <path d="M6 13.4h4M8 11.2v2.2" />
+    <path d="M8 5.2v4" />
+  </Svg>
+);
+
+export const IconHelp = (props: IconProps) => (
+  <Svg {...props}>
+    <circle cx="8" cy="8" r="5.6" />
+    <path d="M6.6 6.2a1.6 1.6 0 1 1 2.2 1.5c-.5.2-.8.7-.8 1.2v.4" />
+    <path d="M8 11.4h.01" />
+  </Svg>
+);
+
 export const IconGlobe = (props: IconProps) => (
   <Svg {...props}>
     <circle cx="8" cy="8" r="5.6" />

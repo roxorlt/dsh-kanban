@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.2.1 — 2026-10-21
+
+### 修复（用户实测 12 项）
+
+- 去重：卡片数/待确认/会话运行中只保留顶栏一处；连接状态只保留工具栏右侧一处；footer 只留快捷键与预览标识。
+- 宿主安全区：接入 DSH 0.2.x 的 `--dsh-frame-overlay-top` / `--dsh-frame-leading-clearance`，macOS 侧栏折叠时的悬浮「展开/新建会话」按钮不再压住看板标题行。
+- 夜间模式：工具栏新增三态主题（跟随/亮/暗，`T` 同效，localStorage）；嵌入时优先调用宿主 `theme.set`，整个 DSH 一起切换，旧版/独立模式才用本地令牌兜底。
+- 快捷键：document capture + 画布聚焦修复 iframe 场景失效；N/B/L/⌘K/T///?/Esc；`?` 打开帮助。
+- 筛选：修复 `.kb-check` 与清单勾选样式撞类名导致的空文案/错乱；空组、长文本、暗色、组内滚动。
+- 「加载更早」改为 12px ghost 文字；「打开详情」统一为「详情 >」。
+- 密度对齐 mock：顶栏 52 / 工具栏 48 / 列头 40 / 列距 12 / 卡片 padding 10×12 / 标题 20 / 正文 13 / meta 12 / 列表行 44 / 区块 12。
+- 卡片内输入框 focus 改为 inset 1px 业务蓝，不再与卡片边框撞色/出框。
+- 卡片展开动作改为「详情 > / 编辑 / 移动到 ▾」文字按钮。
+- 审批兜底：审批先落库；卡片未绑定会话时提示「审批已记录；未绑定会话，决定未发送」并提供「新建会话并发给 agent」；会话失效时提示「重新绑定会话」，不再报红色错误。
+- （客户端）修复 DSH 0.2.x 下「打开会话」报 `sessions.open is not a function`：0.2.x 改用 `ctx.uiWorkspace.openSession`，提示词改用 `sessions.using(target,{source},op)`；0.1.x 自动回退旧 API。
+
+### 新增
+
+- 设计：列表动作区左置变体（`?listActions=left`）、多问题审批（对齐 DSH `ask_user_question`）、三态主题 mock、紧凑规格 §4.5。
+- 文档：[Deep link 提案](docs/08-deeplink-proposal.md)、[DSH 0.2.1 兼容说明](docs/02-dsh-integration.md)。
+
+### 验证
+
+- 服务端 node --test 55/55；Web vitest 39/39；tsc、vite build、令牌 lint 0/0。
+- 真实 DSH **0.2.1-rc.2** web 宿主：插件加载、iframe 桥、insets、theme.set、会话 create/prompt/open 全部实测；打开会话可正确跳转对话；审批未绑定提示为中性。
+- Playwright 回归：去重、insets 76px、三态主题、快捷键、筛选、审批兜底、详情按钮文案、console 0 error。
+
+
 ## v0.2.0 — 2026-10-21
 
 ### 新增

@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import type { CardFilters } from '../lib/filter';
 import { hasActiveFilters } from '../lib/filter';
@@ -6,13 +5,18 @@ import type { Lang } from '../i18n';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { FilterMenu } from './FilterMenu';
+import type { ThemePreference } from '../bridge';
 import {
+  IconAuto,
   IconBoard,
   IconClose,
   IconGlobe,
+  IconHelp,
   IconList,
+  IconMoon,
   IconPlus,
   IconSearch,
+  IconSun,
 } from './Icons';
 
 export type ViewMode = 'board' | 'list';
@@ -36,6 +40,10 @@ interface ToolbarProps {
   /** 数据刷新失败时的内联错误条（重试入口，替代刷新按钮） */
   syncError: string | null;
   onRetry: () => void;
+  themePreference: ThemePreference;
+  themeMode: 'light' | 'dark';
+  onCycleTheme: () => void;
+  onShowHelp: () => void;
 }
 
 function Chip({ label, onRemove, removeLabel }: { label: string; onRemove: () => void; removeLabel: string }) {
@@ -69,22 +77,26 @@ export function Toolbar({
   syncState,
   syncError,
   onRetry,
+  themePreference,
+  themeMode,
+  onCycleTheme,
+  onShowHelp,
 }: ToolbarProps) {
   const { t } = useI18n();
-  const searchRef = useRef<HTMLInputElement | null>(null);
   const activeFilters = hasActiveFilters(filters);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  const themeLabel =
+    themePreference === 'system'
+      ? `${t('theme.follow')}${themeMode === 'dark' ? ` · ${t('theme.dark')}` : ''}`
+      : themePreference === 'light'
+        ? t('theme.light')
+        : t('theme.dark');
+  const themeIcon = themePreference === 'system' ? <IconAuto /> : themeMode === 'dark' ? <IconMoon /> : <IconSun />;
+  const themeShortLabel =
+    themePreference === 'system'
+      ? t('theme.shortFollow')
+      : themePreference === 'light'
+        ? t('theme.shortLight')
+        : t('theme.shortDark');
 
   const views: { id: ViewMode; icon: ReactNode; key: I18nKey }[] = [
     { id: 'board', icon: <IconBoard />, key: 'app.viewBoard' },
@@ -148,6 +160,33 @@ export function Toolbar({
 
         <button
           type="button"
+          className="kb-icon-btn kb-theme-btn"
+          onClick={onCycleTheme}
+          aria-label={t('theme.cycle', { mode: themeLabel })}
+          title={t('theme.current', { mode: themeLabel })}
+        >
+          <span className="kb-icon" aria-hidden="true">
+            {themeIcon}
+          </span>
+          <span className="kb-theme-label" aria-hidden="true">
+            {themeShortLabel}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          className="kb-icon-btn kb-help-btn"
+          onClick={onShowHelp}
+          aria-label={t('shortcut.help')}
+          title={t('shortcut.help')}
+        >
+          <span className="kb-icon" aria-hidden="true">
+            <IconHelp />
+          </span>
+        </button>
+
+        <button
+          type="button"
           className="kb-icon-btn kb-lang-btn"
           onClick={onToggleLang}
           aria-label={t('app.language')}
@@ -177,7 +216,6 @@ export function Toolbar({
           </span>
           <span className="kb-sr-only">{t('a11y.search')}</span>
           <input
-            ref={searchRef}
             id="kb-search-input"
             type="search"
             className="kb-search__input"

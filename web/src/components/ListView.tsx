@@ -319,6 +319,9 @@ function ListRow({
           <div className="kb-list__actions">
             <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => actions.onOpenDetail(card.id)}>
               {t('card.openDetail')}
+              <span className="kb-icon" aria-hidden="true">
+                <IconChevronRight />
+              </span>
             </button>
             <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => actions.onEdit(card)}>
               <span className="kb-icon" aria-hidden="true">

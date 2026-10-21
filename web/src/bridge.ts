@@ -16,7 +16,8 @@ export type BridgeMethod =
   | 'session.ensure'
   | 'card.open'
   | 'panel.select'
-  | 'toast';
+  | 'toast'
+  | 'theme.set';
 
 export interface BridgeParamsMap {
   'app.info': undefined;
@@ -29,6 +30,7 @@ export interface BridgeParamsMap {
   'card.open': { cardId: string; boardId: string };
   'panel.select': { panel: 'kanban' | 'conversation' };
   toast: { text: string; tone?: 'info' | 'success' | 'error' };
+  'theme.set': { preference: ThemePreference };
 }
 
 export interface BridgeDataMap {
@@ -42,6 +44,7 @@ export interface BridgeDataMap {
   'card.open': { ok: true };
   'panel.select': { ok: true };
   toast: { ok: true };
+  'theme.set': { applied: boolean };
 }
 
 interface RequestMessage {
@@ -65,9 +68,25 @@ type ParentPush =
   | { type: 'kanban:theme'; version: 1; mode: 'light' | 'dark'; tokens: Record<string, string> }
   | { type: 'kanban:sessions'; version: 1; sessions: SessionRow[]; current: string | null }
   | { type: 'kanban:visibility'; version: 1; visible: boolean }
-  | { type: 'kanban:host'; version: 1; locale: 'zh' | 'en'; dshVersion?: string };
+  | {
+      type: 'kanban:host';
+      version: 1;
+      locale: 'zh' | 'en';
+      dshVersion?: string;
+      insets?: { top?: number; leading?: number; platform?: string; fullscreen?: boolean };
+    };
 
 export type BridgeMode = 'connecting' | 'embedded' | 'standalone';
+/** 主题偏好：system=跟随宿主/系统；light/dark=手动覆盖（用本地令牌） */
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+/** 宿主安全区（DSH 0.2.x --dsh-frame-overlay-top / --dsh-frame-leading-clearance） */
+export interface HostInsets {
+  top: number;
+  leading: number;
+  platform?: string;
+  fullscreen?: boolean;
+}
 
 export interface BridgeState {
   mode: BridgeMode;
@@ -77,6 +96,14 @@ export interface BridgeState {
   visible: boolean;
   /** 父页面明确表示不支持会话能力（旧版 DSH）时置 false。 */
   sessionSupport: boolean;
+  /** 宿主安全区（未收到时 top=0） */
+  insets: HostInsets;
+  /** 主题偏好：默认跟随宿主 */
+  themePreference: ThemePreference;
+  /** 当前生效的明暗 */
+  themeMode: 'light' | 'dark';
+  /** 主题来源：host=宿主统一换主题；local=看板本地令牌兜底 */
+  themeSource: 'host' | 'local';
 }
 
 export class BridgeUnavailableError extends Error {
@@ -91,6 +118,8 @@ export class BridgeUnavailableError extends Error {
 const REQUEST_TIMEOUT_MS = 20_000;
 const HOST_HANDSHAKE_GRACE_MS = 1_500;
 const STORAGE_THEME = 'dsh-kanban.theme';
+const STORAGE_THEME_PREF = 'dsh-kanban.theme-preference';
+const STORAGE_THEME_SOURCE = 'dsh-kanban.theme-source';
 const TOKEN_KEYS = new Set<string>();
 
 function uuid(): string {
@@ -117,6 +146,10 @@ class KanbanBridge {
     currentSessionId: null,
     visible: true,
     sessionSupport: true,
+    insets: { top: 0, leading: 0 },
+    themePreference: readThemePreference(),
+    themeMode: 'light',
+    themeSource: readThemeSource(),
   };
 
   private listeners = new Set<(state: BridgeState) => void>();
@@ -127,6 +160,7 @@ class KanbanBridge {
   private started = false;
   private hostTimer: number | null = null;
   private mediaQuery: MediaQueryList | null = null;
+  private hostTheme: { tokens: Record<string, string>; mode: 'light' | 'dark' } | null = null;
 
   start(): void {
     if (this.started || typeof window === 'undefined') return;
@@ -138,14 +172,14 @@ class KanbanBridge {
     const inIframe = window.parent !== window;
     if (!inIframe) {
       this.setMode('standalone');
-      this.applyStandaloneTheme();
+      this.applyThemePreference();
     } else {
       // 契约：window.parent !== window 且收到过 kanban:host/kanban:theme 才算嵌入。
       this.post({ type: 'kanban:ready', version: 1 });
       this.hostTimer = window.setTimeout(() => {
         if (this.state.mode === 'connecting') {
           this.setMode('standalone');
-          this.applyStandaloneTheme();
+          this.applyThemePreference();
         }
       }, HOST_HANDSHAKE_GRACE_MS);
     }
@@ -167,6 +201,38 @@ class KanbanBridge {
     return this.state.mode === 'embedded';
   }
 
+  /**
+   * 本地三态主题（standalone，或宿主 theme.set applied:false 时的兜底）。
+   * 手动 light/dark 时清空宿主令牌、用本地 tokens.css。
+   */
+  setThemePreference(preference: ThemePreference): void {
+    this.persistPreference(preference, 'local');
+    this.setState({ themePreference: preference, themeSource: 'local' });
+    this.applyThemePreference();
+  }
+
+  /** 宿主已统一换主题：跟随宿主推送的 kanban:theme 令牌。 */
+  applyHostThemePreference(preference: ThemePreference): void {
+    this.persistPreference(preference, 'host');
+    this.setState({ themePreference: preference, themeSource: 'host' });
+    this.applyThemePreference();
+  }
+
+  private persistPreference(preference: ThemePreference, source: 'host' | 'local'): void {
+    try {
+      localStorage.setItem(STORAGE_THEME_PREF, preference);
+      localStorage.setItem(STORAGE_THEME_SOURCE, source);
+    } catch {
+      /* 私密模式忽略 */
+    }
+  }
+
+  cycleThemePreference(): ThemePreference {
+    const next = nextThemePreference(this.state.themePreference);
+    this.setThemePreference(next);
+    return next;
+  }
+
   private setState(patch: Partial<BridgeState>): void {
     this.state = { ...this.state, ...patch };
     for (const listener of this.listeners) listener(this.state);
@@ -175,6 +241,7 @@ class KanbanBridge {
   private setMode(mode: BridgeMode): void {
     this.setState({ mode });
     document.documentElement.dataset.kanbanHost = mode;
+    if (mode !== 'connecting') this.applyThemePreference();
     if (this.hostTimer !== null) {
       window.clearTimeout(this.hostTimer);
       this.hostTimer = null;
@@ -202,6 +269,7 @@ class KanbanBridge {
     switch (data.type) {
       case 'kanban:host': {
         const previous = this.state.host;
+        const insets = data.insets ?? {};
         this.setState({
           host: {
             locale: data.locale,
@@ -209,13 +277,21 @@ class KanbanBridge {
             dshVersion: data.dshVersion,
             panelVisible: previous?.panelVisible ?? true,
           },
+          insets: {
+            top: Number.isFinite(insets.top) ? Math.max(0, Number(insets.top)) : 0,
+            leading: Number.isFinite(insets.leading) ? Math.max(0, Number(insets.leading)) : 0,
+            platform: typeof insets.platform === 'string' ? insets.platform : undefined,
+            fullscreen: Boolean(insets.fullscreen),
+          },
         });
+        this.applyInsets();
         break;
       }
       case 'kanban:theme': {
-        this.applyTokens(data.tokens, data.mode);
+        this.hostTheme = { tokens: data.tokens ?? {}, mode: data.mode };
         const host = this.state.host;
         if (host) this.setState({ host: { ...host, themeMode: data.mode } });
+        if (this.state.themeSource === 'host') this.applyThemePreference();
         break;
       }
       case 'kanban:sessions': {
@@ -285,6 +361,7 @@ class KanbanBridge {
       TOKEN_KEYS.add(key);
     }
     root.dataset.kanbanTheme = mode;
+    this.setState({ themeMode: mode });
     try {
       localStorage.setItem(STORAGE_THEME, mode);
     } catch {
@@ -292,18 +369,49 @@ class KanbanBridge {
     }
   }
 
-  private applyStandaloneTheme(): void {
-    const stored = safeStorageGet(STORAGE_THEME);
-    const prefersDark =
-      typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const mode: 'light' | 'dark' = stored === 'light' || stored === 'dark' ? stored : prefersDark ? 'dark' : 'light';
-    document.documentElement.dataset.kanbanTheme = mode;
+  private clearHostTokens(): void {
+    const root = document.documentElement;
+    for (const key of TOKEN_KEYS) root.style.removeProperty(key);
+    TOKEN_KEYS.clear();
   }
 
-  private handleMediaChange = (event: MediaQueryListEvent): void => {
-    if (this.state.mode !== 'standalone') return;
-    if (safeStorageGet(STORAGE_THEME)) return;
-    document.documentElement.dataset.kanbanTheme = event.matches ? 'dark' : 'light';
+  private prefersDark(): boolean {
+    return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+
+  /** 应用三态主题：system 用宿主/系统；light/dark 用本地 tokens.css 兜底令牌。 */
+  private applyThemePreference(): void {
+    const preference = this.state.themePreference;
+    const root = document.documentElement;
+    let mode: 'light' | 'dark';
+    const followHost =
+      this.state.mode === 'embedded' && this.hostTheme && this.state.themeSource === 'host';
+    if (followHost && this.hostTheme) {
+      this.applyTokens(this.hostTheme.tokens, this.hostTheme.mode);
+      return;
+    }
+    this.clearHostTokens();
+    mode = preference === 'system' ? (this.prefersDark() ? 'dark' : 'light') : preference;
+    root.dataset.kanbanTheme = mode;
+    this.setState({ themeMode: mode });
+    try {
+      localStorage.setItem(STORAGE_THEME, mode);
+    } catch {
+      /* 私密模式忽略 */
+    }
+  }
+
+  private applyInsets(): void {
+    const root = document.documentElement;
+    const { top, leading } = this.state.insets;
+    root.style.setProperty('--kb-host-inset-top', `${top}px`);
+    root.style.setProperty('--kb-host-inset-leading', `${leading}px`);
+  }
+
+  private handleMediaChange = (): void => {
+    if (this.state.themePreference !== 'system') return;
+    if (this.state.mode === 'embedded' && this.hostTheme) return;
+    this.applyThemePreference();
   };
 
   private handleVisibilityChange = (): void => {
@@ -312,12 +420,35 @@ class KanbanBridge {
   };
 }
 
+/** 三态循环：跟随 → 亮 → 暗 → 跟随（纯函数，便于单测）。 */
+export function nextThemePreference(current: ThemePreference): ThemePreference {
+  if (current === 'system') return 'light';
+  if (current === 'light') return 'dark';
+  return 'system';
+}
+
 function safeStorageGet(key: string): string | null {
   try {
     return localStorage.getItem(key);
   } catch {
     return null;
   }
+}
+
+function readThemeSource(): 'host' | 'local' {
+  const stored = safeStorageGet(STORAGE_THEME_SOURCE);
+  if (stored === 'host' || stored === 'local') return stored;
+  // 默认：system 跟随宿主；已持久化的手动偏好用本地令牌
+  return readThemePreference() === 'system' ? 'host' : 'local';
+}
+
+function readThemePreference(): ThemePreference {
+  const stored = safeStorageGet(STORAGE_THEME_PREF);
+  if (stored === 'system' || stored === 'light' || stored === 'dark') return stored;
+  // 兼容旧版只存了 light/dark 的独立模式偏好
+  const legacy = safeStorageGet(STORAGE_THEME);
+  if (legacy === 'light' || legacy === 'dark') return legacy;
+  return 'system';
 }
 
 export const bridge = new KanbanBridge();

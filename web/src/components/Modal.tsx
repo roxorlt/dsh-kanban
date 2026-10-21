@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '../i18n';
+import { pushOverlay } from '../lib/overlayStack';
 import { IconClose } from './Icons';
 
 interface ModalProps {
@@ -31,8 +32,13 @@ export function Modal({
 }: ModalProps) {
   const titleId = useId();
   const requestClose = onRequestClose ?? onClose;
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  // Esc 统一由 App 的浮层栈处理（只关最上层）；这里负责 Tab 焦点圈定
+  useEffect(() => pushOverlay(() => requestCloseRef.current()), []);
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -50,10 +56,6 @@ export function Modal({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        requestClose();
-      }
       if (event.key !== 'Tab' || !panelRef.current) return;
       const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
         (el) => el.offsetParent !== null,
@@ -72,7 +74,7 @@ export function Modal({
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [requestClose]);
+  }, []);
 
   const { t } = useI18n();
 

@@ -8,6 +8,10 @@
     --kb-pad-x: 16px;
   }
 
+  .kb-card {
+    padding: 10px;
+  }
+
   .kb-board {
     grid-template-columns: repeat(4, minmax(240px, 1fr));
     padding-top: 14px;
@@ -72,11 +76,19 @@
     --kb-pad-x: 12px;
   }
 
+  .kb-app--embedded {
+    padding: max(12px, calc(var(--kb-host-inset-top, 0px) + 8px)) 12px 8px;
+  }
+
   .kb-topbar {
     height: auto;
-    min-height: 52px;
-    padding: 8px 12px;
+    min-height: 48px;
+    padding: 6px 12px;
     gap: 8px;
+  }
+
+  .kb-theme-label {
+    display: none;
   }
 
   .kb-crumb:first-child,
@@ -460,6 +472,10 @@
 
 
 @media (max-width: 719px) {
+  .kb-help-btn {
+    display: none;
+  }
+
   .kb-crumbs {
     flex: 1 1 auto;
     gap: 6px;

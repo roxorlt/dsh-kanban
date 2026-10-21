@@ -8,8 +8,10 @@
   /* 首帧防闪：仅演示用；真实插件由宿主 ui-theme 决定主题与主区宽度 */
   (function () {
     var p = new URLSearchParams(location.search);
-    var dark = p.get('theme') ? p.get('theme') === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    var mode = p.get('themeMode') || (p.get('theme') ? (p.get('theme') === 'dark' ? 'dark' : 'light') : 'auto');
+    var dark = mode === 'dark' || (mode === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    document.documentElement.dataset.themeMode = mode;
     var w = window.innerWidth;
     document.documentElement.dataset.layout = w < 720 ? 'narrow' : w < 1100 ? 'scroll' : w < 1440 ? 'compact' : 'wide';
   })();
@@ -1609,6 +1611,63 @@
   }
   .muted { color: var(--dsw-alias-label-tertiary); }
 
+
+  /* 三态主题切换：跟随 / 亮色 / 暗色 */
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 8px 0 7px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxxs-strong-11);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .theme-toggle:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+  .theme-toggle .ic { width: 15px; height: 15px; }
+  .theme-label { color: var(--dsw-alias-label-tertiary); }
+  [data-layout="narrow"] .theme-toggle { width: 36px; height: 36px; justify-content: center; padding: 0; }
+  [data-layout="narrow"] .theme-label { display: none; }
+
+  /* 列表动作区：左置变体（?listActions=left），固定紧凑动作列，不横通栏 */
+  .list-row-main.has-actions-left { grid-template-columns: 76px 10px minmax(0, 1fr) auto; }
+  .list-left-actions { display: flex; align-items: center; gap: 4px; width: 76px; flex: none; }
+  .list-left-actions .btn { width: 36px; height: 24px; padding: 0; font: var(--dsw-font-xxxs-strong-11); }
+  .list-left-actions .btn--wide { width: 64px; }
+  .list-left-actions .btn--retry { width: 56px; }
+  [data-layout="narrow"] .list-row-main.has-actions-left { grid-template-columns: 64px 10px minmax(0, 1fr); gap: 6px; }
+  [data-layout="narrow"] .list-left-actions { flex-direction: column; width: 64px; gap: 3px; }
+  [data-layout="narrow"] .list-left-actions .btn { width: 100%; height: 24px; }
+  [data-layout="narrow"] .list-row-main.has-actions-left .list-meta { grid-column: 3; }
+
+  /* 多问题审批：每题独立 fieldset，header + question + 选项完整展示 */
+  .decision-question { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; border: 0; min-width: 0; }
+  .decision-question + .decision-question { padding-top: 7px; border-top: 0.5px solid var(--dsw-alias-border-l1); }
+  .q-head { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .q-header {
+    color: var(--dsw-alias-label-caption);
+    font: var(--dsw-font-xxxs-strong-11);
+    letter-spacing: 0.03em;
+  }
+  .q-title { flex: 1; min-width: 0; color: var(--dsw-alias-label-primary); font: var(--dsw-font-xxs-strong-12); }
+  .q-badge {
+    flex: none;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
+    color: var(--dsw-alias-label-tertiary);
+    font: var(--dsw-font-xxxs-11);
+  }
+  .decision-question .opt { padding: 5px 7px; }
+  .decision-question .decision-options { gap: 4px; }
+  .drawer-foot { max-height: 58dvh; overflow-y: auto; }
+  .drawer-approval { margin: 12px 0 4px; }
+
   /* ===== v2 响应式增补 ===== */
   [data-layout="narrow"] .board-title { flex: 1; min-width: 0; }
   [data-layout="narrow"] .board-metas { gap: 6px; }
@@ -1670,7 +1729,7 @@
             <span class="seg-label">列表</span>
           </button>
         </div>
-        <button type="button" class="icon-btn" id="themeBtn" data-action="theme" aria-label="切换明暗主题" title="切换明暗主题（T）"></button>
+        <button type="button" class="theme-toggle" id="themeBtn" data-action="theme-mode" aria-label="主题：跟随系统（点击切换）" title="主题：跟随系统（点击切换，T）"></button>
         <button type="button" class="icon-btn help-btn" id="helpBtn" data-action="help" aria-label="键盘快捷键与帮助" title="快捷键（?）"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.5 2.2c-.7.3-1.1.9-1.1 1.7"/><circle cx="12" cy="17" r=".7" fill="currentColor" stroke="none"/></svg></button>
       </div>
     </header>
@@ -1792,7 +1851,8 @@
     video: '<rect x="3.5" y="6" width="12" height="12" rx="2"/><path d="m15.5 10 4-2.5v9l-4-2.5"/>',
     report: '<path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M9 12h6M9 16h6M9 8h2"/>',
     archive: '<path d="M4 7h16v3H4z"/><path d="M5.5 10v9a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-9"/><path d="M10 14h4"/>',
-    session: '<rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M7.5 9h6M7.5 13h9"/>'
+    session: '<rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M7.5 9h6M7.5 13h9"/>',
+    monitor: '<rect x="3.5" y="4.5" width="17" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>'
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -1982,18 +2042,42 @@
       thread: [{ from: 'agent', text: '列结构已定：4 列。接下来只确认状态文案与颜色，我建议保持现状。', time: '1 分钟前', sessionId: 'dsh-7f3a' }]
     },
     {
-      id: 'c-304', col: 'needs', title: '选择要同步的发布渠道', status: 'needs', priority: 'P1', project: '运维', tags: ['发布', '多渠道'],
-      summary: 'v0.2 已构建完成，请选择要同时同步的渠道（可多选）。',
-      action: '等待你选择同步渠道', tools: 7, searches: 2, elapsed: '1m 40s', updated: '刚刚', agent: 'K2.5',
+      id: 'c-304', col: 'needs', title: '确认 v0.2 发布前检查', status: 'needs', priority: 'P1', project: '运维', tags: ['发布', '多渠道'],
+      summary: 'v0.2 已构建完成，回答 3 个发布前问题后开始发布。',
+      action: '等待你回答 3 个发布前问题', tools: 7, searches: 2, elapsed: '1m 40s', updated: '刚刚', agent: 'K2.5',
       session: 'dsh-2c9e', workspace: '运维', cwd: '/Users/roxor/Desktop/dsh/ops',
       approval: {
-        title: '需要你确认：v0.2 同步到哪些发布渠道？',
-        detail: '可多选，至少选择 1 个渠道。选择后会并行发布，失败会在会话里回写。',
-        multiSelect: true,
-        options: [
-          { id: 'metrics', label: '同步到 #metrics', description: '发布结果与变化摘要。', tone: 'primary' },
-          { id: 'weekly', label: '同步到周报文档', description: '把结果追加到本周的周报草稿。', tone: 'ghost' },
-          { id: 'team', label: '同步给项目组', description: '在项目组会话中 @ 相关成员。', tone: 'ghost' }
+        title: '需要你确认：v0.2 发布前检查',
+        detail: '共 3 个问题，答完后统一提交。选择后会并行发布，失败会在会话里回写。',
+        questions: [
+          {
+            header: '发布渠道',
+            question: '同步到哪些渠道？',
+            multiSelect: true,
+            options: [
+              { id: 'metrics', label: '同步到 #metrics', description: '发布结果与变化摘要。', tone: 'primary', outcome: 'running' },
+              { id: 'weekly', label: '同步到周报文档', description: '把结果追加到本周的周报草稿。', tone: 'ghost', outcome: 'running' },
+              { id: 'team', label: '同步给项目组', description: '在项目组会话中 @ 相关成员。', tone: 'ghost', outcome: 'running' }
+            ]
+          },
+          {
+            header: '公告',
+            question: '是否同时发布公告？',
+            multiSelect: false,
+            options: [
+              { id: 'announce', label: '发布公告', description: '在项目组发布 v0.2 更新公告。', tone: 'primary', outcome: 'running' },
+              { id: 'skip-announce', label: '暂不发布', description: '只发布构建结果。', tone: 'ghost', outcome: 'running' }
+            ]
+          },
+          {
+            header: '风险窗口',
+            question: '接受 14:30–14:45 的锁表窗口吗？',
+            multiSelect: false,
+            options: [
+              { id: 'accept-window', label: '接受本窗口', description: '窗口内执行，完成后回写结果。', tone: 'primary', outcome: 'running' },
+              { id: 'defer-window', label: '推迟到下一窗口', description: '卡片回到待办等待排期。', tone: 'danger', outcome: 'backlog' }
+            ]
+          }
         ]
       },
       nodes: [
@@ -2091,6 +2175,7 @@
   const state = {
     view: 'board',
     theme: 'light',
+    themeMode: 'auto',
     layout: 'wide',
     search: '',
     filters: { projects: new Set(), priorities: new Set() },
@@ -2108,6 +2193,7 @@
     doneListExpanded: false,
     doneListAll: false,
     groupBy: 'status',
+    listActions: 'right',
     syncError: false,
     syncRetrying: false,
     approvalSel: {},
@@ -2162,14 +2248,38 @@
     const s = sessionList(card).find((x) => x.id === id);
     return s ? s.title : id;
   }
-  function approvalSelection(card) {
+  function isMultiQuestionApproval(a) {
+    return Boolean(a && Array.isArray(a.questions) && a.questions.length);
+  }
+  function approvalQuestions(a) {
+    if (!a) return [];
+    return isMultiQuestionApproval(a) ? a.questions : [{ header: '', question: a.title, multiSelect: a.multiSelect, options: a.options }];
+  }
+  function approvalSelection(card, qIndex) {
     const a = card.approval;
     if (!a) return [];
+    const qi = qIndex || 0;
+    const question = approvalQuestions(a)[qi];
+    if (!question) return [];
+    if (isMultiQuestionApproval(a)) {
+      const stored = state.approvalSel[card.id];
+      const arr = stored && !Array.isArray(stored) ? stored[qi] : null;
+      if (arr && arr.length) return arr;
+      if (question.multiSelect) return [];
+      const def = question.options.find((o) => o.tone === 'primary') || question.options[0];
+      return def ? [def.id] : [];
+    }
     const stored = state.approvalSel[card.id];
     if (stored && stored.length) return stored;
-    if (a.multiSelect) return [];
-    const def = a.options.find((o) => o.tone === 'primary') || a.options[0];
+    if (question.multiSelect) return [];
+    const def = question.options.find((o) => o.tone === 'primary') || question.options[0];
     return def ? [def.id] : [];
+  }
+  function approvalAnswers(card) {
+    return approvalQuestions(card.approval).map(function (q, qi) { return approvalSelection(card, qi); });
+  }
+  function isMultiQuestionCard(card) {
+    return Boolean(card.approval && isMultiQuestionApproval(card.approval));
   }
   function runningSessionsCount() {
     const ids = new Set();
@@ -2237,32 +2347,49 @@
   function decisionHTML(card) {
     if (!card.approval || card.status !== 'needs') return '';
     const a = card.approval;
-    const sel = approvalSelection(card);
+    const multiQuestion = isMultiQuestionApproval(a);
+    const questions = approvalQuestions(a);
     const note = state.approvalNotes[card.id] || '';
     const primary = primarySession(card);
-    const inputType = a.multiSelect ? 'checkbox' : 'radio';
     return '<section class="decision" role="group" aria-label="待你确认">' +
       '<div class="decision-q">' + icon('alert') +
         '<span class="decision-title">' + esc(a.title) + '</span>' +
       '</div>' +
-      '<div class="decision-meta">' + esc(primary.title) + ' · ' + esc(card.updated) + '</div>' +
+      '<div class="decision-meta">' + esc(primary.title) + ' · ' + esc(card.updated) + (multiQuestion ? ' · ' + questions.length + ' 个问题' : '') + '</div>' +
       (a.detail ? '<p class="decision-risk">' + icon('info') + '<span>' + esc(a.detail) + '</span></p>' : '') +
-      '<fieldset class="decision-options"><legend class="sr-only">' + (a.multiSelect ? '可多选' : '选择一个选项') + '</legend>' +
-        a.options.map(function (o) {
-          const checked = sel.indexOf(o.id) >= 0;
-          return '<label class="opt' + (checked ? ' is-selected' : '') + '" data-tone="' + esc(o.tone || 'ghost') + '">' +
-            '<input type="' + inputType + '" name="ap-' + card.id + '" value="' + o.id + '" data-approval-option="' + card.id + '"' + (checked ? ' checked' : '') + '>' +
-            '<span class="opt-body"><span class="opt-label">' + esc(o.label) + '</span>' +
-            (o.description ? '<span class="opt-desc">' + esc(o.description) + '</span>' : '') + '</span></label>';
-        }).join('') +
-      '</fieldset>' +
-      (a.multiSelect ? '<p class="decision-hint">可多选，至少选择 1 项</p>' : '') +
-      '<input class="approval-note" data-approval-note="' + card.id + '" value="' + esc(note) + '" placeholder="备注（可选）" aria-label="审批备注">' +
+      questions.map(function (q, qi) {
+        const sel = approvalSelection(card, qi);
+        const inputType = q.multiSelect ? 'checkbox' : 'radio';
+        const inputName = 'ap-' + card.id + '-q' + qi;
+        const head = multiQuestion
+          ? '<div class="q-head">' +
+              (q.header ? '<span class="q-header">' + esc(q.header) + '</span>' : '') +
+              '<span class="q-title">' + (qi + 1) + ' / ' + questions.length + '　' + esc(q.question) + '</span>' +
+              '<span class="q-badge">' + (q.multiSelect ? '多选' : '单选') + '</span>' +
+            '</div>'
+          : '';
+        return '<fieldset class="decision-question" aria-label="' + esc((q.header || '问题') + '：' + q.question) + '">' +
+          (head ? '<legend class="sr-only">' + esc(q.question) + '</legend>' : '<legend class="sr-only">' + (q.multiSelect ? '可多选' : '选择一个选项') + '</legend>') +
+          head +
+          '<div class="decision-options">' +
+            q.options.map(function (o) {
+              const checked = sel.indexOf(o.id) >= 0;
+              return '<label class="opt' + (checked ? ' is-selected' : '') + '" data-tone="' + esc(o.tone || 'ghost') + '">' +
+                '<input type="' + inputType + '" name="' + inputName + '" value="' + o.id + '" data-approval-option="' + card.id + '" data-q="' + qi + '"' + (checked ? ' checked' : '') + '>' +
+                '<span class="opt-body"><span class="opt-label">' + esc(o.label) + '</span>' +
+                (o.description ? '<span class="opt-desc">' + esc(o.description) + '</span>' : '') + '</span></label>';
+            }).join('') +
+          '</div>' +
+          (q.multiSelect ? '<p class="decision-hint">可多选，至少选择 1 项</p>' : '') +
+        '</fieldset>';
+      }).join('') +
+      '<input class="approval-note" data-approval-note="' + card.id + '" value="' + esc(note) + '" placeholder="备注（可选，统一提交）" aria-label="审批备注">' +
       '<div class="decision-actions">' +
         '<button type="button" class="btn btn-secondary btn-sm" data-action="reject" data-id="' + card.id + '">驳回</button>' +
-        '<button type="button" class="btn btn-primary btn-sm" data-action="approve" data-id="' + card.id + '">提交选择</button>' +
+        '<button type="button" class="btn btn-primary btn-sm" data-action="approve" data-id="' + card.id + '">' + (multiQuestion ? '提交全部回答' : '提交选择') + '</button>' +
       '</div></section>';
   }
+
   function timelineHTML(card, opts) {
     const o = opts || {};
     const all = card.nodes || [];
@@ -2326,7 +2453,7 @@
       '<div class="card-foot">' + statusFoot(card) + metrics(card) + '</div>' +
       decisionHTML(card) +
       (expanded ? '<div class="card-expanded" id="exp-' + card.id + '">' +
-        '<div class="exp-head"><span>重要节点</span><button type="button" class="link-btn" data-action="open" data-id="' + card.id + '">详情' + icon('chevronRight') + '</button></div>' +
+        '<div class="exp-head"><span>重要节点</span><button type="button" class="link-btn" data-action="open" data-id="' + card.id + '">详情 &gt;</button></div>' +
         timelineHTML(card, { limit: 3 }) +
         mediaRowHTML(card) +
         (card.status === 'failed' ? '<button type="button" class="btn btn-secondary btn-sm" data-action="retry" data-id="' + card.id + '">' + icon('redo') + '重试任务</button>' : '') +
@@ -2387,16 +2514,22 @@
     const expanded = state.expanded.has(card.id);
     const selected = state.drawerId === card.id;
     const pendingApproval = card.approval && card.status === 'needs';
-    const rowActions = pendingApproval
-      ? '<span class="row-actions">' +
-          '<button type="button" class="btn btn-secondary" data-action="reject" data-id="' + card.id + '">驳回</button>' +
-          '<button type="button" class="btn btn-primary" data-action="approve" data-id="' + card.id + '">批准</button>' +
-        '</span>'
-      : card.status === 'failed'
-        ? '<span class="row-actions"><button type="button" class="btn btn-secondary btn--retry" data-action="retry" data-id="' + card.id + '">重试</button></span>'
-        : '';
+    const multiQuestion = isMultiQuestionCard(card);
+    let rowActions = '';
+    if (pendingApproval) {
+      rowActions = multiQuestion
+        ? '<span class="row-actions"><button type="button" class="btn btn-secondary btn--wide" data-action="open" data-id="' + card.id + '">详情 &gt;</button></span>'
+        : '<span class="row-actions">' +
+            '<button type="button" class="btn btn-secondary" data-action="reject" data-id="' + card.id + '">驳回</button>' +
+            '<button type="button" class="btn btn-primary" data-action="approve" data-id="' + card.id + '">批准</button>' +
+          '</span>';
+    } else if (card.status === 'failed') {
+      rowActions = '<span class="row-actions"><button type="button" class="btn btn-secondary btn--retry" data-action="retry" data-id="' + card.id + '">重试</button></span>';
+    }
+    const actionsLeft = state.listActions === 'left';
     return '<div class="list-row' + (selected ? ' is-selected' : '') + '" data-card-id="' + card.id + '" tabindex="0" role="group" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '">' +
-      '<div class="list-row-main" data-action="expand" data-id="' + card.id + '">' +
+      '<div class="list-row-main' + (actionsLeft ? ' has-actions-left' : '') + '" data-action="expand" data-id="' + card.id + '">' +
+        (actionsLeft ? '<div class="list-left-actions">' + rowActions + '</div>' : '') +
         dot(s.dot) +
         '<div class="list-main">' +
           '<div class="list-title-row"><span class="list-title">' + esc(card.title) + '</span>' +
@@ -2409,13 +2542,13 @@
           statusFoot(card) +
           '<span class="metric" title="工具调用 ' + card.tools + ' 次">' + icon('tool') + card.tools + '</span>' +
           '<span class="metric" title="搜索 ' + card.searches + ' 次">' + icon('search') + card.searches + '</span>' +
-          rowActions +
-          '<button type="button" class="icon-btn" data-action="open" data-id="' + card.id + '" aria-label="打开详情：' + esc(card.title) + '">' + icon('chevronRight') + '</button>' +
+          (!actionsLeft ? rowActions : '') +
+          '<button type="button" class="icon-btn" data-action="open" data-id="' + card.id + '" aria-label="详情：' + esc(card.title) + '">' + icon('chevronRight') + '</button>' +
           '<button type="button" class="icon-btn" data-action="menu" data-id="' + card.id + '" aria-label="卡片操作：' + esc(card.title) + '">' + icon('kebab') + '</button>' +
         '</div>' +
       '</div>' +
       (expanded ? '<div class="list-expanded">' +
-        '<div class="exp-head"><span>重要节点</span><button type="button" class="link-btn" data-action="open" data-id="' + card.id + '">详情' + icon('chevronRight') + '</button></div>' +
+        '<div class="exp-head"><span>重要节点</span><button type="button" class="link-btn" data-action="open" data-id="' + card.id + '">详情 &gt;</button></div>' +
         timelineHTML(card, { limit: 3 }) + mediaRowHTML(card) + decisionHTML(card) +
         (card.status === 'failed' ? '<button type="button" class="btn btn-secondary btn-sm" data-action="retry" data-id="' + card.id + '">' + icon('redo') + '重试任务</button>' : '') +
         replyHTML(card, 'list') + '</div>' : '') +
@@ -2521,9 +2654,12 @@
     $('#viewBoard').setAttribute('aria-selected', String(state.view === 'board'));
     $('#viewList').setAttribute('aria-selected', String(state.view === 'list'));
     const themeBtn = $('#themeBtn');
-    themeBtn.innerHTML = icon(state.theme === 'dark' ? 'sun' : 'moon');
-    themeBtn.setAttribute('aria-pressed', String(state.theme === 'dark'));
-    themeBtn.setAttribute('aria-label', state.theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题');
+    const themeLabels = { auto: '跟随', light: '亮色', dark: '暗色' };
+    const themeIcons = { auto: 'monitor', light: 'sun', dark: 'moon' };
+    themeBtn.innerHTML = icon(themeIcons[state.themeMode]) + '<span class="theme-label">' + themeLabels[state.themeMode] + '</span>';
+    themeBtn.setAttribute('aria-pressed', String(state.themeMode !== 'auto'));
+    themeBtn.setAttribute('aria-label', '主题：' + themeLabels[state.themeMode] + '（点击切换）');
+    themeBtn.setAttribute('title', '主题：' + themeLabels[state.themeMode] + '（点击切换，T）');
     $('#syncStatus').textContent = state.syncError ? 'SSE 同步中断 · 可手动重试' : 'SSE 实时同步 · 最后更新刚刚';
     $('#syncStatus').parentElement.querySelector('.dot').dataset.state = state.syncError ? 'error' : 'done';
     boardMetas.innerHTML =
@@ -2580,11 +2716,27 @@
     announce(view === 'board' ? '已切换到看板视图' : '已切换到列表视图');
     searchInput.focus({ preventScroll: true });
   }
-  function toggleTheme() {
-    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+  const THEME_MODES = ['auto', 'light', 'dark'];
+  const THEME_LABELS = { auto: '跟随系统', light: '亮色', dark: '暗色' };
+  function resolveTheme(mode) {
+    if (mode === 'auto') return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return mode;
+  }
+  function applyTheme() {
+    state.theme = resolveTheme(state.themeMode);
     document.documentElement.dataset.theme = state.theme;
+    document.documentElement.dataset.themeMode = state.themeMode;
+  }
+  function setThemeMode(mode) {
+    if (THEME_MODES.indexOf(mode) < 0) return;
+    state.themeMode = mode;
+    applyTheme();
     renderToolbar();
-    announce(state.theme === 'dark' ? '已切换到暗色主题' : '已切换到亮色主题');
+    announce('主题：' + THEME_LABELS[mode] + (mode === 'auto' ? '（当前' + (state.theme === 'dark' ? '暗色' : '亮色') + '）' : ''));
+  }
+  function cycleThemeMode() {
+    const index = THEME_MODES.indexOf(state.themeMode);
+    setThemeMode(THEME_MODES[(index + 1) % THEME_MODES.length]);
   }
   function toggleExpand(id) {
     if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
@@ -2673,26 +2825,42 @@
       : '已收到你的决定 · 会话继续执行';
   }
 
-  function resolveApproval(card, approved, selectedIds, note) {
+  function resolveApproval(card, approved, answers, note) {
     if (!card.approval) return;
     const a = card.approval;
-    const ids = selectedIds && selectedIds.length ? selectedIds : [];
-    const labels = ids.map(function (id) {
-      const opt = a.options.find(function (x) { return x.id === id; });
-      return opt ? opt.label : id;
+    const questions = approvalQuestions(a);
+    const groups = questions.map(function (q, qi) {
+      const ids = Array.isArray(answers && answers[qi]) ? answers[qi] : [];
+      const labels = ids.map(function (id) {
+        const opt = q.options.find(function (x) { return x.id === id; });
+        return opt ? opt.label : id;
+      });
+      return { question: q, labels: labels };
     });
     const target = primarySession(card);
-    const full = (approved ? '[审批] 提交选择：' : '[审批] 驳回：') + (labels.length ? labels.join('、') : '（未选择选项）') + (note ? '；备注：' + note : '');
+    const pieces = groups.map(function (g) {
+      return (g.question.header ? g.question.header + '：' : '') + (g.labels.join('、') || '（未选）');
+    });
+    const full = approved
+      ? '[审批] 提交选择：' + pieces.join('；') + (note ? '；备注：' + note : '')
+      : '[审批] 驳回：全部问题' + (note ? '；备注：' + note : '');
     card.thread.push({ from: 'you', text: full, time: '刚刚', sessionId: target.id });
     card.nodes.push({
       ago: '刚刚',
-      text: (approved ? '你提交了确认选择：' : '你驳回了确认请求：') + (labels.length ? labels.join('、') : '无选项') + (note ? ' · ' + note : ''),
+      text: (approved ? '你提交了确认选择：' : '你驳回了确认请求：') + (approved ? pieces.join(' · ') : '全部问题') + (note ? ' · ' + note : ''),
       state: 'done'
     });
     card.updated = '刚刚';
     if (approved) {
-      const chosen = a.options.find(function (x) { return x.id === ids[0]; }) || a.options[0];
-      applyApprovalOutcome(card, chosen && chosen.outcome);
+      let outcome = 'running';
+      outer: for (let qi = 0; qi < groups.length; qi += 1) {
+        const ids = answers && answers[qi] ? answers[qi] : [];
+        for (let oi = 0; oi < ids.length; oi += 1) {
+          const opt = groups[qi].question.options.find(function (x) { return x.id === ids[oi]; });
+          if (opt && opt.outcome) { outcome = opt.outcome; break outer; }
+        }
+      }
+      applyApprovalOutcome(card, outcome);
     } else {
       applyApprovalOutcome(card, 'backlog');
     }
@@ -2707,21 +2875,25 @@
   function approveCard(id) {
     const card = findCard(id);
     if (!card || !card.approval) return;
-    const sel = approvalSelection(card);
-    if (card.approval.multiSelect && !sel.length) {
-      toast('请至少选择 1 个选项', { icon: 'alert' });
-      const first = document.querySelector('[data-approval-option="' + id + '"]');
+    const questions = approvalQuestions(card.approval);
+    let missing = -1;
+    questions.forEach(function (q, qi) {
+      if (missing === -1 && !approvalSelection(card, qi).length) missing = qi;
+    });
+    if (missing >= 0) {
+      toast(isMultiQuestionApproval(card.approval) ? '请回答全部问题（第 ' + (missing + 1) + ' 题未选）' : '请至少选择 1 个选项', { icon: 'alert' });
+      const first = document.querySelector('[data-approval-option="' + id + '"][data-q="' + missing + '"]') || document.querySelector('[data-approval-option="' + id + '"]');
       if (first) first.focus();
       return;
     }
-    resolveApproval(card, true, sel, (state.approvalNotes[id] || '').trim());
+    resolveApproval(card, true, approvalAnswers(card), (state.approvalNotes[id] || '').trim());
   }
 
   function rejectCard(id) {
     const card = findCard(id);
     if (!card || !card.approval) return;
-    const danger = card.approval.options.find(function (o) { return o.tone === 'danger'; }) || card.approval.options[card.approval.options.length - 1];
-    resolveApproval(card, false, danger ? [danger.id] : [], (state.approvalNotes[id] || '').trim());
+    const questions = approvalQuestions(card.approval);
+    resolveApproval(card, false, questions.map(function () { return []; }), (state.approvalNotes[id] || '').trim());
   }
 
   function retryCard(id) {
@@ -2893,9 +3065,9 @@
     popoverLayer.innerHTML = '';
   }
   function cardMenuHTML(card) {
-    const pendingApproval = card.approval && card.status === 'needs';
+    const pendingApproval = card.approval && card.status === 'needs' && !isMultiQuestionCard(card);
     return '<div class="menu-label">卡片</div>' +
-      '<button type="button" class="menu-item" data-menu="open:' + card.id + '">' + icon('link') + '打开详情<span class="menu-hint">O</span></button>' +
+      '<button type="button" class="menu-item" data-menu="open:' + card.id + '">' + icon('link') + '详情 &gt;<span class="menu-hint">O</span></button>' +
       (pendingApproval ? '<button type="button" class="menu-item" data-menu="edit-approval:' + card.id + '">' + icon('edit') + '编辑确认请求</button>' : '') +
       '<div class="menu-sep"></div>' +
       '<div class="menu-label">移到</div>' +
@@ -2917,7 +3089,7 @@
   function helpHTML() {
     const rows = [
       ['搜索卡片', ['⌘K', '/']], ['新建卡片', ['N']], ['看板 / 列表', ['B', 'L']],
-      ['明暗主题', ['T']], ['展开重要节点', ['Enter']], ['打开详情', ['O']],
+      ['主题 / 明暗', ['T']], ['展开重要节点', ['Enter']], ['详情 >', ['O']],
       ['卡片换列', ['Alt', '←/→']], ['列内排序', ['Alt', '↑/↓']], ['关闭浮层', ['Esc']]
     ];
     return '<div class="menu-label">键盘快捷键</div>' +
@@ -3018,6 +3190,7 @@
     }
     const s = statusOf(card.status);
     const isApproval = card.approval && card.status === 'needs';
+    const multiApproval = isApproval && isMultiQuestionCard(card);
     const tab = state.drawerTab;
     const primary = primarySession(card);
     drawer.innerHTML = '<div class="drawer-grabber" aria-hidden="true"></div>' +
@@ -3033,9 +3206,10 @@
           '<div class="drawer-actions">' +
             '<button type="button" class="btn btn-secondary" data-action="session-tab">' + icon('message') + '会话' + (sessionList(card).length > 1 ? '（' + sessionList(card).length + '）' : '') + '</button>' +
             '<button type="button" class="btn btn-ghost" data-action="open-dsh">' + icon('link') + '在 DSH 中打开</button>' +
-            (isApproval ? '<button type="button" class="btn btn-ghost" data-action="edit-approval" data-id="' + card.id + '">编辑确认请求</button>' : '') +
+            (isApproval && !isMultiQuestionCard(card) ? '<button type="button" class="btn btn-ghost" data-action="edit-approval" data-id="' + card.id + '">编辑确认请求</button>' : '') +
           '</div>' +
           attrHTML(card) +
+          (multiApproval ? '<div class="drawer-approval">' + decisionHTML(card) + '</div>' : '') +
           '<div class="drawer-tabs" role="tablist" aria-label="详情分区">' +
             '<button type="button" class="seg-btn' + (tab === 'nodes' ? ' is-active' : '') + '" role="tab" aria-selected="' + (tab === 'nodes') + '" data-action="drawer-tab" data-tab="nodes">重要节点<span class="drawer-tab-count">' + card.nodes.length + '</span></button>' +
             '<button type="button" class="seg-btn' + (tab === 'thread' ? ' is-active' : '') + '" role="tab" aria-selected="' + (tab === 'thread') + '" data-action="drawer-tab" data-tab="thread">' + icon('message') + '会话<span class="drawer-tab-count">' + card.thread.length + '</span></button>' +
@@ -3043,7 +3217,7 @@
           '<div class="drawer-body">' + (tab === 'nodes' ? timelineHTML(card) : threadHTML(card)) + '</div>') +
       '</div>' +
       '<footer class="drawer-foot">' +
-        (isApproval ? decisionHTML(card) : '') +
+        (isApproval && !multiApproval ? decisionHTML(card) : '') +
         (state.editing ? '' : '<div class="drawer-foot-row"><button type="button" class="btn btn-ghost" data-action="close-drawer">关闭</button></div>') +
       '</footer>';
     const thread = drawer.querySelector('.thread');
@@ -3167,6 +3341,7 @@
   function openApprovalEditor(cardId) {
     const card = findCard(cardId);
     if (!card || !card.approval) return;
+    if (isMultiQuestionCard(card)) { toast('多问题审批请直接在卡片内逐题回答', { icon: 'alert' }); return; }
     const a = card.approval;
     const optA = a.options[0] || { label: '继续' };
     const optB = a.options[1] || { label: '停止', tone: 'danger' };
@@ -3346,7 +3521,7 @@
     if (!btn) return false;
     const action = btn.dataset.action;
     const id = btn.dataset.id;
-    if (action === 'theme') { toggleTheme(); return true; }
+    if (action === 'theme' || action === 'theme-mode') { cycleThemeMode(); return true; }
     if (action === 'help') { openPopover('help', helpBtn, helpHTML(), '键盘快捷键'); return true; }
     if (action === 'filter') { openFilter(); return true; }
     if (action === 'new-card') { openNewModal('backlog'); return true; }
@@ -3527,15 +3702,24 @@
       const cardId = opt.dataset.approvalOption;
       const card = findCard(cardId);
       if (!card || !card.approval) return;
-      const current = approvalSelection(card).slice();
+      const qIndex = Number(opt.dataset.q || 0);
+      const question = approvalQuestions(card.approval)[qIndex];
+      if (!question) return;
+      const current = approvalSelection(card, qIndex).slice();
       const value = opt.value;
       let next;
-      if (card.approval.multiSelect) {
+      if (question.multiSelect) {
         next = current.indexOf(value) >= 0 ? current.filter(function (x) { return x !== value; }) : current.concat([value]);
       } else {
         next = [value];
       }
-      state.approvalSel[cardId] = next;
+      if (isMultiQuestionApproval(card.approval)) {
+        const map = Object.assign({}, state.approvalSel[cardId] && !Array.isArray(state.approvalSel[cardId]) ? state.approvalSel[cardId] : {});
+        map[qIndex] = next;
+        state.approvalSel[cardId] = map;
+      } else {
+        state.approvalSel[cardId] = next;
+      }
       const group = opt.closest('.decision-options');
       if (group) {
         $$('.opt', group).forEach(function (label) {
@@ -3695,7 +3879,7 @@
     if (k === 'n') { e.preventDefault(); openNewModal('backlog'); }
     else if (k === 'b') { e.preventDefault(); setView('board'); }
     else if (k === 'l') { e.preventDefault(); setView('list'); }
-    else if (k === 't') { e.preventDefault(); toggleTheme(); }
+    else if (k === 't') { e.preventDefault(); cycleThemeMode(); }
     else if (k === 'o') {
       const el = document.activeElement && document.activeElement.closest && document.activeElement.closest('.card, .list-row');
       if (el) { e.preventDefault(); openDrawer(el.dataset.cardId); }
@@ -3717,6 +3901,7 @@
   /* ---------------------------------------------------------------- init */
   function init() {
     const params = new URLSearchParams(location.search);
+    state.themeMode = document.documentElement.dataset.themeMode || 'auto';
     state.theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
     state.layout = document.documentElement.dataset.layout || 'wide';
     if (params.get('view') === 'list') state.view = 'list';
@@ -3729,7 +3914,8 @@
     if (params.get('done') === 'all') state.doneAll = true;
     if (params.get('listDone') === 'expanded') state.doneListExpanded = true;
     if (params.get('listDone') === 'all') { state.doneListExpanded = true; state.doneListAll = true; }
-    if (params.get('multi') === '1') { state.expanded.clear(); state.expanded.add('c-304'); }
+    if (params.get('multi') === '1' || params.get('approval') === 'multi-question') { state.expanded.clear(); state.expanded.add('c-304'); }
+    if (params.get('listActions') === 'left') state.listActions = 'left';
     if (params.get('syncError') === '1') state.syncError = true;
     if (params.get('col')) state.activeCol = params.get('col');
     renderAll();
@@ -3738,13 +3924,21 @@
     } else if (params.get('sessions') === '1') {
       openDrawer('c-201', 'thread');
     }
-    const firstExpanded = params.get('multi') === '1' || params.get('expanded') ? Array.from(state.expanded)[0] : null;
+    const firstExpanded = params.get('multi') === '1' || params.get('approval') || params.get('expanded') ? Array.from(state.expanded)[0] : null;
     if (firstExpanded) {
       setTimeout(function () {
         const el = document.querySelector('.card[data-card-id="' + firstExpanded + '"]');
         if (el) el.scrollIntoView({ block: 'center' });
       }, motionMs(80));
     }
+    const systemTheme = matchMedia('(prefers-color-scheme: dark)');
+    const onSystemTheme = function () {
+      if (state.themeMode !== 'auto') return;
+      applyTheme();
+      renderToolbar();
+    };
+    if (systemTheme.addEventListener) systemTheme.addEventListener('change', onSystemTheme);
+    else if (systemTheme.addListener) systemTheme.addListener(onSystemTheme);
     window.addEventListener('resize', function () { if (state.popover) closePopover(); });
   }
 

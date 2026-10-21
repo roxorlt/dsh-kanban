@@ -1,6 +1,6 @@
 # DSH 看板 · 设计系统（v2，2026-10-21）
 
-> 交付：`design/mockup.html`（单文件可交互高保真）、`design/screens/01–14`（状态截图）、`design/lint/`（组件样式抽取与令牌 lint）。
+> 交付：`design/mockup.html`（单文件可交互高保真）、`design/screens/01–16`（状态截图）、`design/lint/`（组件样式抽取与令牌 lint）。
 > 锚定 DSH `dsh-v0.1.5-rc.2` 设计令牌与 `dsh-ui-spec`；产品决定见 §10.3「已拍板」。
 
 ## 1. 设计目标与原则
@@ -90,6 +90,24 @@ flowchart LR
 - 多选至少选 1 项，否则内联 toast 并聚焦第一个选项。
 - 审批通过后卡片按 outcome 回到 `进行中`（默认），不直接进入已完成；由会话完成后自行移动到已完成。
 
+#### 2.5.1 多问题审批（对齐 DSH `ask_user_question`）
+
+一个审批可包含多个问题；结构与 DSH `ask_user_question` 对齐：
+
+| DSH 字段 | 看板 UI | 说明 |
+|---|---|---|
+| `questions[]` | 卡片内按题分组，全部展示 | 不折叠、不分页；一屏放不下时随列/抽屉滚动 |
+| `header` | 题目标签（11px caption，如「发布渠道」） | 可空；空则只显示问题 |
+| `question` | 问题正文（12px 500） | 每题一个 fieldset，带序号「1 / 3」 |
+| `multi_select` | `单选` / `多选` 徽标 + radio/checkbox | 多选至少选 1 项 |
+| `options[]` | 全部选项 + description | 与单问题审批同款选项卡片，不截断 |
+
+- **统一提交**：所有题共用一个备注输入 + 一个「提交全部回答」按钮；提交前校验每题都有选择，缺哪题就聚焦哪题并 toast 提示。
+- **回答序列化**：`answers[questionIndex] = optionId[]`；写入会话的消息按「题目标签：选项、选项」拼接为全文，看板节点只写摘要。
+- **列表动作区**：多问题审批行不提供快捷批准，动作列只显示「详情 >」，进入卡片/详情逐题回答。
+- 多问题审批不提供「编辑确认请求」（人工编辑仅适用于单问题模板）；拖入待你确认生成的是单问题默认模板。
+- 问题数量建议 ≤4、每题选项 2–4 个；超过时拆卡或改用多张审批卡。
+
 ### 2.6 会话与同步
 
 - 详情抽屉展示卡片绑定的全部会话：主会话徽标、运行中状态、`设为主会话`、`打开`。
@@ -106,6 +124,7 @@ flowchart LR
 - 非文字素材不内联大图，使用紧凑媒体行：缩略图 + 数量（截图/录屏/报告/文件）+「在会话中查看」。
 - 已完成列看板只渲染最近 5 张 +「查看全部 N 张 / 收起」；列表视图已完成分组默认折叠，展开后先显示 5 条 +「加载更多（剩余 N 张）」。
 - 卡片菜单的删除语义为**归档**（可从撤销 Toast 恢复），对应头部“未归档”计数。
+- **动作文案统一**：所有详情入口固定为「详情 >」（卡片展开区、列表展开区、卡片菜单），不再混用「详情」「打开详情」「查看详情」；chevron 属于文案的一部分，不单独再加图标。
 
 ## 3. 令牌映射
 
@@ -165,7 +184,9 @@ flowchart LR
 
 - 间距阶梯 `4 / 6 / 8 / 10 / 12 / 16 / 20 / 24`；卡片内 gap 4–10，区块 16–20。
 - 控件高度：icon 24–28；次级按钮 28；工具栏 32；主按钮 34–36；审批按钮桌面 30 / 竖屏 40；触控主决策热区 ≥44。
-- **列表动作区**：批准/驳回/重试固定宽 64px（紧凑档 56px，竖屏 72px×32px 高）；同一行内右对齐成簇，放在指标与详情入口之间；竖屏换行到行尾并左对齐。动作区不参与省略与收缩，标题/摘要先让位。
+- **列表动作区（默认右置）**：批准/驳回/重试固定宽 64px（紧凑档 56px，竖屏 72px×32px 高）；同一行内右对齐成簇，放在指标与详情入口之间；竖屏换行到行尾并左对齐。动作区不参与省略与收缩，标题/摘要先让位。
+- **列表动作区（左置变体 `?listActions=left`）**：动作列固定在状态点与标题左侧，宽 76px（竖屏 64px），按钮 36×24（宽按钮 64px），只占动作列、不横通栏；没有动作的行保留同宽空列，保证所有标题左对齐。默认仍为右置，左置仅用于对比/高密度评审。
+- **三态主题控件**：顶栏右侧按钮按「跟随系统 → 亮色 → 暗色」循环，图标 + 文字标签（跟随/亮色/暗色）；`T` 同效。跟随系统时监听 `prefers-color-scheme` 与宿主 themeMode；手动选择覆盖当前主题，正式版持久化到 localStorage，embedded 默认跟随宿主。
 - 看板列：列宽 ≥280（宽屏）/ ≥240（紧凑）/ 300（横向滚动）；列间距 16 / 12；列内卡片间距 10–12。
 - 抽屉宽度 `clamp(380px, 34vw, 460px)`；底部弹层最大高 92dvh，`min-height: 42dvh`。
 
@@ -178,6 +199,49 @@ flowchart LR
 - 卡片不用阴影，只用发丝线 + 悬停底色；菜单/浮层 `elevation-panel`；抽屉/Modal/确认框 `elevation-prominent`；唯一的 `shadow-lv1` 用于分段控件选中指示。
 - 时长：hover/颜色 100ms；展开、Toast、抽屉淡入 200ms；抽屉/底部弹层滑入 300ms；`prefers-reduced-motion` 下全部压到 0.01ms，呼吸点静默。
 - 展开区内部滚动不触发页面滚动；抽屉/弹层打开时焦点圈定。
+
+
+### 4.5 紧凑规格（builder-web 可执行）
+
+目标：给 builder-web 一份可直接执行的收紧规格；mockup v2 保留当前演示密度。下表的「mockup 现值 → builder 目标」差异是实施清单，不要求 mockup 再改。
+
+| 项 | mockup v2 现值 | builder-web 目标 | 实现要点 |
+|---|---|---|---|
+| 顶栏 | 56px | **52px**（竖屏 48px + 计数最多 2 行） | 图标 28、水平 padding 16；看板名 + 计数 |
+| 工具栏 | 50px | **48px** | 上下 padding 8；搜索/筛选控件 32；列表新建按钮 32 |
+| 列头 | 40px | 40px | 列名 13/18 500；计数胶囊 18px |
+| 列间距 | 16（宽屏）/ 12（紧凑） | **12px**（≥1440 可 16） | grid gap |
+| 列内 padding | 10px | 8–10px | 列体 `0 10px 4px` |
+| 卡片 padding | 10×10 | **10×12**（紧凑 10×10） | 圆角 12；卡片间距 8 |
+| 卡片内部 gap | 6px | 6px | 标题→摘要→动作→属性→页脚 |
+| 卡片标题 | 14 / 22 | **14 / 20，500** | `--dsw-font-s-strong-14` + `line-height: 20px` |
+| 摘要 / 当前动作 | 12 / 18 | **13 / 20；动作 12 / 17** | 摘要用 `--dsw-font-xs-13`；动作可 12px |
+| meta / 工具 / 耗时 | 11 / 14 | **12 / 16** | 数字 `tabular-nums`；徽标仍 11px |
+| 列表行 | 约 11px 上下 padding | **min-height 44，padding 8×12** | 摘要单行省略；动作按钮 24px 高 |
+| 列表组头 | 40px | **36px** | 与列头同密度 |
+| 区块间距 | 16px | **12px** | 卡片间 8、区块间 12、页面 padding 16–20 |
+| 按钮 | 次级 28；主 34–36；行内 26 | 次级 28；主 32；行内 24；审批 30（竖屏 40） | icon 24–28；触控主决策热区 ≥44 |
+| 审批选项 | padding 6×8，行高 17 | padding 5×7，行高 17 | 全部题与选项保持完整展示，不因密度压缩截断 |
+
+建议用组件局部变量落地（不占用 `--dsw-`）：
+
+```css
+.kb-app {
+  --kb-topbar-h: 52px;
+  --kb-toolbar-h: 48px;
+  --kb-col-head-h: 40px;
+  --kb-card-pad: 10px 12px;
+  --kb-card-gap: 8px;
+  --kb-col-gap: 12px;
+  --kb-row-min-h: 44px;
+}
+.kb-card { padding: var(--kb-card-pad); gap: 6px; }
+.kb-card__title { font: var(--dsw-font-s-strong-14); line-height: 20px; }
+.kb-card__summary { font: var(--dsw-font-xs-13); }
+.kb-card__meta { font: var(--dsw-font-xxs-12); font-variant-numeric: tabular-nums; }
+```
+
+验收：同一 1440×900 视口截图与 mockup 对照，允许顶栏 ±2px、卡片高度 ±8px、列间距一致；暗色与嵌入宿主各截一张；不得通过隐藏审批选项/动作来换密度。
 
 ## 5. 组件规范
 
@@ -201,6 +265,9 @@ flowchart LR
 | **抽屉 / 底部弹层** | 桌面右侧、竖屏上滑；`role=dialog aria-modal`、焦点圈定、Esc/蒙层关闭；关闭后焦点回卡片；脏草稿弹二次确认 |
 | **确认框** | `role=alertdialog`；标题「放弃未保存的修改？」+ 说明 + 继续编辑 / 放弃修改；Esc/蒙层=继续编辑 |
 | **SSE 状态与错误条** | 状态栏/工具栏显示「SSE 实时同步 · N 个会话运行中」；**不提供全局刷新按钮**；断连时出现错误条，手动重试只放在错误条内 |
+| **多问题审批** | 对齐 `ask_user_question`：每题 fieldset（header + 序号 + question + 单选/多选徽标），全部选项与说明完整展示；统一备注 + 「提交全部回答」；逐题校验；列表快捷动作仅「详情 >」；回答按题序列化 |
+| **列表动作区左置（`?listActions=left`）** | 固定 76px 动作列在状态点/标题左侧，按钮 36×24（宽按钮 64px），不横通栏；无动作行保留空列对齐标题；竖屏 64px、按钮堆叠；默认仍右置 |
+| **三态主题切换** | 跟随系统 / 亮色 / 暗色；顶栏按钮显示图标 + 当前模式标签，点击或 T 循环；auto 监听系统/宿主变化；不写死暗色配色；正式版 localStorage 记住手动选择 |
 | **空 / 加载 / Toast / 菜单** | 空态说明“这里会出现什么”并给下一步；骨架卡只在首次加载；Toast 反色面板，可带撤销；菜单无 border + elevation |
 
 ## 6. 响应式
@@ -252,7 +319,10 @@ flowchart LR
 
 - 分组：按状态（默认）/ 项目 / 优先级；切换后保留筛选、搜索与展开状态。
 - 已完成：看板列只渲染最近 5 张 + 查看全部 N / 收起；列表完成组默认折叠，展开后 5 条 + 加载更多（剩余 N）+ 收起。
-- 列表动作区：批准/驳回/重试固定宽、右对齐；窄屏换行左对齐；行内快速批准使用默认主选项，完整选项仍在展开区/详情。
+- 列表动作区：默认批准/驳回/重试固定宽、右对齐；窄屏换行左对齐；行内快速批准使用默认主选项，完整选项仍在展开区/详情。
+- 左置变体（`?listActions=left`）：动作列移到标题左侧，宽度固定、按钮紧凑，不横通栏；无动作行保留空列以对齐标题；只改变布局，不改变动作语义与快捷批准规则。
+- 多问题审批行只显示「详情 >」，不提供一键批准（必须逐题回答）。
+- 所有详情入口统一「详情 >」。
 
 ### 7.4 展开、节点、素材
 
@@ -282,14 +352,21 @@ flowchart LR
 
 `⌘K` / `/` 搜索；`N` 新建；`B` / `L` 看板/列表；`T` 明暗；`Enter` 展开；`O` 详情；`Alt+←/→` 换列；`Alt+↑/↓` 列内排序；`Esc` 关闭当前浮层（确认框 → 菜单 → 弹窗 → 抽屉）。
 
-### 7.9 加载 / 空 / 错误
+### 7.9 主题（跟随 / 亮 / 暗）
+
+- 顶栏主题按钮三态循环：跟随系统（默认）→ 亮色 → 暗色；点击或 `T` 切换，显示当前模式图标与文字。
+- 跟随系统：读取 `prefers-color-scheme`；embedded 下默认跟随宿主 `themeMode`；系统/宿主变化时即时更新。
+- 手动选择覆盖当前主题；正式版写入 localStorage，下次启动恢复；mockup 用 `?themeMode=auto|light|dark`（`?theme=dark` 为旧别名），不持久化。
+- 主题只切换 alias 令牌解析，不出现硬编码暗色表；所有浮层、状态色、阴影同步跟随。
+
+### 7.10 加载 / 空 / 错误
 
 - 首次加载骨架卡；SSE 断连错误条；空列/空分组说明“这里会出现什么”并给下一步；筛选无结果提供清除筛选。
 - 受阻/失败在待你确认列显示原因和重试；禁止只靠颜色表达状态。
 
 ## 8. 无障碍与国际化
 
-- 文案全部走 locale 字典（含 `aria-label`、placeholder、Toast、空态、计数标签）；建议 key：`kanban.header.unarchived`、`kanban.header.needsCount`、`kanban.session.runningCount`、`kanban.approval.*`、`kanban.session.primary`、`kanban.list.groupBy.*`、`kanban.done.showAll`、`kanban.dirty.confirm`。
+- 文案全部走 locale 字典（含 `aria-label`、placeholder、Toast、空态、计数标签）；建议 key：`kanban.header.unarchived`、`kanban.header.needsCount`、`kanban.session.runningCount`、`kanban.approval.*`、`kanban.approval.submitAll`、`kanban.approval.questionIndex`、`kanban.session.primary`、`kanban.list.groupBy.*`、`kanban.done.showAll`、`kanban.dirty.confirm`、`kanban.theme.follow|light|dark`、`kanban.action.details`。
 - 不用本地化文本做逻辑判断：状态、列、分组、优先级用稳定枚举。
 - 图标按钮必须有 `aria-label`；装饰图标 `aria-hidden`；选项 fieldset/legend、备注有 label；抽屉/弹层 `role=dialog aria-modal aria-labelledby`。
 - 状态不只颜色；审批按钮/选项有文字；计数有 title；卡片 `aria-label` 汇总标题、状态、优先级、项目。
@@ -324,7 +401,12 @@ flowchart LR
 | D-23 | 焦点与播报 | 抽屉焦点圈定、Esc 归还；操作有 aria-live；reduced-motion 生效 |
 | D-24 | 单文件 | `design/mockup.html` 零网络依赖，`file://` 直接打开 |
 | D-25 | 令牌 lint | `design/lint` 抽取组件样式后 0 error / 0 warning |
-| D-26 | 截图 | `design/screens/01–14` 与当前 mockup 一致，包含多选审批、审批编辑、多会话、列表分组、已完成折叠、错误条 |
+| D-26 | 截图 | `design/screens/01–16` 与当前 mockup 一致，包含多选审批、多问题审批、审批编辑、多会话、列表分组、已完成折叠、错误条、左置动作区 |
+| D-27 | 列表动作区左置 | `?listActions=left` 时动作列固定在标题左侧、宽 76px、不横通栏；无动作行标题仍对齐；默认右置不受影响 |
+| D-28 | 多问题审批 | `questions[]` 每题 header/question/multi_select/options 全部展示；统一备注与「提交全部回答」；缺题校验；回答序列化写入会话全文、看板摘要 |
+| D-29 | 三态主题 | 跟随/亮/暗三态循环；跟随模式随系统/宿主变化；T 生效；无首帧闪色与写死暗色 |
+| D-30 | 紧凑密度 | builder-web 采用 §4.5 数值：工具栏 48、卡片 padding 10–12、标题 14/20、正文 13、meta 12、区块间距 12；同视口截图对照通过 |
+| D-31 | 动作文案 | 所有详情入口均为「详情 >」；不再出现「打开详情」「查看详情」等变体 |
 
 ## 10. 交付、复跑与已拍板
 
@@ -332,15 +414,15 @@ flowchart LR
 
 | 文件 | 说明 |
 |---|---|
-| [`design/mockup.html`](../design/mockup.html) | 单文件零依赖；覆盖 12 条反馈与拍板项 |
-| [`design/screens/`](../design/screens/) | 14 张设计稿截图（01–14）；`web-*.png` 为 builder 产物，本次未改动 |
+| [`design/mockup.html`](../design/mockup.html) | 单文件零依赖；覆盖 12 条反馈、拍板项与追加项（左置动作区 / 多问题审批 / 三态主题 / 紧凑规格 / 详情 >） |
+| [`design/screens/`](../design/screens/) | 16 张设计稿截图（01–16）；新增 `15-list-actions-left-1440.png`（左置动作区）、`16-multi-question-drawer-1440.png`（多问题审批详情）；`web-*.png` 为 builder 产物，本次未改动 |
 | `design/lint/extract.mjs` | 抽取 `<style id="kanban-styles">`（排除主题替身） |
 | `design/lint/mockup-component.module.css` | 抽取结果，供 lint 机械核对 |
 | `docs/03-design-system.md` | 本文档 |
 
 ### 10.2 URL 预览参数
 
-`?theme=dark`、`?view=list`、`?group=project|priority`、`?expanded=c-301`、`?multi=1`（多选审批）、`?drawer=c-201&tab=thread`（多会话）、`?sessions=1`、`?done=all`（看板已完成全量）、`?listDone=expanded|all`、`?syncError=1`（SSE 错误条）、`?col=running`。
+`?themeMode=auto|light|dark`（三态主题，`?theme=dark` 为旧别名）、`?view=list`、`?group=project|priority`、`?listActions=left`（动作区左置）、`?expanded=c-301`、`?approval=multi-question`（多问题审批；`?multi=1` 为展开同一张卡片的旧别名）、`?drawer=c-201&tab=thread`（多会话）、`?sessions=1`、`?done=all`（看板已完成全量）、`?listDone=expanded|all`、`?syncError=1`（SSE 错误条）、`?col=running`。
 
 ### 10.3 已拍板（用户决定，实现对照）
 

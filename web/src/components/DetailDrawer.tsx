@@ -12,6 +12,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { SessionSection } from './SessionSection';
 import { Timeline, TimelineLoadMore } from './Timeline';
 import type { CardActionHandlers } from './types';
+import { pushOverlay } from '../lib/overlayStack';
 import {
   IconArchive,
   IconClose,
@@ -137,15 +138,14 @@ export function DetailDrawer({
     if (composerDirty) setDiscardOpen(true);
     else onClose();
   };
+  const requestCloseRef = useRef(requestClose);
+  requestCloseRef.current = requestClose;
+
+  // Esc 由 App 的浮层栈统一处理（抽屉属于最上层时关闭）
+  useEffect(() => pushOverlay(() => requestCloseRef.current()), []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        if (discardOpen) return;
-        requestClose();
-        return;
-      }
       if (event.key !== 'Tab' || !panelRef.current) return;
       const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
         (element) => element.offsetParent !== null,
@@ -163,8 +163,7 @@ export function DetailDrawer({
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [composerDirty, discardOpen, onClose]);
+  }, []);
 
   const targetSession = targetSessionId ?? card.sessionIds[0] ?? null;
 
@@ -335,7 +334,7 @@ export function DetailDrawer({
                 <ul className="kb-checklist__items">
                   {card.checklists.map((item) => (
                     <li className={`kb-checklist__item${item.done ? ' kb-checklist__item--done' : ''}`} key={item.id}>
-                      <span className={`kb-check${item.done ? ' kb-check--done' : ''}`} aria-hidden="true">
+                      <span className={`kb-checkbox${item.done ? ' kb-checkbox--done' : ''}`} aria-hidden="true">
                         {item.done ? '✓' : ''}
                       </span>
                       <span>{item.text}</span>

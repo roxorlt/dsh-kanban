@@ -15,6 +15,7 @@ import { Timeline, TimelineLoadMore } from './Timeline';
 import {
   IconArchive,
   IconChevronDown,
+  IconChevronRight,
   IconEdit,
   IconFile,
   IconFolder,
@@ -360,6 +361,9 @@ export function KanbanCard({
             {card.agent?.name ? <span className="kb-exp-agent">{card.agent.name}</span> : null}
             <button type="button" className="kb-link-btn" onClick={() => onOpenDetail(card.id)}>
               {t('card.openDetail')}
+              <span className="kb-icon" aria-hidden="true">
+                <IconChevronRight />
+              </span>
             </button>
           </div>
           <div className="kb-card-timeline-scroll">
@@ -410,6 +414,9 @@ export function KanbanCard({
           <div className="kb-card-actions">
             <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => onOpenDetail(card.id)}>
               {t('card.openDetail')}
+              <span className="kb-icon" aria-hidden="true">
+                <IconChevronRight />
+              </span>
             </button>
             <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => onEdit(card)}>
               <span className="kb-icon" aria-hidden="true">
@@ -419,8 +426,15 @@ export function KanbanCard({
             </button>
             <MenuButton
               label={t('a11y.moveMenu')}
-              trigger={<IconMove />}
-              triggerClassName="kb-btn kb-btn--icon kb-btn--sm kb-btn--ghost"
+              trigger={
+                <>
+                  {t('card.moveTo')}
+                  <span className="kb-icon" aria-hidden="true">
+                    <IconChevronDown />
+                  </span>
+                </>
+              }
+              triggerClassName="kb-btn kb-btn--sm kb-btn--ghost kb-card-move"
               items={moveItems}
               onSelect={(id) => {
                 if (id.startsWith('move:')) {

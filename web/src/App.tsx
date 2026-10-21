@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import type { Approval, Board, BoardSummary, Card, ColumnId, SessionRow } from './types';
 import { KanbanApiError, api } from './api';
-import { bridge, useBridgeState } from './bridge';
+import { bridge, nextThemePreference, useBridgeState } from './bridge';
 import type { HostInfo } from './types';
 import { I18nContext, readStoredLang, resolveLang, storeLang, translate } from './i18n';
 import type { I18nKey, Lang, TranslateVars } from './i18n';
@@ -17,6 +18,7 @@ import { applyPage, EMPTY_FEED } from './lib/activities';
 import type { ActivityFeed } from './lib/activities';
 import { useMediaQuery } from './lib/useMediaQuery';
 import { useRealtime } from './lib/useRealtime';
+import { closeTopOverlay } from './lib/overlayStack';
 import { BoardView } from './components/BoardView';
 import { ApprovalDraftModal } from './components/ApprovalDraftModal';
 import type { ApprovalDraftValues } from './components/ApprovalDraftModal';
@@ -25,6 +27,7 @@ import type { CardFormValues } from './components/CardFormModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { DetailDrawer } from './components/DetailDrawer';
 import { EmptyState, ErrorState, SkeletonBoard } from './components/feedback';
+import { HelpDialog } from './components/HelpDialog';
 import { ListView } from './components/ListView';
 import { ToastRegion, useToasts } from './components/Toast';
 import { Toolbar } from './components/Toolbar';
@@ -50,6 +53,14 @@ interface LoadError {
 type FormState =
   | { mode: 'create'; column: ColumnId }
   | { mode: 'edit'; card: Card };
+
+interface UnsentDecision {
+  cardId: string;
+  cardTitle: string;
+  cwd?: string;
+  text: string;
+  reason: 'no_session' | 'not_found';
+}
 
 interface ApprovalDraftState {
   card: Card;
@@ -147,6 +158,9 @@ export function App() {
   const notifyRef = useRef<(text: string, tone?: 'info' | 'success' | 'error') => void>(() => undefined);
   const { toasts, notify, dismiss } = useToasts();
   notifyRef.current = notify;
+  const [helpOpen, setHelpOpen] = useState(false);
+  const appRef = useRef<HTMLDivElement | null>(null);
+  const [unsentDecision, setUnsentDecision] = useState<UnsentDecision | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const announce = useCallback((text: string) => {
     setAnnouncement('');
@@ -490,16 +504,39 @@ export function App() {
         const note = comment ? `\n备注：${comment}` : '';
         const text = `【看板·审批】${header}「${approval.title}」：${labels.join('、')}${note}`;
         const sessionId = sessionIdOverride ?? approval.sessionId ?? card.sessionIds[0];
-        const sessionResult = await sendToSession({
-          text,
-          ...(sessionId ? { sessionId } : {}),
-          ...(card.cwd ? { cwd: card.cwd } : {}),
-        });
-        if (sessionResult.ok) {
-          notifyToast(t('toast.approvalResolved'), 'success');
-          announce(`${t('toast.approvalResolved')}：${approval.title}`);
+        // 审批已经写入时间线：会话缺失/失效时只做中性提示，不报错
+        if (!sessionId) {
+          setUnsentDecision({
+            cardId: card.id,
+            cardTitle: card.title,
+            ...(card.cwd ? { cwd: card.cwd } : {}),
+            text,
+            reason: 'no_session',
+          });
+          notifyToast(t('toast.approvalRecordedNoSession'), 'info');
+          announce(t('toast.approvalRecordedNoSession'));
         } else {
-          notifyToast(sessionResult.error ?? t('toast.sessionFailed'), 'error');
+          const sessionResult = await sendToSession({
+            text,
+            sessionId,
+            ...(card.cwd ? { cwd: card.cwd } : {}),
+          });
+          if (sessionResult.ok) {
+            notifyToast(t('toast.approvalResolved'), 'success');
+            announce(`${t('toast.approvalResolved')}：${approval.title}`);
+          } else if (/SESSION_NOT_FOUND|not found|不存在|失效|invalid/i.test(sessionResult.error ?? '')) {
+            setUnsentDecision({
+              cardId: card.id,
+              cardTitle: card.title,
+              ...(card.cwd ? { cwd: card.cwd } : {}),
+              text,
+              reason: 'not_found',
+            });
+            notifyToast(t('toast.approvalRecordedInvalidSession'), 'info');
+            announce(t('toast.approvalRecordedInvalidSession'));
+          } else {
+            notifyToast(sessionResult.error ?? t('toast.sessionFailed'), 'error');
+          }
         }
         await refresh({ silent: true });
       } catch (error) {
@@ -511,6 +548,29 @@ export function App() {
     },
     [announce, notifyToast, refresh, sendToSession, t],
   );
+
+  /** 把没发出去的决定补发：新建会话 → 绑定到卡片 → session.ensure。 */
+  const handleResendDecision = useCallback(async () => {
+    const pending = unsentDecision;
+    if (!pending) return;
+    try {
+      const created = await bridge.request('session.create', {
+        ...(pending.cwd ? { cwd: pending.cwd } : {}),
+        title: pending.cardTitle,
+      });
+      await api.bindSession(pending.cardId, created.sessionId);
+      await bridge.request('session.ensure', {
+        sessionId: created.sessionId,
+        text: pending.text,
+        ...(pending.cwd ? { cwd: pending.cwd } : {}),
+      });
+      setUnsentDecision(null);
+      notifyToast(t('toast.decisionResent'), 'success');
+      await refresh({ silent: true });
+    } catch (error) {
+      notifyToast(error instanceof Error ? error.message : t('toast.sessionFailed'), 'error');
+    }
+  }, [notifyToast, refresh, t, unsentDecision]);
 
   const handleReply = useCallback(
     async (card: Card, text: string, sessionId?: string | null): Promise<{ ok: boolean; error?: string }> => {
@@ -773,45 +833,99 @@ export function App() {
         : loading && !snapshot.board
           ? 'connecting'
           : 'connected';
-  const syncLabel =
-    syncState === 'standalone'
-      ? t('app.syncStandalone')
-      : syncState === 'connecting'
-        ? t('app.syncConnecting')
-        : syncState === 'reconnecting'
-          ? t('app.syncReconnecting')
-          : t('app.syncConnected');
+  const inIframe = typeof window !== 'undefined' && window.parent !== window;
+  const cycleTheme = useCallback(async () => {
+    const next = nextThemePreference(bridgeState.themePreference);
+    if (!embedded) {
+      bridge.setThemePreference(next);
+      return;
+    }
+    try {
+      const result = await bridge.request('theme.set', { preference: next });
+      if (result.applied) bridge.applyHostThemePreference(next);
+      else bridge.setThemePreference(next);
+    } catch {
+      // 旧宿主没有 theme.set：退化为本地令牌兜底
+      bridge.setThemePreference(next);
+    }
+  }, [bridgeState.themePreference, embedded]);
 
-  // 键盘快捷键：N 新建、B/L 切视图、/ 聚焦搜索（输入态不触发）
+  // 键盘快捷键：document capture 监听（iframe 内也能生效），点击画布后聚焦 app 容器
+  const focusApp = useCallback(() => {
+    appRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  const focusSearch = useCallback(() => {
+    const input = document.getElementById('kb-search-input');
+    if (input instanceof HTMLInputElement) {
+      input.focus();
+      input.select();
+      return true;
+    }
+    return false;
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
-      const typing =
+      const typing = Boolean(
         target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable);
+          (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.isContentEditable),
+      );
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        if (focusSearch()) event.preventDefault();
+        return;
+      }
+      if (event.key === 'Escape') {
+        // 只关最上层浮层（菜单 → 弹窗 → 抽屉），由各浮层注册到 overlayStack
+        if (closeTopOverlay()) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        if (helpOpen) {
+          event.preventDefault();
+          setHelpOpen(false);
+        }
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (typing) return;
-      const key = event.key.toLowerCase();
-      if (key === 'n') {
+      const key = event.key;
+      if (key === '?') {
+        event.preventDefault();
+        setHelpOpen((current) => !current);
+      } else if (key === '/') {
+        if (focusSearch()) event.preventDefault();
+      } else if (key.toLowerCase() === 'n') {
         event.preventDefault();
         handleCreateCard();
-      } else if (key === 'b') {
+      } else if (key.toLowerCase() === 'b') {
         event.preventDefault();
         handleViewChange('board');
-      } else if (key === 'l') {
+      } else if (key.toLowerCase() === 'l') {
         event.preventDefault();
         handleViewChange('list');
-      } else if (event.key === '/') {
+      } else if (key.toLowerCase() === 't') {
         event.preventDefault();
-        document.getElementById('kb-search-input')?.focus();
+        void cycleTheme();
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleCreateCard, handleViewChange]);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [cycleTheme, focusSearch, handleCreateCard, handleViewChange, helpOpen]);
+
+  const handleRootPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, button, a, [tabindex]')) return;
+      focusApp();
+    },
+    [focusApp],
+  );
 
   const main = (() => {
     if (loading && !snapshot.board) return <SkeletonBoard />;
@@ -870,7 +984,13 @@ export function App() {
 
   return (
     <I18nContext.Provider value={i18nValue}>
-      <div className="kb-app-scope">
+      <div
+        ref={appRef}
+        className={`kb-app-scope${inIframe ? ' kb-app--embedded' : ''}`}
+        tabIndex={-1}
+        style={{ '--kb-host-inset-top': `${bridgeState.insets.top}px` } as CSSProperties}
+        onPointerDown={handleRootPointerDown}
+      >
         <Toolbar
           boardName={snapshot.board?.name ?? t('app.boardFallback')}
           totalCards={totalCards}
@@ -888,27 +1008,58 @@ export function App() {
           syncState={syncState}
           syncError={loadError && snapshot.board ? loadError.message : null}
           onRetry={() => void refresh()}
+          themePreference={bridgeState.themePreference}
+          themeMode={bridgeState.themeMode}
+          onCycleTheme={() => void cycleTheme()}
+          onShowHelp={() => setHelpOpen(true)}
         />
         <main className={`kb-main${loading ? ' kb-main--loading' : ''}`}>{main}</main>
+        {unsentDecision ? (
+          <div className="kb-unsent-banner" role="status" aria-live="polite">
+            <span className="kb-unsent-banner__text">
+              {unsentDecision.reason === 'no_session'
+                ? t('app.unsentNoSession')
+                : t('app.unsentInvalidSession')}
+            </span>
+            <button type="button" className="kb-btn kb-btn--sm kb-btn--primary" onClick={() => void handleResendDecision()}>
+              {unsentDecision.reason === 'no_session'
+                ? t('app.createSessionAndSend')
+                : t('app.rebindSession')}
+            </button>
+            <button
+              type="button"
+              className="kb-btn kb-btn--icon kb-btn--sm kb-btn--ghost"
+              aria-label={t('app.dismiss')}
+              onClick={() => setUnsentDecision(null)}
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
         <footer className="kb-statusbar">
-          <span
-            className={`kb-dot kb-dot--${syncState === 'connected' ? 'success' : syncState === 'reconnecting' ? 'warn' : syncState === 'connecting' ? 'business' : 'tertiary'}`}
-            aria-hidden="true"
-          />
-          <span>{syncLabel}</span>
-          <span className="kb-statusbar__spacer" />
           {bridgeState.mode === 'standalone' ? (
             <span className="kb-statusbar__mock">
               <span className="kb-kbd">preview</span>
             </span>
           ) : null}
-          <span>{t('app.cardCountTotal', { count: totalCards })}</span>
-          <span aria-hidden="true">·</span>
+          <span className="kb-statusbar__spacer" />
           <span>
-            <span className="kb-kbd">⌘K</span> {t('a11y.search')}
+            <span className="kb-kbd">N</span> {t('shortcut.new')}
           </span>
           <span>
-            <span className="kb-kbd">N</span> {t('app.newCard')}
+            <span className="kb-kbd">B</span> {t('shortcut.board')}
+          </span>
+          <span>
+            <span className="kb-kbd">L</span> {t('shortcut.list')}
+          </span>
+          <span>
+            <span className="kb-kbd">⌘K</span> {t('shortcut.search')}
+          </span>
+          <span>
+            <span className="kb-kbd">T</span> {t('shortcut.theme')}
+          </span>
+          <span>
+            <span className="kb-kbd">?</span> {t('shortcut.help')}
           </span>
         </footer>
 
@@ -975,6 +1126,8 @@ export function App() {
             }}
           />
         ) : null}
+
+        {helpOpen ? <HelpDialog onClose={() => setHelpOpen(false)} /> : null}
 
         <div className="kb-sr-only" role="status" aria-live="polite" aria-atomic="true">
           {announcement}

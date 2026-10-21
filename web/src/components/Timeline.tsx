@@ -2,7 +2,6 @@ import type { Activity } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { formatRelative } from '../lib/time';
-import { IconChevronUp } from './Icons';
 import { activityStatus, activityTitle } from '../lib/timeline';
 
 interface TimelineProps {
@@ -63,13 +62,6 @@ export function TimelineLoadMore({ hasMore, loading, onClick }: TimelineLoadMore
       disabled={loading}
       onClick={onClick}
     >
-      {loading ? (
-        <span className="kb-spinner" aria-hidden="true" />
-      ) : (
-        <span className="kb-icon" aria-hidden="true">
-          <IconChevronUp />
-        </span>
-      )}
       {loading ? t('timeline.loadingEarlier') : t('timeline.loadEarlier')}
     </button>
   );

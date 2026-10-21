@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import { pushOverlay } from '../lib/overlayStack';
 
 export interface MenuEntry {
   id: string;
@@ -75,6 +76,11 @@ export function MenuButton({
     const firstEnabled = items.findIndex((item) => !item.disabled);
     if (firstEnabled >= 0) itemRefs.current[firstEnabled]?.focus();
   }, [open, items, measure]);
+
+  useEffect(() => {
+    if (!open) return;
+    return pushOverlay(() => close());
+  }, [open, close]);
 
   useEffect(() => {
     if (!open) return;

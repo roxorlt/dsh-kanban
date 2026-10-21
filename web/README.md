@@ -56,8 +56,11 @@ web/
 
 - **嵌入 vs 独立**：`window.parent !== window` 且收到过 `kanban:host`/`kanban:theme` 才视为嵌入 DSH；
   否则为独立模式（隐藏会话操作，回复/审批降级为「写时间线 + 复制文本」）。
-- **主题**：嵌入时把父页面 `kanban:theme` 的 `tokens` 写到 `document.documentElement.style`；
-  独立时用 `tokens.css` 的亮暗 fallback，跟随系统并写入 `data-kanban-theme`。
+- **主题**：三态循环「跟随系统 → 亮 → 暗」（`T` 同效，localStorage 持久化）。
+  嵌入时先调桥 `theme.set`：宿主 `applied:true` 就由宿主统一换主题（整个 DSH 一起变，看板接收新的
+  `kanban:theme` 令牌）；`applied:false` 才清空宿主令牌、用本地 `tokens.css` 兜底。独立模式全程本地三态。
+- **宿主安全区**：`kanban:host` 推送可带 `insets {top, leading, platform, fullscreen}`；嵌入时外层
+  `padding-top: max(16px, top+8px)`、左右 16px，保证标题行不压住 DSH 左上「侧边栏展开/新建会话」浮层控件。
 - **实时**：`EventSource /api/kanban/events`，revision 变化后 150ms 拉 `/state`；断线 1s→30s 退避；
   `document.hidden` 或父页面 `kanban:visibility=false` 时断开，恢复后重连。
 - **乐观移动**：拖拽/菜单/键盘换列先本地改 `status + cardOrder`，失败整体回滚并 toast。
@@ -82,8 +85,13 @@ web/
   `api.ts` 的 `normalizeCard` 补默认值，避免 UI 假设字段存在；`normalizeApproval` 兼容新旧 resolution。
 - **草稿保护**：卡片表单 / 通用审批弹窗 / 详情抽屉（回复草稿）在 Esc、蒙层点击、关闭按钮时若有未保存内容，
   先弹「放弃未保存的修改？」二次确认。
-- **键盘**：`⌘K`/`Ctrl+K`/`/` 聚焦搜索、`N` 新建、`B`/`L` 切视图、`Enter`/`O` 打开详情、
-  `Space` 展开、`Alt+←/→` 换列、`Esc` 关闭浮层；拖拽另有菜单「移动到…」替代。
+- **键盘**：`document` capture 监听（iframe 内可用），点击画布后聚焦 app 容器；输入框内不触发单键。
+  `⌘K`/`/` 搜索、`N` 新建、`B`/`L` 切视图、`T` 主题、`?` 帮助、`Esc` 关闭最上层浮层（浮层栈：菜单 → 弹窗 → 抽屉）、
+  `Enter`/`O` 详情、`Space` 展开、`Alt+←/→` 换列；拖拽另有菜单「移动到…」替代。
+- **审批兜底**：审批写入时间线后，若卡片未绑定会话 → 中性提示「审批已记录；未绑定会话，决定未发送」+
+  「新建会话并发给 agent」；会话失效（`SESSION_NOT_FOUND`）→ 同一提示条给「重新绑定会话」，不再报红色错误 toast。
+- **信息去重**：卡片数与「待你确认 / 会话运行中」只在顶栏出现；连接状态只在工具栏右侧出现；
+  底部状态栏只保留快捷键提示与独立预览标识。
 
 ## 合规与验收
 
@@ -92,7 +100,8 @@ web/
 - `npm --prefix web run lint:tokens`：8 个 CSS 文件，0 error / 0 warning
   （`tokens.css` 是主题兜底值镜像，逐行标注了 `lint-tokens-ignore` 例外）。
 - `npm --prefix web run test`：24 个单测（分组 / 筛选 / 时间格式化）。
-- 截图：`design/screens/web-*.png`（宽屏看板、列表分组、详情抽屉、多选审批、390 竖屏看板/底部弹层等）。
+- 截图：`design/screens/web-*.png`（宽屏看板、暗色、嵌入宿主安全区、列表分组、详情抽屉、多选审批、
+  通用审批弹窗、未发送决定提示、筛选浮层、快捷键帮助、390 竖屏看板/底部弹层/列表、与 mockup 的密度对照）。
 
 ## 待服务端配合 / 契约建议
 
