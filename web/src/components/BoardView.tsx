@@ -239,6 +239,7 @@ export function BoardView({
                     onReopen={actions.onReopen}
                     onMove={actions.onMove}
                     onResolveApproval={actions.onResolveApproval}
+                    onNotify={actions.onNotify}
                     onReply={actions.onReply}
                     onRetry={actions.onRetry}
                     onSessionClick={actions.onSessionClick}

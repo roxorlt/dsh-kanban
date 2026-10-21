@@ -28,8 +28,8 @@
 | POST | `/api/kanban/cards/:id/move` | `{column, version?, beforeId?, afterId?}` → `{ok, card, revision}`；设置对应代表 status 并更新 cardOrder |
 | GET | `/api/kanban/cards/:id/activities?limit=&before=` | 单卡时间线（倒序，默认 30，上限 100）。`before` 为上一页最后一条 activity id，用于「加载更早」；返回 `{ok, activities, hasMore, nextBefore}`。`/state` 不内嵌全量时间线 |
 | POST | `/api/kanban/cards/:id/comments` | `{text, actor?}` → `{ok, activity, card, revision}`（UI 提交后由客户端桥把同一文本发到主会话） |
-| POST | `/api/kanban/cards/:id/approvals` | `{title, detail, options[], multiSelect?, sessionId?}` → `{ok, approval, card, revision}`；卡片 status→`needs_you`；`multiSelect:true` 时 UI 渲染复选框 |
-| POST | `/api/kanban/cards/:id/approvals/:approvalId/resolve` | `{optionIds: string[], comment?}`（也兼容旧的 `{optionId}`）→ `{ok, approval, card, revision}`；多选时 `optionIds` 可多个；判定：所选项全部为 danger/no/reject/deny/cancel → `rejected`，否则 `approved`；解决后卡片仍留在 `needs_you`，由 agent 或用户决定回到 `running`/`done`；UI 随后把决定文本发到主会话 |
+| POST | `/api/kanban/cards/:id/approvals` | 二选一：单题 `{title, detail, options[], multiSelect?, sessionId?}`；多题 `{questions:[{header?,question,multiSelect?,options[]}], detail?, sessionId?}` → `{ok, approval, card, revision}`；卡片 status→`needs_you`；多题时每题独立单选/多选 |
+| POST | `/api/kanban/cards/:id/approvals/:approvalId/resolve` | 单题：`{optionIds: string[], comment?}`；多题：`{answers:[{questionId, optionIds[]}], comment?}`（也兼容旧的 `{optionId}`）→ `{ok, approval, card, revision}`；多题必须逐题作答、每题至少 1 项；判定：所有所选 option 均为 danger/no/reject/deny/cancel → `rejected`，否则 `approved`；解决后卡片仍留在 `needs_you`；UI 随后把逐题答案文本发到主会话 |
 | POST | `/api/kanban/cards/:id/session` | `{sessionId, title?}` 绑定主会话（去重、置顶）→ `{ok, card, revision}` |
 | DELETE | `/api/kanban/cards/:id/session/:sessionId` | 解绑 → `{ok, card, revision}` |
 | POST | `/api/kanban/cards/:id/ack` | 用户已读/已看审批 → `{ok, revision}`，清未读红点 |

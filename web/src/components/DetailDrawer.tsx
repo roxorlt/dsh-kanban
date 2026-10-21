@@ -6,7 +6,7 @@ import { STATUS_TONE, isWarningStatus } from '../lib/status';
 import { elapsedMs, formatDateTime, formatDuration, formatRelative } from '../lib/time';
 import type { ActivityFeed } from '../lib/activities';
 import { ApprovalPanel } from './ApprovalPanel';
-import type { ApprovalDecision } from './ApprovalPanel';
+import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 import { Composer } from './Composer';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SessionSection } from './SessionSection';
@@ -39,11 +39,12 @@ interface DetailDrawerProps {
   onResolveApproval: (
     card: Card,
     approval: Approval,
-    optionIds: string[],
+    submission: ApprovalSubmission,
     comment: string,
     decision: ApprovalDecision,
     sessionId: string | null,
   ) => void;
+  onNotify: (message: string, tone?: 'info' | 'success' | 'error') => void;
   onBindSession: (card: Card, sessionId: string) => void;
   onUnbindSession: (card: Card, sessionId: string) => void;
   onOpenSession: (sessionId: string) => void;
@@ -83,6 +84,7 @@ export function DetailDrawer({
   actions,
   onReply,
   onResolveApproval,
+  onNotify,
   onBindSession,
   onUnbindSession,
   onOpenSession,
@@ -311,9 +313,11 @@ export function DetailDrawer({
                   approval={approval}
                   busy={resolvingApprovalId === approval.id}
                   now={now}
-                  onResolve={(target, optionIds, comment, decision) =>
-                    onResolveApproval(card, target, optionIds, comment, decision, targetSession)
+                  inDrawer
+                  onResolve={(target, submission, comment, decision) =>
+                    onResolveApproval(card, target, submission, comment, decision, targetSession)
                   }
+                  onValidationError={(message) => onNotify(message, 'error')}
                 />
               ))}
             </section>

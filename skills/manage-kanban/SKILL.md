@@ -39,7 +39,7 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 | `kanban_update_card` | 更新字段 | `cardId` + 任意字段（`currentAction` `progress` `checklists` `status` `result`…） |
 | `kanban_move_card` | 换列/换状态 + 原因 | `cardId` `column` 或 `status` `text` |
 | `kanban_add_activity` | 追加时间线节点 | `cardId` `text` `type` `data` `metadata` |
-| `kanban_request_approval` | 请求审批（→待你确认） | `cardId` `title` `detail` `options`(1–8) `multiSelect` `sessionId` |
+| `kanban_request_approval` | 请求审批（→待你确认） | 单题：`title` `detail` `options`(1–8) `multiSelect`；多题：`questions`(1–6 题，每题独立单选/多选) |
 | `kanban_link_session` | 绑定当前会话 | `cardId` `sessionId` `title` |
 | `kanban_complete_card` | 完成并写结果 | `cardId` `result` |
 
@@ -64,6 +64,12 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 { "cardId": "card-1a2b3c4d", "title": "发布前要带哪些检查？", "multiSelect": true, "options": [{ "label": "单元测试" }, { "label": "构建" }, { "label": "真实设备" }, { "label": "文档" }] }
 ```
 ```json
+{ "cardId": "card-1a2b3c4d", "questions": [
+  { "header": "发布窗口", "question": "选择本次发布窗口", "options": ["今天 22:00", { "id": "hold", "label": "暂缓", "tone": "danger" }] },
+  { "header": "发布检查", "question": "本次要带哪些检查？", "multiSelect": true, "options": ["单元测试", "构建", "真实设备", "文档"] }
+] }
+```
+```json
 { "cardId": "card-1a2b3c4d", "result": "routes.js 已实现全部 REST + SSE；npm test 30/30 通过；冒烟命令见报告。" }
 ```
 
@@ -71,6 +77,7 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 
 - **不要替用户做审批决定**，也不要自行把 `needs_you` 的卡片改回 `running`；只有用户在看板里选择后（时间线出现 `approval_resolved`）才继续。
 - 需要用户勾选多个项时用 `multiSelect: true`（选项 1–8 个）；单选审批用户只会选一个。
+- 一次要问用户多个问题（最多 6 题，每题可独立单选/多选）时传 `questions[]`，不要串多次审批；多题时 `title` 由服务端从第一题生成。
 - 请求审批后在同一轮里不要假设结果；明确告诉用户「已在看板等你确认」。
 - `blocked`/`failed` 卡片在「待你确认」列展示，解决后由你改回 `running` 或 `done`，并在时间线说明原因。
 - 用户拒绝时尊重结论：停下、记录原因，必要时新建卡片而不是反复重试。
@@ -88,5 +95,6 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 - `CARD_NOT_FOUND`：卡片不存在或已归档，用 `kanban_cards` 重新查找。
 - `BAD_REQUEST`：检查参数（状态枚举、选项数量 1–4、必填文本）。
 - `CONFLICT`：卡片状态已被用户改变，重新读卡后再决定下一步。
-- 审批决议在 `approval.resolution`：`{ optionIds, labels, comment? }`；不要假设旧的单值 `optionId`。
+- 审批决议在 `approval.resolution`：单题 `{ optionIds, labels, comment? }`；多题额外有 `answers: [{questionId, optionIds, labels}]`（`optionIds/labels` 仍是拍平后的兼容字段）。不要假设旧的单值 `optionId`。
+- 多题审批用户会逐题作答；你只能在用户完成后读取 `answers`，不要自行补答或推断用户选择。
 - 工具返回 `{ok:false,error:{code,message}}` 时不要重试同样的错误参数；根据 `message` 修正。

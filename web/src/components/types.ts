@@ -1,6 +1,6 @@
 import type { Activity, Approval, ApprovalOption, Card, ColumnId, SessionRow } from '../types';
 import type { ActivityFeed } from '../lib/activities';
-import type { ApprovalDecision } from './ApprovalPanel';
+import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 
 export interface Placement {
   beforeId?: string;
@@ -31,10 +31,11 @@ export interface CardActionHandlers {
   onResolveApproval: (
     card: Card,
     approval: Approval,
-    optionIds: string[],
+    submission: ApprovalSubmission,
     comment: string,
     decision: ApprovalDecision,
   ) => void;
+  onNotify: (message: string, tone?: 'info' | 'success' | 'error') => void;
   onReply: (card: Card, text: string) => Promise<{ ok: boolean; error?: string }>;
   onRetry: (card: Card) => void;
   onSessionClick: (card: Card) => void;

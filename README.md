@@ -3,7 +3,7 @@
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里的原生看板插件。
 **卡片是控制面，DSH 会话是执行面**：你在看板里管理"要做什么、到哪了、需要你决定什么"，agent 在会话里执行，并通过原生工具把进展写回卡片。卡片内回复会直接进入绑定的 DSH 会话，会话里的决定也会回到卡片。
 
-> 状态：v0.2.1，已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写）。数据存本机 `~/.dsh-kanban/data.json`。
+> 状态：v0.3.0，已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写）。数据存本机 `~/.dsh-kanban/data.json`。
 > 仓库：[github.com/roxorlt/dsh-kanban](https://github.com/roxorlt/dsh-kanban)
 
 ![看板视图（真实 DSH 内）](docs/assets/screens/embedded-board-light.png)
@@ -14,7 +14,7 @@
 - **卡片 CRUD + 拖拽**：新建、编辑、归档、拖拽换列；列内排序持久化；乐观更新失败自动回滚。
 - **卡片摘要分层**：一句话摘要 → 当前动作 → 最近节点 → 结果 → 待决策；折叠、展开、详情三档信息密度。
 - **重要节点时间线**：状态变化、进展、评论、审批、会话绑定、产物全部记录。
-- **审批与确认**：卡片进入"待你确认"时带结构化待定项（单选 / 多选 / 多方案 + 备注），所有选项与说明在卡片内完整展示；决定直接发回会话。
+- **审批与确认**：卡片进入"待你确认"时带结构化待定项（单选 / 多选 / **多问题** + 备注），所有选项与说明在卡片内完整展示；逐题作答后决定直接发回会话；对齐 DSH `ask_user_question`。
 - **卡片内回复**：回复写时间线，并通过桥进入 DSH 会话；没有会话时可从卡片新建。
 - **会话绑定**：选择已有会话作为主会话、打开会话跳转 DSH 对话、显示运行状态。
 - **实时刷新**：SSE 推送 revision，断线指数退避，页面隐藏暂停；手动重试只在断连错误条出现。
@@ -25,7 +25,7 @@
 
 ## 已验证
 
-- 服务端 `node --test`：**55/55 通过**；Web `tsc` + Vite 构建通过，vitest 39/39，令牌 lint 0 error / 0 warning。
+- 服务端 `node --test`：**60/60 通过**；Web `tsc` + Vite 构建通过，vitest 49/49，令牌 lint 0 error / 0 warning。
 - 在**独立 DSH profile** 中真实安装并加载：侧栏入口、`main` 全屏面板、iframe 桥就绪、49 个主题令牌同步、明暗主题、console 0 error。
 - 会话桥：`session.create → refresh → open → binding → prompt` 实测 `accepted: true`。
 - agent 工具：真实 agent 调用 `kanban_create_card` 创建卡片，SSE 实时出现在看板。

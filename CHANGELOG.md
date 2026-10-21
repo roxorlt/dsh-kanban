@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.3.0 — 2026-10-21
+
+### 新增：多问题审批（对齐 DSH `ask_user_question`）
+
+- 数据模型：`Approval.questions[]`（1–6 题，每题 `header/question/multiSelect/options`）与 `ApprovalAnswer`；保留单题字段与旧 resolution 兼容。见 [契约](docs/contracts/01-data-model.md)。
+- API：`POST /approvals` 支持 `questions[]`；`POST /approvals/:id/resolve` 支持 `{answers:[{questionId,optionIds[]}],comment}`，逐题校验、逐题必答；`resolution` 同时写 `answers` 与拍平的 `optionIds/labels`。
+- Agent 工具：`kanban_request_approval` 新增 `questions` 参数（与旧 title/options 二选一）；`kanban_card` 返回题目；pendingApproval 摘要带题数。
+- Web：卡片/列表/详情复用同一审批组件；逐题 fieldset、单选/多选徽标、全部选项说明、统一备注、「提交全部回答」；缺题高亮+聚焦+toast；已解决态逐题展示；卡片内限高滚动。
+- 会话文本：`【看板·审批】已提交「title」：\n- header：A、B…`；未绑定会话保持中性提示 +「新建会话并发给 agent」。
+- 种子：新增 3 题示例卡「上线评审：发布窗口与检查项」；总卡数 7→8。
+
+### 验证
+
+- 服务端 `node --test` 60/60；Web vitest 8 文件 / 49 测试；tsc 0 error；令牌 lint 8 CSS 0/0；build 成功。
+- Playwright 真实 dev-server：3 题逐题作答 → `resolution.answers` 三题正确、`optionIds` 拍平、approved；单题审批回归正常；console 0 error。
+
+
 ## v0.2.1 — 2026-10-21
 
 ### 修复（用户实测 12 项）

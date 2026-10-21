@@ -40,14 +40,14 @@ test('GET /state 返回看板快照、列计数、按列排序的卡片，不内
   assert.equal(body.activities, undefined)
   assert.equal(body.boards.length, 1)
   assert.equal(body.board.id, 'board-default')
-  assert.equal(body.boards[0].counts.total, 7)
-  assert.equal(body.cards.length, 7)
+  assert.equal(body.boards[0].counts.total, 8)
+  assert.equal(body.cards.length, 8)
   assert.equal(body.revision, 1)
   assert.ok(body.serverTime > 0)
   // 按列展开：backlog 在最前，每张卡只出现一次
   assert.equal(body.cards[0].status, 'backlog')
   assert.deepEqual(body.cards.map(card => card.id).sort(), [...new Set(body.cards.map(card => card.id))].sort())
-  assert.equal(body.board.cardOrder.needs_you.length, 4)
+  assert.equal(body.board.cardOrder.needs_you.length, 5)
 
   const scoped = await api(server, '/api/kanban/state?boardId=board-default')
   assert.equal(scoped.status, 200)
@@ -87,7 +87,7 @@ test('看板 CRUD：创建/改名/删除；默认看板与含卡看板不可删'
 
   const boards = await api(server, '/api/kanban/boards')
   assert.equal(boards.json.boards.length, 2)
-  assert.equal(boards.json.boards[0].counts.total, 7)
+  assert.equal(boards.json.boards[0].counts.total, 8)
 })
 
 test('卡片创建：字段白名单、默认值、version=1、created 时间线', async t => {
@@ -337,6 +337,93 @@ test('多选审批：multiSelect + optionIds resolve、全 danger 判 rejected�
   })).status, 400)
 })
 
+test('多问题审批：POST questions 创建、resolve answers 逐题作答、逐题校验与旧参数兼容', async t => {
+  const { server } = await setup(t)
+  const card = await createCard(server, { title: '多问题审批 HTTP' })
+  const created = await api(server, `/api/kanban/cards/${card.id}/approvals`, {
+    method: 'POST',
+    body: {
+      detail: '请逐题选择',
+      questions: [
+        { header: '发布窗口', question: '选择发布窗口', options: [{ id: 'today', label: '今天' }, { id: 'hold', label: '暂缓', tone: 'danger' }] },
+        { header: '检查项', question: '带哪些检查？', multiSelect: true, options: [{ id: 'unit', label: '单测' }, { id: 'build', label: '构建' }, { id: 'docs', label: '文档' }] },
+        { header: '回滚', question: '回滚就绪？', options: [{ id: 'ready', label: '已就绪' }, { id: 'no', label: '未就绪', tone: 'danger' }] },
+      ],
+    },
+  })
+  assert.equal(created.status, 200)
+  const approval = created.json.approval
+  assert.equal(approval.questions.length, 3)
+  assert.equal(approval.title, '发布窗口：选择发布窗口')
+  assert.equal(approval.questions[1].multiSelect, true)
+  assert.equal(created.json.card.status, 'needs_you')
+  const [q1, q2, q3] = approval.questions
+
+  // 缺题 / 非法题号 / 非法选项 / 单选多选均 400
+  const missing = await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST', body: { answers: [{ questionId: q1.id, optionIds: ['today'] }] },
+  })
+  assert.equal(missing.status, 400)
+  assert.equal((await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST', body: { answers: [{ questionId: 'q-ffffff', optionIds: ['today'] }] },
+  })).status, 400)
+  assert.equal((await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST', body: { answers: [{ questionId: q1.id, optionIds: ['nope'] }, { questionId: q2.id, optionIds: ['unit'] }, { questionId: q3.id, optionIds: ['ready'] }] },
+  })).status, 400)
+  assert.equal((await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST', body: { answers: [{ questionId: q1.id, optionIds: ['today', 'hold'] }, { questionId: q2.id, optionIds: ['unit'] }, { questionId: q3.id, optionIds: ['ready'] }] },
+  })).status, 400)
+  // 多题审批不能只传旧 optionIds
+  assert.equal((await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST', body: { optionIds: ['today'] },
+  })).status, 400)
+
+  const resolved = await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST',
+    body: {
+      answers: [
+        { questionId: q1.id, optionIds: ['today'] },
+        { questionId: q2.id, optionIds: ['unit', 'build'] },
+        { questionId: q3.id, optionIds: ['ready'] },
+      ],
+      comment: '逐题确认',
+    },
+  })
+  assert.equal(resolved.status, 200)
+  assert.equal(resolved.json.approval.status, 'approved')
+  assert.equal(resolved.json.approval.resolution.answers.length, 3)
+  assert.deepEqual(resolved.json.approval.resolution.answers[1].labels, ['单测', '构建'])
+  assert.deepEqual(resolved.json.approval.resolution.optionIds, ['today', 'unit', 'build', 'ready'])
+  assert.equal(resolved.json.approval.resolution.comment, '逐题确认')
+
+  // 全部题目都选 danger → rejected
+  const card2 = await createCard(server, { title: '多问题全 danger' })
+  const created2 = await api(server, `/api/kanban/cards/${card2.id}/approvals`, {
+    method: 'POST',
+    body: { questions: [{ question: 'Q1', options: [{ id: 'no', label: '否', tone: 'danger' }] }, { question: 'Q2', multiSelect: true, options: [{ id: 'reject', label: '拒绝', tone: 'danger' }] }] },
+  })
+  const rejected = await api(server, `/api/kanban/cards/${card2.id}/approvals/${created2.json.approval.id}/resolve`, {
+    method: 'POST',
+    body: { answers: created2.json.approval.questions.map(question => ({ questionId: question.id, optionIds: [question.options[0].id] })) },
+  })
+  assert.equal(rejected.json.approval.status, 'rejected')
+
+  // 题数边界：6 题可创建，7 题 400；旧单题 POST 仍可用
+  const six = await api(server, `/api/kanban/cards/${card2.id}/approvals`, {
+    method: 'POST', body: { questions: Array.from({ length: 6 }, (_, index) => ({ question: `Q${index + 1}`, options: ['A'] })) },
+  })
+  assert.equal(six.status, 200)
+  assert.equal(six.json.approval.questions.length, 6)
+  assert.equal((await api(server, `/api/kanban/cards/${card2.id}/approvals`, {
+    method: 'POST', body: { questions: Array.from({ length: 7 }, (_, index) => ({ question: `Q${index + 1}`, options: ['A'] })) },
+  })).status, 400)
+  const legacy = await api(server, `/api/kanban/cards/${card2.id}/approvals`, {
+    method: 'POST', body: { title: '旧单题', options: ['A', 'B'] },
+  })
+  assert.equal(legacy.status, 200)
+  assert.equal(legacy.json.approval.questions, undefined)
+})
+
 test('时间线分页：before 游标/hasMore/nextBefore、limit 默认 30 上限 100、非法游标 400', async t => {
   const { server, store } = await setup(t)
   const card = await createCard(server)
@@ -394,7 +481,7 @@ test('POST /seed：demo/empty/reset、revision 单调，非法模式 400', async
   const demo = await api(server, '/api/kanban/seed', { method: 'POST', body: { mode: 'demo' } })
   assert.equal(demo.json.revision, empty.json.revision + 1)
   const state = await api(server, '/api/kanban/state')
-  assert.equal(state.json.cards.length, 7)
+  assert.equal(state.json.cards.length, 8)
   assert.equal(state.json.revision, demo.json.revision)
   assert.equal((await api(server, '/api/kanban/seed', { method: 'POST', body: { mode: 'nope' } })).status, 400)
 })
@@ -527,6 +614,6 @@ test('并发的写请求串行落盘，最终 state 与 revision 一致', async 
   const revisions = responses.map(res => res.json.revision)
   assert.equal(new Set(revisions).size, 10)
   const state = await api(server, '/api/kanban/state')
-  assert.equal(state.json.cards.length, 17)
+  assert.equal(state.json.cards.length, 18)
   assert.equal(state.json.revision, store.peek().meta.revision)
 })

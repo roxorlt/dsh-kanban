@@ -227,6 +227,76 @@ activity(cardMultiApproval.id, 'approval_requested', '请求确认：发布前�
 });
 activity(cardMultiApproval.id, 'created', '创建卡片', minutesAgo(45));
 
+// 3.1) needs_you（v0.3 多问题审批：3 题，单/多选混合）
+const approvalQuestions = {
+  id: 'ap-55ee66ff',
+  title: '需要你确认：v0.2 发布前检查',
+  detail: '共 3 个问题，答完后统一提交。选择后会并行发布，失败会在会话里回写。',
+  questions: [
+    {
+      id: 'q-aa1001',
+      header: '发布渠道',
+      question: '同步到哪些渠道？',
+      multiSelect: true,
+      options: [
+        { id: 'metrics', label: '同步到 #metrics', description: '发布结果与变化摘要。', tone: 'primary' },
+        { id: 'weekly', label: '同步到周报文档', description: '把结果追加到本周的周报草稿。', tone: 'ghost' },
+        { id: 'team', label: '同步给项目组', description: '在项目组会话中 @ 相关成员。', tone: 'ghost' },
+      ],
+    },
+    {
+      id: 'q-aa1002',
+      header: '公告',
+      question: '是否同时发布公告？',
+      multiSelect: false,
+      options: [
+        { id: 'announce', label: '发布公告', description: '在项目组发布 v0.2 更新公告。', tone: 'primary' },
+        { id: 'skip-announce', label: '暂不发布', description: '只发布构建结果。', tone: 'ghost' },
+      ],
+    },
+    {
+      id: 'q-aa1003',
+      header: '风险窗口',
+      question: '接受 14:30–14:45 的锁表窗口吗？',
+      multiSelect: false,
+      options: [
+        { id: 'accept-window', label: '接受本窗口', description: '窗口内执行，完成后回写结果。', tone: 'primary' },
+        { id: 'defer-window', label: '推迟到下一窗口', description: '卡片回到待办等待排期。', tone: 'danger' },
+      ],
+    },
+  ],
+  // 单题兼容摘要字段
+  multiSelect: true,
+  options: [],
+  status: 'pending',
+  requestedBy: AGENT,
+  requestedAt: minutesAgo(3),
+  sessionId: 'session-91c2d3',
+};
+const cardQuestionsApproval = makeCard({
+  id: 'card-4d5e6f70',
+  title: '确认 v0.2 发布前检查',
+  summary: 'v0.2 已构建完成，回答 3 个发布前问题后开始发布。',
+  currentAction: '等待你回答 3 个发布前问题',
+  status: 'needs_you',
+  priority: 'high',
+  labels: ['发布', '多渠道'],
+  project: 'release-ops',
+  sessionIds: ['session-91c2d3'],
+  agent: { name: 'DSH Agent' },
+  approvals: [approvalQuestions],
+  metadata: { toolCalls: 7, searches: 2, elapsedMs: 1 * 60_000 + 40_000 },
+  startedAt: minutesAgo(14),
+  createdAt: minutesAgo(42),
+  updatedAt: minutesAgo(3),
+});
+cards.push(cardQuestionsApproval);
+activity(cardQuestionsApproval.id, 'approval_requested', '请求确认：需要你确认：v0.2 发布前检查', minutesAgo(3), {
+  title: approvalQuestions.title,
+});
+activity(cardQuestionsApproval.id, 'progress', '检查三个渠道的发送权限', minutesAgo(4), { percent: 80 });
+activity(cardQuestionsApproval.id, 'created', '创建卡片', minutesAgo(42));
+
 // 4) blocked
 const cardBlocked = makeCard({
   id: 'card-3c4d5e6f',
@@ -649,28 +719,55 @@ const server = http.createServer(async (req, res) => {
       const card = ensureCard(decodeURIComponent(createApprovalMatch[1]));
       if (!card) return fail(res, 404, 'CARD_NOT_FOUND', '卡片不存在');
       const body = await readBody(req);
-      const title = String(body.title ?? '').trim().slice(0, 160);
-      if (!title) return fail(res, 400, 'BAD_REQUEST', '审批标题必填');
-      const options = (Array.isArray(body.options) ? body.options : [])
-        .slice(0, 8)
-        .map((option, index) => ({
+      const normalizeOptions = (list) =>
+        (Array.isArray(list) ? list : []).slice(0, 8).map((option, index) => ({
           id: String(option?.id ?? `option-${index + 1}`).slice(0, 40),
           label: String(option?.label ?? `选项 ${index + 1}`).slice(0, 80),
           description: option?.description ? String(option.description).slice(0, 300) : undefined,
           tone: ['primary', 'danger', 'ghost'].includes(option?.tone) ? option.tone : 'ghost',
         }));
-      if (!options.length) return fail(res, 400, 'BAD_REQUEST', '至少一个选项');
-      const approval = {
-        id: id('ap'),
-        title,
-        detail: String(body.detail ?? '').slice(0, 1200),
-        multiSelect: Boolean(body.multiSelect),
-        options,
-        status: 'pending',
-        requestedBy: USER,
-        requestedAt: NOW(),
-        sessionId: body.sessionId,
-      };
+      const rawQuestions = Array.isArray(body.questions) ? body.questions.slice(0, 6) : [];
+      const questions = rawQuestions.map((question, index) => ({
+        id: String(question?.id ?? id('q')).slice(0, 40),
+        header: question?.header ? String(question.header).slice(0, 40) : undefined,
+        question: String(question?.question ?? `问题 ${index + 1}`).slice(0, 240),
+        multiSelect: question?.multiSelect === true,
+        options: normalizeOptions(question?.options),
+      }));
+      const title = String(body.title ?? questions[0]?.question ?? '').trim().slice(0, 160);
+      if (!title) return fail(res, 400, 'BAD_REQUEST', '审批标题必填');
+      let approval;
+      if (questions.length) {
+        if (questions.some((question) => !question.options.length)) {
+          return fail(res, 400, 'BAD_REQUEST', '每个问题至少一个选项');
+        }
+        approval = {
+          id: id('ap'),
+          title,
+          detail: String(body.detail ?? '').slice(0, 1200),
+          multiSelect: true,
+          options: [],
+          questions,
+          status: 'pending',
+          requestedBy: USER,
+          requestedAt: NOW(),
+          sessionId: body.sessionId,
+        };
+      } else {
+        const options = normalizeOptions(body.options);
+        if (!options.length) return fail(res, 400, 'BAD_REQUEST', '至少一个选项');
+        approval = {
+          id: id('ap'),
+          title,
+          detail: String(body.detail ?? '').slice(0, 1200),
+          multiSelect: Boolean(body.multiSelect),
+          options,
+          status: 'pending',
+          requestedBy: USER,
+          requestedAt: NOW(),
+          sessionId: body.sessionId,
+        };
+      }
       card.approvals.unshift(approval);
       card.status = 'needs_you';
       touchCard(card);
@@ -688,25 +785,54 @@ const server = http.createServer(async (req, res) => {
       const approval = card.approvals.find((item) => item.id === approvalId);
       if (!approval) return fail(res, 404, 'APPROVAL_NOT_FOUND', '审批不存在');
       const body = await readBody(req);
-      const rawIds = Array.isArray(body.optionIds)
-        ? body.optionIds
-        : typeof body.optionId === 'string'
-          ? [body.optionId]
-          : [];
-      const optionIds = [...new Set(rawIds.map((value) => String(value)))];
-      const options = optionIds
-        .map((optionId) => approval.options.find((item) => item.id === optionId))
-        .filter(Boolean);
-      if (!options.length) return fail(res, 400, 'BAD_REQUEST', 'optionIds 不合法');
-      const allDanger = options.every(
-        (option) => option.tone === 'danger' || ['no', 'reject', 'deny', 'cancel', 'hold'].includes(option.id),
+      const questions = Array.isArray(approval.questions) ? approval.questions : [];
+      let optionIds = [];
+      let selectedOptions = [];
+      let answers;
+      if (questions.length) {
+        const rawAnswers = Array.isArray(body.answers) ? body.answers : [];
+        const normalized = [];
+        for (const [index, question] of questions.entries()) {
+          const answer = rawAnswers.find((item) => String(item?.questionId) === question.id) ?? rawAnswers[index];
+          const ids = Array.isArray(answer?.optionIds) ? answer.optionIds.map((value) => String(value)) : [];
+          const picked = ids.map((optionId) => question.options.find((item) => item.id === optionId)).filter(Boolean);
+          if (!picked.length) {
+            return fail(res, 400, 'BAD_REQUEST', `第 ${index + 1} 题还没有选择`);
+          }
+          normalized.push({
+            questionId: question.id,
+            optionIds: picked.map((option) => option.id),
+            labels: picked.map((option) => option.label),
+          });
+          selectedOptions.push(...picked);
+        }
+        if (normalized.length !== questions.length) {
+          return fail(res, 400, 'BAD_REQUEST', '必须逐题作答');
+        }
+        optionIds = normalized.flatMap((answer) => answer.optionIds);
+        answers = normalized;
+      } else {
+        const rawIds = Array.isArray(body.optionIds)
+          ? body.optionIds
+          : typeof body.optionId === 'string'
+            ? [body.optionId]
+            : [];
+        optionIds = [...new Set(rawIds.map((value) => String(value)))];
+        selectedOptions = optionIds
+          .map((optionId) => approval.options.find((item) => item.id === optionId))
+          .filter(Boolean);
+        if (!selectedOptions.length) return fail(res, 400, 'BAD_REQUEST', 'optionIds 不合法');
+      }
+      const allDanger = selectedOptions.every(
+        (option) => option.tone === 'danger' || ['no', 'reject', 'deny', 'cancel', 'hold', 'defer-window'].includes(option.id),
       );
       approval.status = allDanger ? 'rejected' : 'approved';
       approval.resolvedAt = NOW();
       approval.resolvedBy = USER;
       approval.resolution = {
         optionIds,
-        labels: options.map((option) => option.label),
+        labels: selectedOptions.map((option) => option.label),
+        ...(answers ? { answers } : {}),
         comment: body.comment,
       };
       // 新契约：解决后卡片仍留在 needs_you，由 agent / 用户决定下一步

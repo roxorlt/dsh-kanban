@@ -2,6 +2,8 @@ import type {
   Activity,
   ActivityPage,
   Approval,
+  ApprovalAnswer,
+  ApprovalQuestion,
   Board,
   Card,
   ColumnId,
@@ -70,11 +72,27 @@ export function normalizeCard(raw: Partial<Card> & { id: string }): Card {
 
 /** 兼容旧 resolution（{optionId,label}）与新 resolution（{optionIds,labels}）。 */
 export function normalizeApproval(raw: Approval & { resolution?: Partial<Approval['resolution']> & { optionId?: string; label?: string } }): Approval {
+  const questions = raw.questions?.map((question, index) => ({
+    ...question,
+    id: question.id || `q-${index + 1}`,
+    options: question.options ?? [],
+    multiSelect: question.multiSelect === true,
+  }));
   const resolution = raw.resolution;
-  if (!resolution) return { ...raw, multiSelect: raw.multiSelect ?? false };
+  if (!resolution) return { ...raw, multiSelect: raw.multiSelect ?? false, ...(questions ? { questions } : {}) };
   const optionIds = resolution.optionIds ?? (resolution.optionId ? [resolution.optionId] : []);
   const labels = resolution.labels ?? (resolution.label ? [resolution.label] : []);
-  return { ...raw, multiSelect: raw.multiSelect ?? false, resolution: { ...resolution, optionIds, labels } };
+  const answers = resolution.answers?.map((answer) => ({
+    questionId: answer.questionId,
+    optionIds: answer.optionIds ?? [],
+    labels: answer.labels ?? [],
+  }));
+  return {
+    ...raw,
+    multiSelect: raw.multiSelect ?? false,
+    ...(questions ? { questions } : {}),
+    resolution: { ...resolution, optionIds, labels, ...(answers ? { answers } : {}) },
+  };
 }
 
 function normalizeCards(cards: readonly Partial<Card>[] | undefined): Card[] {
@@ -172,6 +190,25 @@ export interface MoveOptions {
   afterId?: string;
 }
 
+export type ApprovalCreateInput =
+  | {
+      title: string;
+      detail: string;
+      options: { id: string; label: string; description?: string; tone?: 'primary' | 'danger' | 'ghost' }[];
+      multiSelect?: boolean;
+      sessionId?: string;
+    }
+  | {
+      /** v0.3 多问题：标题由服务端/第一题派生 */
+      questions: ApprovalQuestion[];
+      detail?: string;
+      sessionId?: string;
+    };
+
+export type ApprovalResolveInput =
+  | { optionIds: string[]; comment?: string }
+  | { answers: Pick<ApprovalAnswer, 'questionId' | 'optionIds'>[]; comment?: string };
+
 export interface HealthPayload {
   version: string;
   schemaVersion: number;
@@ -255,13 +292,7 @@ export const api = {
 
   createApproval: (
     cardId: string,
-    input: {
-      title: string;
-      detail: string;
-      options: { id: string; label: string; description?: string; tone?: 'primary' | 'danger' | 'ghost' }[];
-      multiSelect?: boolean;
-      sessionId?: string;
-    },
+    input: ApprovalCreateInput,
   ): Promise<{ approval: Approval; card: Card; revision: number }> =>
     request<{ approval: Approval; card: Card; revision: number }>(
       `/cards/${encodeURIComponent(cardId)}/approvals`,
@@ -275,21 +306,26 @@ export const api = {
   resolveApproval: (
     cardId: string,
     approvalId: string,
-    optionIds: string[],
-    comment?: string,
-  ): Promise<{ approval: Approval; card: Card; revision: number }> =>
-    request<{ approval: Approval; card: Card; revision: number }>(
+    input: ApprovalResolveInput,
+  ): Promise<{ approval: Approval; card: Card; revision: number }> => {
+    const body =
+      'answers' in input
+        ? { answers: input.answers, comment: input.comment }
+        : {
+            optionIds: input.optionIds,
+            // optionId 同时带上以兼容尚未升级的 dev-server
+            optionId: input.optionIds[0],
+            comment: input.comment,
+          };
+    return request<{ approval: Approval; card: Card; revision: number }>(
       `/cards/${encodeURIComponent(cardId)}/approvals/${encodeURIComponent(approvalId)}/resolve`,
-      {
-        method: 'POST',
-        // optionIds 是新契约；optionId 同时带上以兼容尚未升级的 dev-server。
-        body: JSON.stringify({ optionIds, optionId: optionIds[0], comment }),
-      },
+      { method: 'POST', body: JSON.stringify(body) },
     ).then((result) => ({
       ...result,
       approval: normalizeApproval(result.approval),
       card: normalizeCard(result.card),
-    })),
+    }));
+  },
 
   bindSession: (cardId: string, sessionId: string, title?: string): Promise<{ card: Card; revision: number }> =>
     request<{ card: Card; revision: number }>(`/cards/${encodeURIComponent(cardId)}/session`, {

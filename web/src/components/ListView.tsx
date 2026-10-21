@@ -305,9 +305,10 @@ function ListRow({
               approval={pendingApproval}
               busy={shared.resolvingApprovalId === pendingApproval.id}
               now={shared.now}
-              onResolve={(approval, optionIds, comment, decision) =>
-                actions.onResolveApproval(card, approval, optionIds, comment, decision)
+              onResolve={(approval, submission, comment, decision) =>
+                actions.onResolveApproval(card, approval, submission, comment, decision)
               }
+              onValidationError={(message) => actions.onNotify(message, 'error')}
             />
           ) : resolvedApproval ? (
             <ApprovalPanel approval={resolvedApproval} busy={false} now={shared.now} onResolve={() => undefined} />

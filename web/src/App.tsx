@@ -3,6 +3,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import type { Approval, Board, BoardSummary, Card, ColumnId, SessionRow } from './types';
 import { KanbanApiError, api } from './api';
 import { bridge, nextThemePreference, useBridgeState } from './bridge';
+import { formatApprovalSessionText } from './lib/approvalQuestions';
 import type { HostInfo } from './types';
 import { I18nContext, readStoredLang, resolveLang, storeLang, translate } from './i18n';
 import type { I18nKey, Lang, TranslateVars } from './i18n';
@@ -32,7 +33,7 @@ import { ListView } from './components/ListView';
 import { ToastRegion, useToasts } from './components/Toast';
 import { Toolbar } from './components/Toolbar';
 import type { SyncState, ViewMode } from './components/Toolbar';
-import type { ApprovalDecision } from './components/ApprovalPanel';
+import type { ApprovalDecision, ApprovalSubmission } from './components/ApprovalPanel';
 import type { CardActionHandlers, Placement } from './components/types';
 
 const VIEW_STORAGE_KEY = 'dsh-kanban.view';
@@ -489,20 +490,30 @@ export function App() {
     async (
       card: Card,
       approval: Approval,
-      optionIds: string[],
+      submission: ApprovalSubmission,
       comment: string,
       decision: ApprovalDecision,
       sessionIdOverride?: string,
     ) => {
       setResolvingApprovalId(approval.id);
       try {
-        await api.resolveApproval(card.id, approval.id, optionIds, comment || undefined);
-        const labels = optionIds
-          .map((optionId) => approval.options.find((option) => option.id === optionId)?.label ?? optionId)
-          .filter(Boolean);
-        const header = decision === 'approve' ? '已批准' : '已拒绝';
-        const note = comment ? `\n备注：${comment}` : '';
-        const text = `【看板·审批】${header}「${approval.title}」：${labels.join('、')}${note}`;
+        await api.resolveApproval(
+          card.id,
+          approval.id,
+          submission.answers?.length
+            ? {
+                answers: submission.answers.map(({ questionId, optionIds }) => ({ questionId, optionIds })),
+                ...(comment ? { comment } : {}),
+              }
+            : { optionIds: submission.optionIds, ...(comment ? { comment } : {}) },
+        );
+        const text = formatApprovalSessionText(
+          approval,
+          submission.answers,
+          comment,
+          decision,
+          submission.optionIds,
+        );
         const sessionId = sessionIdOverride ?? approval.sessionId ?? card.sessionIds[0];
         // 审批已经写入时间线：会话缺失/失效时只做中性提示，不报错
         if (!sessionId) {
@@ -790,8 +801,9 @@ export function App() {
       onArchive: handleArchiveRequest,
       onReopen: (card) => void handleReopen(card),
       onMove: (cardId, column, placement) => void handleMove(cardId, column, placement),
-      onResolveApproval: (card, approval, optionIds, comment, decision) =>
-        void handleResolveApproval(card, approval, optionIds, comment, decision),
+      onResolveApproval: (card, approval, submission, comment, decision) =>
+        void handleResolveApproval(card, approval, submission, comment, decision),
+      onNotify: (message, tone) => notifyToast(message, tone),
       onReply: (card, text) => handleReply(card, text),
       onRetry: handleRestart,
       onSessionClick: handleSessionClick,
@@ -807,6 +819,7 @@ export function App() {
       handleRestart,
       handleSessionClick,
       handleToggleExpanded,
+      notifyToast,
     ],
   );
 
@@ -1076,9 +1089,10 @@ export function App() {
             onClose={() => setActiveCardId(null)}
             actions={actions}
             onReply={handleReply}
-            onResolveApproval={(card, approval, optionIds, comment, decision, sessionId) =>
-              void handleResolveApproval(card, approval, optionIds, comment, decision, sessionId ?? undefined)
+            onResolveApproval={(card, approval, submission, comment, decision, sessionId) =>
+              void handleResolveApproval(card, approval, submission, comment, decision, sessionId ?? undefined)
             }
+            onNotify={notifyToast}
             onBindSession={(card, sessionId) => void handleBindSession(card, sessionId)}
             onUnbindSession={(card, sessionId) => void handleUnbindSession(card, sessionId)}
             onOpenSession={(sessionId) => void handleOpenSession(sessionId)}

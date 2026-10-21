@@ -51,6 +51,15 @@
 
 > 说明：真机 Electron 的窗口 chrome 无法在 headless 中复现，安全区通过注入宿主同名 CSS 变量验证；其余交互在 0.2.1 web 宿主实测。
 
+## 1.3 v0.3 增量验证（多问题审批）
+
+| 项 | 结果 |
+| --- | --- |
+| 服务端 | `node --test` 60/60（多题创建/边界、逐题校验、answers resolve、旧单题兼容） |
+| Web | vitest 49/49；tsc 0 error；令牌 lint 8 CSS 0/0；build 成功 |
+| 真实 dev-server | 种子 8 卡（新增 3 题「上线评审：发布窗口与检查项」）；Playwright 逐题选择 → `resolution.answers` 3 条正确、`optionIds` 拍平、approved；单题审批回归正常 |
+| 截图 | `docs/assets/screens/multi-question-pending.png`、`multi-question-resolved.png`、`multi-question-drawer.png` |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

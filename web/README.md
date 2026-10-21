@@ -64,9 +64,11 @@ web/
 - **实时**：`EventSource /api/kanban/events`，revision 变化后 150ms 拉 `/state`；断线 1s→30s 退避；
   `document.hidden` 或父页面 `kanban:visibility=false` 时断开，恢复后重连。
 - **乐观移动**：拖拽/菜单/键盘换列先本地改 `status + cardOrder`，失败整体回滚并 toast。
-- **审批**：折叠卡内完整展示所有选项与说明；单选用 radio，`multiSelect` 用复选框，提交 `optionIds[]`
-  （同时带 `optionId` 兼容旧 dev-server）；resolved 展示所选 labels（兼容旧 `resolution.optionId/label`）。
-  成功后经桥发 `【看板·审批】已批准「…」：…`（`session.ensure`，详情里可用目标会话覆盖）。
+- **审批**：兼容单题与 v0.3 多问题（`questions[]`）。单题沿用 radio/复选框 + `optionIds[]`；多问题逐题渲染
+  fieldset（header 小标题、序号、问题、单选/多选徽标、全部选项与说明），统一备注 +「提交全部回答」，提交前
+  逐题校验并高亮/聚焦缺题，提交 `answers:[{questionId, optionIds[]}]`。卡片内 questions 限高滚动、详情内展开。
+  resolved 逐题展示所选 labels（兼容旧 `resolution.optionIds/labels`）；多问题会话全文按
+  `【看板·审批】已提交「title」：\n- header：A、B` 拼接（`session.ensure`，详情里可用目标会话覆盖）。
 - **多会话**：详情抽屉列出卡片全部会话、主会话徽标、设为主会话（复用绑接口置顶）、解绑/打开；
   >1 个会话时可选「回复与审批同步到」的目标会话。
 - **时间线分页**：`GET /cards/:id/activities?limit=&before=`（返回 `hasMore/nextBefore`）。
@@ -101,7 +103,8 @@ web/
   （`tokens.css` 是主题兜底值镜像，逐行标注了 `lint-tokens-ignore` 例外）。
 - `npm --prefix web run test`：24 个单测（分组 / 筛选 / 时间格式化）。
 - 截图：`design/screens/web-*.png`（宽屏看板、暗色、嵌入宿主安全区、列表分组、详情抽屉、多选审批、
-  通用审批弹窗、未发送决定提示、筛选浮层、快捷键帮助、390 竖屏看板/底部弹层/列表、与 mockup 的密度对照）。
+  多问题审批的卡片/抽屉/列表/已解决态、通用审批弹窗、未发送决定提示、筛选浮层、快捷键帮助、
+  390 竖屏看板/底部弹层/列表、与 mockup 的密度对照）。
 
 ## 待服务端配合 / 契约建议
 

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import {
   COLUMNS, COLUMN_OF_STATUS, DEFAULT_BOARD_ID, LIMITS, STATUSES, STATUS_OF_COLUMN, DomainError,
   ackCard, applySeedMode, archiveCard, cardsOfBoard, cleanText, completeCard, countsFor, createCard,
-  createSeed, isValidId, linkSession, moveCard, newActivityId, newApprovalId, newArtifactId, newBoardId,
+  createSeed, isValidId, linkSession, moveCard, newActivityId, newApprovalId, newArtifactId, newBoardId, newQuestionId,
   newCardId, newChecklistId, normalizeStore, patchCard, requestApproval, requireCard, resolveApproval,
   sortColumnCards, unlinkSession,
 } from '../lib/domain.js'
@@ -23,8 +23,8 @@ test('状态与列映射覆盖全部状态，且与代表 status 自洽', () => 
 })
 
 test('ID 生成器符合契约格式且唯一', () => {
-  const generators = [newBoardId, newCardId, newApprovalId, newActivityId, newChecklistId, newArtifactId]
-  const patterns = [/^board-[a-f0-9]{8}$/, /^card-[a-f0-9]{8}$/, /^ap-[a-f0-9]{8}$/, /^ev-[a-f0-9]{8}$/, /^ck-[a-f0-9]{6}$/, /^art-[a-f0-9]{6}$/]
+  const generators = [newBoardId, newCardId, newApprovalId, newActivityId, newChecklistId, newArtifactId, newQuestionId]
+  const patterns = [/^board-[a-f0-9]{8}$/, /^card-[a-f0-9]{8}$/, /^ap-[a-f0-9]{8}$/, /^ev-[a-f0-9]{8}$/, /^ck-[a-f0-9]{6}$/, /^art-[a-f0-9]{6}$/, /^q-[a-f0-9]{6}$/]
   generators.forEach((generate, index) => {
     const ids = new Set(Array.from({ length: 20 }, generate))
     assert.equal(ids.size, 20)
@@ -44,7 +44,7 @@ test('demo 种子覆盖五层摘要与 required 状态形态，时间戳相对�
   assert.equal(seed.boards.length, 1)
   assert.equal(seed.boards[0].id, DEFAULT_BOARD_ID)
   assert.equal(seed.boards[0].name, 'DSH 看板')
-  assert.equal(seed.cards.length, 7)
+  assert.equal(seed.cards.length, 8)
   const statuses = new Set(seed.cards.map(card => card.status))
   for (const required of ['running', 'needs_you', 'blocked', 'done', 'backlog']) assert.ok(statuses.has(required), required)
   assert.ok(seed.cards.every(card => card.project === 'dsh-kanban'))
@@ -63,6 +63,21 @@ test('demo 种子覆盖五层摘要与 required 状态形态，时间戳相对�
   assert.equal(multiApproval.options.length, 4)
   assert.deepEqual(multiApproval.options.map(option => option.label), ['单元测试', '构建', '真实设备', '文档'])
   assert.equal(multiApproval.status, 'pending')
+  // 多问题审批示例卡
+  const reviewCard = seed.cards.find(card => (card.approvals || []).some(approval => (approval.questions || []).length))
+  assert.ok(reviewCard, '种子应包含多问题审批卡片')
+  const reviewApproval = reviewCard.approvals.find(approval => (approval.questions || []).length)
+  assert.equal(reviewApproval.questions.length, 3)
+  assert.equal(reviewApproval.questions[0].multiSelect, false)
+  assert.equal(reviewApproval.questions[1].multiSelect, true)
+  assert.equal(reviewApproval.questions[2].multiSelect, false)
+  assert.equal(reviewApproval.questions[1].options.length, 4)
+  assert.deepEqual(reviewApproval.options, reviewApproval.questions[0].options) // 兼容字段取第一题
+  assert.equal(reviewApproval.title, '发布窗口：选择本次发布窗口') // 多题 title 取第一题摘要
+  for (const question of reviewApproval.questions) {
+    assert.match(question.id, /^q-[a-f0-9]{6}$/)
+    assert.ok(question.question && question.options.length >= 1)
+  }
   const done = seed.cards.find(card => card.status === 'done')
   assert.ok(done.result && done.completedAt)
   for (const card of seed.cards) {
@@ -274,15 +289,15 @@ test('列内排序：cardOrder 优先，未入列卡片按 updatedAt desc 兜底
   const draft = seedDraft()
   const board = draft.boards[0]
   const counts = countsFor(draft.cards, board.id)
-  assert.equal(counts.total, 7)
-  assert.equal(counts.needs_you, 4) // needs_you×2 + blocked + failed
+  assert.equal(counts.total, 8)
+  assert.equal(counts.needs_you, 5) // needs_you×2 + 多问题审批 + blocked + failed
   const backlog = sortColumnCards(board, draft.cards, 'backlog')
   assert.equal(backlog.length, counts.backlog)
   const extra = createCard(draft, { title: '额外的卡', status: 'backlog' }, { now: FIXED_NOW })
   const sorted = sortColumnCards(board, draft.cards, 'backlog')
   assert.equal(sorted.length, counts.backlog + 1)
   assert.equal(sorted[0].id, extra.card.id) // 新卡插入列头
-  assert.equal(countsFor(draft.cards, board.id).total, 8)
+  assert.equal(countsFor(draft.cards, board.id).total, 9)
 })
 
 test('applySeedMode：demo 覆盖、empty 清空保留看板、reset 重建默认看板、保留 revision', () => {
@@ -299,7 +314,7 @@ test('applySeedMode：demo 覆盖、empty 清空保留看板、reset 重建默�
 
   board.cardOrder = { backlog: [], running: [], needs_you: [], done: [] }
   applySeedMode(draft, 'demo', FIXED_NOW + 2)
-  assert.equal(draft.cards.length, 7)
+  assert.equal(draft.cards.length, 8)
   assert.equal(draft.meta.revision, 42)
   assert.equal(draft.meta.seededAt, FIXED_NOW + 2)
 
@@ -397,4 +412,135 @@ test('旧数据 compatibility：resolution 旧结构 {optionId,label} 读取迁�
   assert.deepEqual(approval.resolution.optionIds, ['no'])
   assert.deepEqual(approval.resolution.labels, ['拒绝'])
   assert.equal(approval.resolution.comment, '不做了')
+})
+
+test('多问题审批：创建（title 取第一题摘要、questions 规范化、兼容字段取第一题）', () => {
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'backlog')
+  const { approval } = requestApproval(draft, card.id, {
+    detail: '请逐题选择',
+    questions: [
+      { header: '发布窗口', question: '何时发布？', multiSelect: false, options: ['今天', { id: 'hold', label: '暂缓', tone: 'danger' }] },
+      { header: '检查项', question: '带哪些检查？', multiSelect: true, options: ['单测', '构建', '文档'] },
+    ],
+  }, { actor: { kind: 'agent', name: 'DSH Agent' }, now: FIXED_NOW })
+  assert.equal(approval.questions.length, 2)
+  assert.equal(approval.title, '发布窗口：何时发布？')
+  assert.equal(approval.detail, '请逐题选择')
+  assert.equal(approval.options, approval.questions[0].options) // 旧字段取第一题
+  assert.equal(approval.multiSelect, false) // 取第一题
+  assert.equal(approval.questions[1].multiSelect, true)
+  assert.match(approval.questions[0].id, /^q-[a-f0-9]{6}$/)
+  assert.notEqual(approval.questions[0].id, approval.questions[1].id)
+  assert.equal(approval.status, 'pending')
+  assert.ok(draft.activities.some(item => item.type === 'approval_requested' && /2 题/.test(item.text)))
+})
+
+test('多问题审批校验：题目/选项/题数边界', () => {
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'backlog')
+  assert.throws(() => requestApproval(draft, card.id, { questions: [] }), error => error.code === 'BAD_REQUEST')
+  assert.throws(() => requestApproval(draft, card.id, { questions: Array.from({ length: 7 }, (_, index) => ({ question: `Q${index}`, options: ['A'] })) }),
+    error => error.code === 'BAD_REQUEST')
+  assert.throws(() => requestApproval(draft, card.id, { questions: [{ options: ['A'] }] }), error => error.code === 'BAD_REQUEST')
+  assert.throws(() => requestApproval(draft, card.id, { questions: [{ question: '缺选项', options: [] }] }), error => error.code === 'BAD_REQUEST')
+  assert.throws(() => requestApproval(draft, card.id, { questions: [{ question: '选项过多', options: Array.from({ length: 9 }, (_, index) => `O${index}`) }] }),
+    error => error.code === 'BAD_REQUEST')
+  assert.throws(() => requestApproval(draft, card.id, {}), error => error.code === 'BAD_REQUEST')
+})
+
+test('多问题审批 resolve：answers 逐题作答、拍平 resolution、全 danger 判 rejected', () => {
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'backlog')
+  const { approval } = requestApproval(draft, card.id, {
+    questions: [
+      { header: '发布窗口', question: '何时发布？', options: [{ id: 'today', label: '今天' }, { id: 'hold', label: '暂缓', tone: 'danger' }] },
+      { header: '检查项', question: '带哪些检查？', multiSelect: true, options: [{ id: 'unit', label: '单测' }, { id: 'build', label: '构建' }] },
+      { header: '回滚', question: '回滚就绪？', options: [{ id: 'ready', label: '已就绪' }, { id: 'no', label: '未就绪', tone: 'danger' }] },
+    ],
+  }, { now: FIXED_NOW })
+
+  // 缺一题
+  assert.throws(() => resolveApproval(draft, card.id, approval.id, {
+    answers: [{ questionId: approval.questions[0].id, optionIds: ['today'] }],
+  }), error => error.code === 'BAD_REQUEST')
+  // 题号非法
+  assert.throws(() => resolveApproval(draft, card.id, approval.id, {
+    answers: approval.questions.map(question => ({ questionId: 'q-ffffff', optionIds: [question.options[0].id] })),
+  }), error => error.code === 'BAD_REQUEST')
+  // 重复作答
+  assert.throws(() => resolveApproval(draft, card.id, approval.id, {
+    answers: [0, 1, 2].map(index => ({ questionId: approval.questions[index].id, optionIds: [approval.questions[index].options[0].id] })).concat([{ questionId: approval.questions[0].id, optionIds: [approval.questions[0].options[0].id] }]),
+  }), error => error.code === 'BAD_REQUEST')
+  // 选项不存在
+  assert.throws(() => resolveApproval(draft, card.id, approval.id, {
+    answers: approval.questions.map(question => ({ questionId: question.id, optionIds: ['nope'] })),
+  }), error => error.code === 'BAD_REQUEST')
+  // 单选给多个
+  assert.throws(() => resolveApproval(draft, card.id, approval.id, {
+    answers: [
+      { questionId: approval.questions[0].id, optionIds: ['today', 'hold'] },
+      { questionId: approval.questions[1].id, optionIds: ['unit'] },
+      { questionId: approval.questions[2].id, optionIds: ['ready'] },
+    ],
+  }), error => error.code === 'BAD_REQUEST')
+
+  const resolved = resolveApproval(draft, card.id, approval.id, {
+    answers: [
+      { questionId: approval.questions[0].id, optionIds: ['today'] },
+      { questionId: approval.questions[1].id, optionIds: ['build', 'unit', 'build'] },
+      { questionId: approval.questions[2].id, optionIds: ['ready'] },
+    ],
+    comment: '逐题确认', now: FIXED_NOW + 1,
+  })
+  assert.equal(resolved.approval.status, 'approved')
+  assert.equal(resolved.approval.resolution.answers.length, 3)
+  assert.deepEqual(resolved.approval.resolution.answers[1].optionIds, ['build', 'unit'])
+  assert.deepEqual(resolved.approval.resolution.optionIds, ['today', 'build', 'unit', 'ready'])
+  assert.deepEqual(resolved.approval.resolution.labels, ['今天', '构建', '单测', '已就绪'])
+  assert.equal(resolved.approval.resolution.comment, '逐题确认')
+  assert.match(resolved.activity.text, /（3 题）/)
+  assert.deepEqual(resolved.activity.data.questionIds, approval.questions.map(question => question.id))
+
+  // 所有题都选 danger/id=no → rejected
+  const card2 = findCardByStatus(draft, 'running')
+  const { approval: second } = requestApproval(draft, card2.id, {
+    questions: [
+      { question: 'Q1', options: [{ id: 'no', label: '否', tone: 'danger' }] },
+      { question: 'Q2', multiSelect: true, options: [{ id: 'reject', label: '拒绝', tone: 'danger' }, { id: 'deny', label: '否决', tone: 'danger' }] },
+    ],
+  }, { now: FIXED_NOW + 2 })
+  const rejected = resolveApproval(draft, card2.id, second.id, {
+    answers: [
+      { questionId: second.questions[0].id, optionIds: ['no'] },
+      { questionId: second.questions[1].id, optionIds: ['reject', 'deny'] },
+    ],
+    now: FIXED_NOW + 3,
+  })
+  assert.equal(rejected.approval.status, 'rejected')
+  assert.match(rejected.activity.text, /已拒绝/)
+})
+
+test('多问题审批兼容：单题旧字段 resolve 不受影响，旧数据读取仍可用', () => {
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'backlog')
+  const legacy = requestApproval(draft, card.id, { title: '旧单题', options: ['A', 'B'] }, { now: FIXED_NOW })
+  assert.equal(legacy.approval.questions, undefined)
+  const resolved = resolveApproval(draft, card.id, legacy.approval.id, { optionIds: ['option-1'], now: FIXED_NOW + 1 })
+  assert.equal(resolved.approval.status, 'approved')
+  assert.equal(resolved.approval.resolution.answers, undefined)
+  assert.deepEqual(resolved.approval.resolution.optionIds, ['option-1'])
+
+  const data = normalizeStore({
+    boards: [{ id: DEFAULT_BOARD_ID, cardOrder: { backlog: [], running: [], needs_you: [], done: [] } }],
+    cards: [{
+      id: 'card-bbbbbbbb', boardId: DEFAULT_BOARD_ID, title: '旧卡', status: 'needs_you',
+      approvals: [{ id: 'ap-bbbbbbbb', title: '旧审批', options: [{ id: 'yes', label: '批准' }, { id: 'no', label: '拒绝' }], status: 'pending', requestedAt: 1 }],
+    }],
+    activities: [], meta: { revision: 2 },
+  }, FIXED_NOW)
+  const approval = data.cards[0].approvals[0]
+  assert.equal(approval.questions, undefined)
+  assert.equal(approval.multiSelect, false)
+  assert.equal(approval.options.length, 2)
 })

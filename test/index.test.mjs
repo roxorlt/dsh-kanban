@@ -48,7 +48,7 @@ test('apply 注册两条前缀路由与 10 个工具，并种下 demo 数据', a
   await flush()
   const data = JSON.parse(await readFile(join(dir, 'data.json'), 'utf8'))
   assert.equal(data.schemaVersion, 1)
-  assert.equal(data.cards.length, 7)
+  assert.equal(data.cards.length, 8)
   // 清理：按注册顺序执行 disposer，不应抛错
   for (const dispose of state.effects.reverse()) if (typeof dispose === 'function') await dispose()
   assert.equal(state.routeDisposers, 2)

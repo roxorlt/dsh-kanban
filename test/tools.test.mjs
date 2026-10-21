@@ -17,6 +17,10 @@ async function setup(t) {
 test('10 个工具名字固定且 schema 形态完整', async t => {
   const { tools } = await setup(t)
   assert.deepEqual(tools.map(tool => tool.name), TOOL_NAMES)
+  const approvalTool = tools.find(tool => tool.name === 'kanban_request_approval')
+  assert.ok(approvalTool.parameters.properties.questions)
+  assert.equal(approvalTool.parameters.properties.questions.maxItems, 6)
+  assert.ok(approvalTool.parameters.properties.questions.items.properties.options)
   assert.equal(new Set(TOOL_NAMES).size, 10)
   for (const tool of tools) {
     assert.equal(tool.parameters.type, 'object', tool.name)
@@ -35,22 +39,22 @@ test('kanban_boards / kanban_cards：只读查询与过滤', async t => {
   const boards = parse(await byName.get('kanban_boards').execute({}, EXEC))
   assert.equal(boards.ok, true)
   assert.equal(boards.boards.length, 1)
-  assert.equal(boards.boards[0].counts.total, 7)
-  assert.equal(boards.boards[0].counts.needs_you, 4)
+  assert.equal(boards.boards[0].counts.total, 8)
+  assert.equal(boards.boards[0].counts.needs_you, 5)
 
   const cardsTool = byName.get('kanban_cards')
   const all = parse(await cardsTool.execute({}, EXEC))
   assert.equal(all.ok, true)
-  assert.equal(all.cards.length, 7)
-  assert.equal(all.total, 7)
+  assert.equal(all.cards.length, 8)
+  assert.equal(all.total, 8)
   assert.equal(all.cards[0].status !== undefined, true)
   assert.equal(all.cards[0].columnLabel.length > 0, true)
   assert.equal(Object.hasOwn(all.cards[0], 'approvals'), false) // 列表用摘要，不带全量审批
 
   assert.equal(parse(await cardsTool.execute({ status: 'blocked' }, EXEC)).total, 1)
-  assert.equal(parse(await cardsTool.execute({ status: 'needs_you' }, EXEC)).total, 2)
+  assert.equal(parse(await cardsTool.execute({ status: 'needs_you' }, EXEC)).total, 3)
   assert.equal(parse(await cardsTool.execute({ label: 'mvp' }, EXEC)).total, 2)
-  assert.equal(parse(await cardsTool.execute({ project: 'dsh-kanban' }, EXEC)).total, 7)
+  assert.equal(parse(await cardsTool.execute({ project: 'dsh-kanban' }, EXEC)).total, 8)
   assert.equal(parse(await cardsTool.execute({ project: 'other' }, EXEC)).total, 0)
   assert.ok(parse(await cardsTool.execute({ q: '看板' }, EXEC)).total >= 1)
   // 种子卡片不再伪造会话绑定；会话过滤在下面 link_session 流程里覆盖。
@@ -67,7 +71,7 @@ test('kanban_boards / kanban_cards：只读查询与过滤', async t => {
 test('kanban_card 返回完整卡片、时间线与 pending approval（单选/多选）', async t => {
   const { byName } = await setup(t)
   const list = parse(await byName.get('kanban_cards').execute({ status: 'needs_you' }, EXEC))
-  const single = list.cards.find(card => card.pendingApproval?.multiSelect === false)
+  const single = list.cards.find(card => card.pendingApproval?.multiSelect === false && card.pendingApproval?.questionCount === 0)
   assert.ok(single, '种子应包含单选审批卡')
   const cardId = single.id
   const detail = parse(await byName.get('kanban_card').execute({ cardId, activityLimit: 2 }, EXEC))
@@ -80,11 +84,20 @@ test('kanban_card 返回完整卡片、时间线与 pending approval（单选/�
   assert.ok(detail.activities[0].at >= detail.activities[1].at)
   assert.match(detail.hint, /等待用户确认/)
 
-  const multi = list.cards.find(card => card.pendingApproval?.multiSelect === true)
+  const multi = list.cards.find(card => card.pendingApproval?.multiSelect === true && card.pendingApproval?.questionCount === 0)
   assert.ok(multi, '种子应包含多选审批卡')
   const multiDetail = parse(await byName.get('kanban_card').execute({ cardId: multi.id }, EXEC))
   assert.equal(multiDetail.pendingApproval.multiSelect, true)
   assert.equal(multiDetail.pendingApproval.options.length, 4)
+
+  // 多问题审批示例卡：kanban_card 返回 questions（逐题单选/多选）
+  const review = list.cards.find(card => card.pendingApproval?.questionCount === 3)
+  assert.ok(review, '种子应包含 3 题多问题审批卡')
+  const reviewDetail = parse(await byName.get('kanban_card').execute({ cardId: review.id }, EXEC))
+  assert.equal(reviewDetail.pendingApproval.questions.length, 3)
+  assert.equal(reviewDetail.questions.length, 3)
+  assert.equal(reviewDetail.questions[1].multiSelect, true)
+  assert.match(reviewDetail.hint, /3 题/)
 
   const missing = parse(await byName.get('kanban_card').execute({ cardId: 'card-ffffffff' }, EXEC))
   assert.equal(missing.ok, false)
@@ -195,6 +208,25 @@ test('kanban_request_approval → needs_you + pending；kanban_link_session；ka
   }, EXEC))
   assert.equal(tooMany.ok, false)
   assert.equal(tooMany.error.code, 'BAD_REQUEST')
+
+  // 多题模式：questions 与 title/options 二选一，title 由服务端生成
+  const questionsResult = parse(await byName.get('kanban_request_approval').execute({
+    cardId,
+    questions: [
+      { header: '发布窗口', question: '何时发布？', options: ['今天', { id: 'hold', label: '暂缓', tone: 'danger' }] },
+      { header: '检查项', question: '带哪些检查？', multiSelect: true, options: ['单测', '构建'] },
+    ],
+  }, EXEC))
+  assert.equal(questionsResult.ok, true)
+  assert.equal(questionsResult.questionCount, 2)
+  assert.equal(questionsResult.approval.title, '发布窗口：何时发布？')
+  assert.equal(questionsResult.approval.questions.length, 2)
+  assert.match(questionsResult.hint, /逐题确认/)
+  const sevenQuestions = parse(await byName.get('kanban_request_approval').execute({
+    cardId, questions: Array.from({ length: 7 }, (_, index) => ({ question: `Q${index + 1}`, options: ['A'] })),
+  }, EXEC))
+  assert.equal(sevenQuestions.ok, false)
+  assert.equal(sevenQuestions.error.code, 'BAD_REQUEST')
 
   const linked = parse(await byName.get('kanban_link_session').execute({ cardId, sessionId: 'session-tool-1', title: '工具会话' }, EXEC))
   assert.equal(linked.ok, true)

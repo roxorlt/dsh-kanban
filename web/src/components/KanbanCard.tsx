@@ -8,7 +8,7 @@ import { elapsedMs, formatDuration } from '../lib/time';
 import { CARD_TIMELINE_PREVIEW, CARD_TIMELINE_STEP, visibleActivities } from '../lib/activities';
 import type { ActivityFeed } from '../lib/activities';
 import { ApprovalPanel } from './ApprovalPanel';
-import type { ApprovalDecision } from './ApprovalPanel';
+import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 import { MenuButton } from './MenuButton';
 import type { MenuEntry } from './MenuButton';
 import { Timeline, TimelineLoadMore } from './Timeline';
@@ -50,10 +50,11 @@ interface KanbanCardProps {
   onResolveApproval: (
     card: Card,
     approval: Approval,
-    optionIds: string[],
+    submission: ApprovalSubmission,
     comment: string,
     decision: ApprovalDecision,
   ) => void;
+  onNotify: (message: string, tone?: 'info' | 'success' | 'error') => void;
   onReply: (card: Card, text: string) => Promise<{ ok: boolean; error?: string }>;
   onRetry: (card: Card) => void;
   onSessionClick: (card: Card) => void;
@@ -86,6 +87,7 @@ export function KanbanCard({
   onReopen,
   onMove,
   onResolveApproval,
+  onNotify,
   onReply,
   onRetry,
   onSessionClick,
@@ -346,9 +348,10 @@ export function KanbanCard({
           approval={pendingApproval}
           busy={resolvingApprovalId === pendingApproval.id}
           now={now}
-          onResolve={(approval, optionIds, comment, decision) =>
-            onResolveApproval(card, approval, optionIds, comment, decision)
+          onResolve={(approval, submission, comment, decision) =>
+            onResolveApproval(card, approval, submission, comment, decision)
           }
+          onValidationError={(message) => onNotify(message, 'error')}
         />
       ) : resolvedApproval ? (
         <ApprovalPanel approval={resolvedApproval} busy={false} now={now} onResolve={() => undefined} />

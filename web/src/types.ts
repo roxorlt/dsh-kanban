@@ -42,23 +42,44 @@ export interface ApprovalOption {
   tone?: 'primary' | 'danger' | 'ghost';
 }
 
-export interface ApprovalResolution {
-  /** 新契约：多选时长度可 >1；单选时长度为 1 */
+export interface ApprovalQuestion {
+  id: string;
+  /** 题组标题（对齐 DSH ask_user_question.header），可空 */
+  header?: string;
+  question: string;
+  multiSelect?: boolean;
+  options: ApprovalOption[];
+}
+
+export interface ApprovalAnswer {
+  questionId: string;
   optionIds: string[];
   labels: string[];
+}
+
+export interface ApprovalResolution {
+  /** 拍平后的全部所选 option id（兼容旧 UI / 单题） */
+  optionIds: string[];
+  labels: string[];
+  /** v0.3：逐题答案 */
+  answers?: ApprovalAnswer[];
   comment?: string;
-  /** 兼容旧服务端返回的 {optionId,label} 形态（normalizeApproval 会转换） */
+  /** 兼容更旧服务端返回的 {optionId,label} 形态（normalizeApproval 会转换） */
   optionId?: string;
   label?: string;
 }
 
 export interface Approval {
   id: string;
+  /** 单题摘要标题；多题时由服务端或第一题派生 */
   title: string;
   detail: string;
   /** 默认 false=单选；true=多选复选框 */
   multiSelect?: boolean;
+  /** 单题兼容字段 */
   options: ApprovalOption[];
+  /** v0.3 多问题（存在时优先渲染 questions） */
+  questions?: ApprovalQuestion[];
   status: ApprovalStatus;
   requestedBy: Actor;
   requestedAt: number;

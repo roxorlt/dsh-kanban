@@ -90,19 +90,41 @@ interface ChecklistItem {
   done: boolean;
 }
 
+interface ApprovalQuestion {
+  id: string;                    // "q-" + 6 hex
+  header?: string;               // 题组标题，≤ 40 字（对齐 DSH ask_user_question.header）
+  question: string;              // 题目，≤ 240 字
+  multiSelect?: boolean;         // 默认 false=单选
+  options: ApprovalOption[];     // 1..8 个
+}
+
+interface ApprovalAnswer {
+  questionId: string;
+  optionIds: string[];           // 单选长度 1
+  labels: string[];
+}
+
 interface Approval {
   id: string;                    // "ap-" + 8 hex
+  // —— 单题兼容字段（v0.2 及以前）——
   title: string;                 // "是否把迁移脚本跑到生产？"
   detail: string;                // 影响、风险、上下文，≤ 1200 字
-  multiSelect?: boolean;         // 默认 false=单选；true=多选（与 DSH user-questions 的 multi_select 语义对齐）
+  multiSelect?: boolean;
   options: ApprovalOption[];     // 1..8 个；卡片内必须完整展示所有选项与说明，不折叠
+  // —— v0.3 多问题（存在时优先渲染 questions，title/detail/options 仍保留作摘要与兼容）——
+  questions?: ApprovalQuestion[]; // 1..6 题；每题独立单选/多选
   status: 'pending' | 'approved' | 'rejected' | 'dismissed';
   requestedBy: Actor;
   requestedAt: number;
   resolvedBy?: Actor;
   resolvedAt?: number;
-  resolution?: { optionIds: string[]; labels: string[]; comment?: string };   // 单选时 optionIds 长度为 1
-  sessionId?: string;            // 请求来自哪个会话
+  resolution?: {
+    optionIds: string[];         // 拍平后的全部所选 option id（兼容旧 UI）
+    labels: string[];
+    answers?: ApprovalAnswer[];  // v0.3：逐题答案
+    comment?: string;
+  };
+  sessionId?: string;
 }
 
 interface ApprovalOption {

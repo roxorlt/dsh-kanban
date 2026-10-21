@@ -882,6 +882,130 @@
   line-height: 16px;
 }
 
+/* ---------------------------------------------------- 多问题审批（v0.3） */
+.kb-decision--multi {
+  gap: 8px;
+}
+
+.kb-decision--multi > .kb-decision-q {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.kb-decision--multi > .kb-decision-q .kb-pill {
+  flex: none;
+}
+
+/* 卡片内限高滚动，详情抽屉内展开（由抽屉自身滚动） */
+.kb-decision-questions {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.kb-decision--in-drawer .kb-decision-questions {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.kb-decision-question {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 0;
+  border: 0;
+}
+
+.kb-decision-question + .kb-decision-question {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.kb-decision-question--missing {
+  margin: 4px 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 7%, transparent);
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-state-error-primary);
+}
+
+.kb-decision-question__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin-bottom: 5px;
+}
+
+.kb-decision-question__header {
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  letter-spacing: 0.02em;
+}
+
+.kb-decision-question__index {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-decision-question__title {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-strong-12);
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.kb-decision-question__head .kb-pill {
+  flex: none;
+  height: 18px;
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-decision-question__hint {
+  margin-top: 3px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-decision-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kb-decision-answer {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kb-decision-answer__label {
+  flex: none;
+  max-width: 42%;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-decision-answer__value {
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  overflow-wrap: anywhere;
+}
+
 .kb-decision-note {
   min-height: 32px;
   height: 32px;
