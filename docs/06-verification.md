@@ -60,6 +60,13 @@
 | 真实 dev-server | 种子 8 卡（新增 3 题「上线评审：发布窗口与检查项」）；Playwright 逐题选择 → `resolution.answers` 3 条正确、`optionIds` 拍平、approved；单题审批回归正常 |
 | 截图 | `docs/assets/screens/multi-question-pending.png`、`multi-question-resolved.png`、`multi-question-drawer.png` |
 
+## 1.4 v0.3.1（列表审批动作左对齐）
+
+- 用户参考图确认语义：列表行展开区底部审批/行内动作整体左对齐、固定 84–96px、不拉伸；卡片内审批保持右对齐。
+- Web 实测：`.kb-decision-actions` 在列表展开区 computed `justify-content: flex-start`；驳回/批准按钮各 84px，左边界与内容对齐（截图 `docs/assets/screens/list-actions-left-production.png`）。
+- 展开行隐藏行首快捷动作簇；移动端按钮不被 `flex:1` 拉通栏。
+- mockup 默认 left、`?listActions=right` 对照；lint 0/0。
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

@@ -1,7 +1,7 @@
 {
   "name": "dsh-kanban-web",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "description": "DSH 看板 Web UI（Vite + React + TypeScript）",
   "scripts": {

@@ -289,6 +289,11 @@
     flex: 1;
   }
 
+  /* 列表展开的审批动作保持固定宽、左对齐（不被 flex:1 拉通栏） */
+  .kb-list__item .kb-decision-actions .kb-btn {
+    flex: 0 0 auto;
+  }
+
   /* 列表 */
   .kb-list {
     padding: 10px 12px 20px;

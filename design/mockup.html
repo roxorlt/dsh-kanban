@@ -1633,16 +1633,14 @@
   [data-layout="narrow"] .theme-toggle { width: 36px; height: 36px; justify-content: center; padding: 0; }
   [data-layout="narrow"] .theme-label { display: none; }
 
-  /* 列表动作区：左置变体（?listActions=left），固定紧凑动作列，不横通栏 */
-  .list-row-main.has-actions-left { grid-template-columns: 76px 10px minmax(0, 1fr) auto; }
-  .list-left-actions { display: flex; align-items: center; gap: 4px; width: 76px; flex: none; }
-  .list-left-actions .btn { width: 36px; height: 24px; padding: 0; font: var(--dsw-font-xxxs-strong-11); }
-  .list-left-actions .btn--wide { width: 64px; }
-  .list-left-actions .btn--retry { width: 56px; }
-  [data-layout="narrow"] .list-row-main.has-actions-left { grid-template-columns: 64px 10px minmax(0, 1fr); gap: 6px; }
-  [data-layout="narrow"] .list-left-actions { flex-direction: column; width: 64px; gap: 3px; }
-  [data-layout="narrow"] .list-left-actions .btn { width: 100%; height: 24px; }
-  [data-layout="narrow"] .list-row-main.has-actions-left .list-meta { grid-column: 3; }
+  /* 列表展开区审批动作行：默认左对齐；备注在上、按钮在下，固定 96px、不拉伸、不横通栏。
+     ?listActions=right 用于对照右对齐；看板卡片内审批仍保持右对齐。 */
+  .list-row.is-expanded .list-meta .row-actions { display: none; }
+  .list-expanded.is-actions-left .decision-actions { justify-content: flex-start; gap: 6px; }
+  .list-expanded.is-actions-left .decision-actions .btn { flex: 0 0 96px; width: 96px; min-width: 96px; height: 28px; }
+  .list-expanded.is-actions-left > .btn[data-action="retry"] { align-self: flex-start; flex: 0 0 96px; width: 96px; min-width: 96px; }
+  [data-layout="narrow"] .list-expanded.is-actions-left .decision-actions .btn { flex-basis: 96px; width: 96px; min-width: 96px; }
+  [data-layout="narrow"] .list-expanded.is-actions-left > .btn[data-action="retry"] { width: 96px; min-width: 96px; }
 
   /* 多问题审批：每题独立 fieldset，header + question + 选项完整展示 */
   .decision-question { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; border: 0; min-width: 0; }
@@ -2193,7 +2191,7 @@
     doneListExpanded: false,
     doneListAll: false,
     groupBy: 'status',
-    listActions: 'right',
+    listActions: 'left',
     syncError: false,
     syncRetrying: false,
     approvalSel: {},
@@ -2526,10 +2524,8 @@
     } else if (card.status === 'failed') {
       rowActions = '<span class="row-actions"><button type="button" class="btn btn-secondary btn--retry" data-action="retry" data-id="' + card.id + '">重试</button></span>';
     }
-    const actionsLeft = state.listActions === 'left';
-    return '<div class="list-row' + (selected ? ' is-selected' : '') + '" data-card-id="' + card.id + '" tabindex="0" role="group" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '">' +
-      '<div class="list-row-main' + (actionsLeft ? ' has-actions-left' : '') + '" data-action="expand" data-id="' + card.id + '">' +
-        (actionsLeft ? '<div class="list-left-actions">' + rowActions + '</div>' : '') +
+    return '<div class="list-row' + (selected ? ' is-selected' : '') + (expanded ? ' is-expanded' : '') + '" data-card-id="' + card.id + '" tabindex="0" role="group" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '">' +
+      '<div class="list-row-main" data-action="expand" data-id="' + card.id + '">' +
         dot(s.dot) +
         '<div class="list-main">' +
           '<div class="list-title-row"><span class="list-title">' + esc(card.title) + '</span>' +
@@ -2542,12 +2538,12 @@
           statusFoot(card) +
           '<span class="metric" title="工具调用 ' + card.tools + ' 次">' + icon('tool') + card.tools + '</span>' +
           '<span class="metric" title="搜索 ' + card.searches + ' 次">' + icon('search') + card.searches + '</span>' +
-          (!actionsLeft ? rowActions : '') +
+          rowActions +
           '<button type="button" class="icon-btn" data-action="open" data-id="' + card.id + '" aria-label="详情：' + esc(card.title) + '">' + icon('chevronRight') + '</button>' +
           '<button type="button" class="icon-btn" data-action="menu" data-id="' + card.id + '" aria-label="卡片操作：' + esc(card.title) + '">' + icon('kebab') + '</button>' +
         '</div>' +
       '</div>' +
-      (expanded ? '<div class="list-expanded">' +
+      (expanded ? '<div class="list-expanded' + (state.listActions === 'left' ? ' is-actions-left' : '') + '">' +
         '<div class="exp-head"><span>重要节点</span><button type="button" class="link-btn" data-action="open" data-id="' + card.id + '">详情 &gt;</button></div>' +
         timelineHTML(card, { limit: 3 }) + mediaRowHTML(card) + decisionHTML(card) +
         (card.status === 'failed' ? '<button type="button" class="btn btn-secondary btn-sm" data-action="retry" data-id="' + card.id + '">' + icon('redo') + '重试任务</button>' : '') +
@@ -3915,7 +3911,7 @@
     if (params.get('listDone') === 'expanded') state.doneListExpanded = true;
     if (params.get('listDone') === 'all') { state.doneListExpanded = true; state.doneListAll = true; }
     if (params.get('multi') === '1' || params.get('approval') === 'multi-question') { state.expanded.clear(); state.expanded.add('c-304'); }
-    if (params.get('listActions') === 'left') state.listActions = 'left';
+    state.listActions = params.get('listActions') === 'right' ? 'right' : 'left';
     if (params.get('syncError') === '1') state.syncError = true;
     if (params.get('col')) state.activeCol = params.get('col');
     renderAll();

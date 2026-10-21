@@ -256,10 +256,35 @@
 .kb-list__actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
   flex-wrap: wrap;
-  width: fit-content;
-  min-width: 260px;
-  margin-left: auto;
+  width: 100%;
+  min-width: 0;
+  margin-left: 0;
+}
+
+.kb-list__actions .kb-btn {
+  flex: 0 0 auto;
+}
+
+/* 列表展开区域的审批动作：整体左对齐、按钮固定宽、不横通栏（用户 2026-10-21 参考图） */
+.kb-list__item .kb-decision-actions {
+  justify-content: flex-start;
+}
+
+.kb-list__item .kb-decision-actions .kb-btn {
+  flex: 0 0 auto;
+  min-width: 84px;
+}
+
+@media (max-width: 720px) {
+  .kb-list__item .kb-decision-actions {
+    justify-content: flex-start;
+  }
+
+  .kb-list__item .kb-decision-actions .kb-btn {
+    flex: 0 0 auto;
+    min-width: 96px;
+  }
 }

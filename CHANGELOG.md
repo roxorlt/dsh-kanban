@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.3.1 — 2026-10-21
+
+### 修复：列表展开区的审批动作改为左对齐（按用户参考图）
+
+- 语义纠正：不是「标题左侧的窄动作列」，而是**列表行展开区底部的审批/行内动作整体左对齐**——备注在上、按钮在下、靠左，按钮固定 84–96px 宽，不拉伸、不横通栏。
+- 列表行展开时隐藏行首快捷动作簇，避免同一动作出现两套入口；折叠行仍保留右对齐的固定宽动作簇。
+- 卡片内审批动作保持右对齐（与列表展开面板区分），已在设计规范 §4.2 写明。
+- 覆盖：`ApprovalPanel` 在列表展开区（单题/多题）全部生效；移动端不被 `flex:1` 拉通栏。
+
+### 验证
+
+- Web tsc 0 error / build 成功；列表展开实测 `.kb-decision-actions` 为 `flex-start`，驳回/批准按钮 84px 固定宽，DOM 左边界与内容一致。
+- mockup `?listActions=left` 默认左对齐、`?listActions=right` 对照；lint-tokens 0/0；截图 `design/screens/15-list-actions-left-1440.png`、`docs/assets/screens/list-actions-left-production.png`。
+
+
 ## v0.3.0 — 2026-10-21
 
 ### 新增：多问题审批（对齐 DSH `ask_user_question`）
