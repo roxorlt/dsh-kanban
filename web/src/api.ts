@@ -1,5 +1,6 @@
 import type {
   Activity,
+  ActivityPage,
   Approval,
   Board,
   Card,
@@ -56,7 +57,7 @@ export function normalizeCard(raw: Partial<Card> & { id: string }): Card {
     labels: raw.labels ?? [],
     sessionIds: raw.sessionIds ?? [],
     checklists: raw.checklists ?? [],
-    approvals: raw.approvals ?? [],
+    approvals: (raw.approvals ?? []).map((approval) => normalizeApproval(approval as Approval)),
     artifacts: raw.artifacts ?? [],
     metadata: { toolCalls: 0, searches: 0, ...(raw.metadata ?? {}) },
     order: raw.order ?? 0,
@@ -65,6 +66,15 @@ export function normalizeCard(raw: Partial<Card> & { id: string }): Card {
     updatedAt: raw.updatedAt ?? raw.createdAt ?? 0,
     boardId: raw.boardId ?? 'board-default',
   } as Card;
+}
+
+/** 兼容旧 resolution（{optionId,label}）与新 resolution（{optionIds,labels}）。 */
+export function normalizeApproval(raw: Approval & { resolution?: Partial<Approval['resolution']> & { optionId?: string; label?: string } }): Approval {
+  const resolution = raw.resolution;
+  if (!resolution) return { ...raw, multiSelect: raw.multiSelect ?? false };
+  const optionIds = resolution.optionIds ?? (resolution.optionId ? [resolution.optionId] : []);
+  const labels = resolution.labels ?? (resolution.label ? [resolution.label] : []);
+  return { ...raw, multiSelect: raw.multiSelect ?? false, resolution: { ...resolution, optionIds, labels } };
 }
 
 function normalizeCards(cards: readonly Partial<Card>[] | undefined): Card[] {
@@ -172,12 +182,26 @@ export interface HealthPayload {
 /** state 响应在冻结契约之外可能附带 activities（时间线）；两者都容忍。 */
 export type StatePayload = KanbanState & { activities?: Activity[] };
 
-async function getActivities(cardId: string): Promise<Activity[]> {
+async function getActivities(
+  cardId: string,
+  options: { limit?: number; before?: string } = {},
+): Promise<ActivityPage> {
   try {
-    const result = await request<{ activities?: Activity[] }>(`/cards/${encodeURIComponent(cardId)}/activities`);
-    return result.activities ?? [];
+    const params = new URLSearchParams();
+    if (options.limit) params.set('limit', String(options.limit));
+    if (options.before) params.set('before', options.before);
+    const query = params.toString();
+    const result = await request<{ activities?: Activity[]; hasMore?: boolean; nextBefore?: string }>(
+      `/cards/${encodeURIComponent(cardId)}/activities${query ? `?${query}` : ''}`,
+    );
+    const activities = result.activities ?? [];
+    return {
+      activities,
+      hasMore: result.hasMore ?? activities.length >= (options.limit ?? 30),
+      nextBefore: result.nextBefore ?? activities[activities.length - 1]?.id,
+    };
   } catch {
-    return [];
+    return { activities: [], hasMore: false };
   }
 }
 
@@ -235,24 +259,37 @@ export const api = {
       title: string;
       detail: string;
       options: { id: string; label: string; description?: string; tone?: 'primary' | 'danger' | 'ghost' }[];
+      multiSelect?: boolean;
       sessionId?: string;
     },
   ): Promise<{ approval: Approval; card: Card; revision: number }> =>
     request<{ approval: Approval; card: Card; revision: number }>(
       `/cards/${encodeURIComponent(cardId)}/approvals`,
       { method: 'POST', body: JSON.stringify(input) },
-    ).then((result) => ({ ...result, card: normalizeCard(result.card) })),
+    ).then((result) => ({
+      ...result,
+      approval: normalizeApproval(result.approval),
+      card: normalizeCard(result.card),
+    })),
 
   resolveApproval: (
     cardId: string,
     approvalId: string,
-    optionId: string,
+    optionIds: string[],
     comment?: string,
   ): Promise<{ approval: Approval; card: Card; revision: number }> =>
     request<{ approval: Approval; card: Card; revision: number }>(
       `/cards/${encodeURIComponent(cardId)}/approvals/${encodeURIComponent(approvalId)}/resolve`,
-      { method: 'POST', body: JSON.stringify({ optionId, comment }) },
-    ).then((result) => ({ ...result, card: normalizeCard(result.card) })),
+      {
+        method: 'POST',
+        // optionIds 是新契约；optionId 同时带上以兼容尚未升级的 dev-server。
+        body: JSON.stringify({ optionIds, optionId: optionIds[0], comment }),
+      },
+    ).then((result) => ({
+      ...result,
+      approval: normalizeApproval(result.approval),
+      card: normalizeCard(result.card),
+    })),
 
   bindSession: (cardId: string, sessionId: string, title?: string): Promise<{ card: Card; revision: number }> =>
     request<{ card: Card; revision: number }>(`/cards/${encodeURIComponent(cardId)}/session`, {
@@ -272,11 +309,10 @@ export const api = {
   seed: (mode: 'demo' | 'empty' | 'reset'): Promise<{ revision: number }> =>
     request<{ revision: number }>('/seed', { method: 'POST', body: JSON.stringify({ mode }) }),
 
-  /** 可选：冻结契约没有 activities 路由，服务端若未实现则返回 []。 */
   getCardActivities: getActivities,
 };
 
-export type { SessionRow };
+export type { ActivityPage, SessionRow };
 
 /** 供调试与测试使用：把筛选条件映射成查询串（当前筛选在客户端做）。 */
 export function filtersToQuery(filters: CardFilters): string {

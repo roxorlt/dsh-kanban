@@ -3,7 +3,7 @@
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里的原生看板插件。
 **卡片是控制面，DSH 会话是执行面**：你在看板里管理"要做什么、到哪了、需要你决定什么"，agent 在会话里执行，并通过原生工具把进展写回卡片。卡片内回复会直接进入绑定的 DSH 会话，会话里的决定也会回到卡片。
 
-> 状态：v0.1 MVP，已在 DSH `0.1.5-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写）。数据存本机 `~/.dsh-kanban/data.json`。
+> 状态：v0.2，已在 DSH `0.1.5-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写）。数据存本机 `~/.dsh-kanban/data.json`。
 > 仓库：[github.com/roxorlt/dsh-kanban](https://github.com/roxorlt/dsh-kanban)
 
 ![看板视图（真实 DSH 内）](docs/assets/screens/embedded-board-light.png)
@@ -14,30 +14,36 @@
 - **卡片 CRUD + 拖拽**：新建、编辑、归档、拖拽换列；列内排序持久化；乐观更新失败自动回滚。
 - **卡片摘要分层**：一句话摘要 → 当前动作 → 最近节点 → 结果 → 待决策；折叠、展开、详情三档信息密度。
 - **重要节点时间线**：状态变化、进展、评论、审批、会话绑定、产物全部记录。
-- **审批与确认**：卡片进入"待你确认"时带结构化待定项（批准/拒绝/多方案），决定直接发回会话。
+- **审批与确认**：卡片进入"待你确认"时带结构化待定项（单选 / 多选 / 多方案 + 备注），所有选项与说明在卡片内完整展示；决定直接发回会话。
 - **卡片内回复**：回复写时间线，并通过桥进入 DSH 会话；没有会话时可从卡片新建。
 - **会话绑定**：选择已有会话作为主会话、打开会话跳转 DSH 对话、显示运行状态。
-- **实时刷新**：SSE 推送 revision，断线指数退避，页面隐藏暂停。
+- **实时刷新**：SSE 推送 revision，断线指数退避，页面隐藏暂停；手动重试只在断连错误条出现。
+- **密度与规模**：已完成列只显示最近 5 张（查看全部进入列表）；列表支持按状态/项目/优先级分组；时间线分页加载；卡片内素材用紧凑媒体行。
 - **横竖屏响应式**：宽屏四列，窄屏列分段 + 单列 + 底部弹层；跟随 DSH 明暗主题。
 - **Agent 原生工具**：10 个 `kanban_*` 工具，agent 不需要学 HTTP 就能建卡、推进、请求审批、写结果。
 - **本地优先**：JSON 存储、原子写、损坏自动备份重建；无云端依赖。
 
 ## 已验证
 
-- 服务端 `node --test`：**49/49 通过**；Web `tsc` + Vite 构建通过，vitest 24/24，令牌 lint 0 error / 0 warning。
-- 在**独立 DSH profile** 中真实安装并加载：侧栏入口、`main` 全屏面板、iframe 桥就绪、49 个主题令牌同步、console 0 error。
+- 服务端 `node --test`：**55/55 通过**；Web `tsc` + Vite 构建通过，vitest 38/38，令牌 lint 0 error / 0 warning。
+- 在**独立 DSH profile** 中真实安装并加载：侧栏入口、`main` 全屏面板、iframe 桥就绪、49 个主题令牌同步、明暗主题、console 0 error。
 - 会话桥：`session.create → refresh → open → binding → prompt` 实测 `accepted: true`。
 - agent 工具：真实 agent 调用 `kanban_create_card` 创建卡片，SSE 实时出现在看板。
 - 审批闭环：看板内「批准」→ 决定写入绑定会话 → agent 通过工具把卡片移到已完成并写结果。
+- v0.2 回归：多选审批提交 `optionIds:["unit-test","build"]`、时间线 `before` 分页、脏草稿二次确认、列表按项目分组、done 折叠、竖屏动作区，Playwright 全部通过。
 - 截图与复跑命令见 [验证记录](docs/06-verification.md)。
 
 | 真实 DSH 内（亮） | 真实 DSH 内（暗） |
 | --- | --- |
 | ![亮色](docs/assets/screens/embedded-board-light.png) | ![暗色](docs/assets/screens/embedded-board-dark.png) |
 
-| 卡片展开（重要节点） | 详情抽屉 |
+| 卡片展开（多选审批） | 详情抽屉（多会话/审批回写） |
 | --- | --- |
-| ![展开](docs/assets/screens/card-expanded.png) | ![详情](docs/assets/screens/detail-drawer.png) |
+| ![多选审批](docs/assets/screens/approval-multi.png) | ![详情](docs/assets/screens/detail-drawer.png) |
+
+| 列表视图（按项目分组） | 已完成防膨胀 |
+| --- | --- |
+| ![列表分组](docs/assets/screens/board-list-groups.png) | ![done 折叠](docs/assets/screens/board-list-done.png) |
 
 ## 安装
 
@@ -160,7 +166,8 @@ docs/             # 分析、契约、设计、架构、验证
 ## 已知限制
 
 - 每个 workspace 一个看板的模式尚未实现（M2）。
-- 卡片内回复只进主会话；多会话并行推进同一张卡时，回复目标暂不可选（M2）。
+- 卡片内回复只进主会话；多会话回复目标选择器在 v1.1（设计稿已含状态）。
+- deep link（`dsh://session/<id>#<card>`）需要宿主支持，当前用面板内「打开会话」替代。
 - 会话事件（工具调用数、耗时）目前由 agent 工具写入；自动回填在 M3。
 - 审批与 DSH 原生工具审批（bash 等）是两套收件箱，是否合并待评估。
 - 无团队协作/云端同步，数据仅本机。
@@ -171,8 +178,8 @@ docs/             # 分析、契约、设计、架构、验证
 | 阶段 | 内容 |
 | --- | --- |
 | M1（当前） | 单看板、四列、CRUD、审批、会话绑定、卡片内回复、SSE、双布局、响应式、agent 工具与技能 |
-| M2 | 多看板 / 按 workspace 分看板、多会话选择、卡片依赖与阻塞、批量操作、卡片模板 |
-| M3 | 会话事件自动回填（工具调用数 / 耗时 / 搜索结果数）、审批与原生审批联动、周期卡 |
+| M2 | 多会话回复目标、handoff 交接摘要、卡片依赖与阻塞、审批收件箱合并、按 workspace 分看板 |
+| M3 | 会话事件自动回填（工具调用数 / 耗时 / 搜索结果数）、审批与原生审批联动、卡片自动重开、周期卡 |
 | M4 | 团队协作、GitHub/Jira 集成、仪表盘（吞吐/阻塞时长）、导出 Markdown/JSON |
 
 ## 致谢

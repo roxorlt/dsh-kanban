@@ -2,6 +2,7 @@ import type { Activity } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { formatRelative } from '../lib/time';
+import { IconChevronUp } from './Icons';
 import { activityStatus, activityTitle } from '../lib/timeline';
 
 interface TimelineProps {
@@ -42,5 +43,34 @@ export function Timeline({ activities, now, variant = 'full' }: TimelineProps) {
         );
       })}
     </ol>
+  );
+}
+
+interface TimelineLoadMoreProps {
+  hasMore: boolean;
+  loading: boolean;
+  onClick: () => void;
+}
+
+/** 时间线「加载更早」按钮（展开卡 / 详情抽屉共用）。 */
+export function TimelineLoadMore({ hasMore, loading, onClick }: TimelineLoadMoreProps) {
+  const { t } = useI18n();
+  if (!hasMore && !loading) return null;
+  return (
+    <button
+      type="button"
+      className="kb-btn kb-btn--sm kb-btn--ghost kb-timeline-more"
+      disabled={loading}
+      onClick={onClick}
+    >
+      {loading ? (
+        <span className="kb-spinner" aria-hidden="true" />
+      ) : (
+        <span className="kb-icon" aria-hidden="true">
+          <IconChevronUp />
+        </span>
+      )}
+      {loading ? t('timeline.loadingEarlier') : t('timeline.loadEarlier')}
+    </button>
   );
 }

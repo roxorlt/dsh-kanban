@@ -42,17 +42,29 @@ export interface ApprovalOption {
   tone?: 'primary' | 'danger' | 'ghost';
 }
 
+export interface ApprovalResolution {
+  /** 新契约：多选时长度可 >1；单选时长度为 1 */
+  optionIds: string[];
+  labels: string[];
+  comment?: string;
+  /** 兼容旧服务端返回的 {optionId,label} 形态（normalizeApproval 会转换） */
+  optionId?: string;
+  label?: string;
+}
+
 export interface Approval {
   id: string;
   title: string;
   detail: string;
+  /** 默认 false=单选；true=多选复选框 */
+  multiSelect?: boolean;
   options: ApprovalOption[];
   status: ApprovalStatus;
   requestedBy: Actor;
   requestedAt: number;
   resolvedBy?: Actor;
   resolvedAt?: number;
-  resolution?: { optionId: string; label: string; comment?: string };
+  resolution?: ApprovalResolution;
   sessionId?: string;
 }
 
@@ -146,6 +158,13 @@ export interface HostInfo {
   themeMode: 'light' | 'dark';
   dshVersion?: string;
   panelVisible: boolean;
+}
+
+/** GET /api/kanban/cards/:id/activities 的分页响应 */
+export interface ActivityPage {
+  activities: Activity[];
+  hasMore: boolean;
+  nextBefore?: string;
 }
 
 /** GET /api/kanban/state 的 payload（去掉 ok） */

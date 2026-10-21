@@ -359,6 +359,32 @@
   min-width: 0;
 }
 
+.kb-session__summary {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-session__row--target {
+  border-color: var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-session__target {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+}
+
+.kb-session__target-legend {
+  padding: 0 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
 .kb-session__create {
   flex: none;
 }
@@ -457,4 +483,79 @@
 .kb-composer__meta {
   color: var(--dsw-alias-label-caption);
   font: var(--dsw-font-xxxs-11);
+}
+
+
+/* --------------------------------------------------- 时间线分页 / 媒体网格 */
+.kb-drawer__timeline-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.kb-drawer__loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-media-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kb-media-thumb {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 88px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  text-decoration: none;
+}
+
+.kb-media-thumb img {
+  width: 88px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--kb-r-ctl);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-media-thumb span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ 回复目标 */
+.kb-composer__target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-composer__target-label {
+  flex: none;
+}
+
+.kb-composer__target-value {
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-composer__target-hint {
+  margin-left: auto;
+  flex: none;
+  color: var(--dsw-alias-label-caption);
 }

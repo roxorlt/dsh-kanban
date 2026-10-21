@@ -457,3 +457,69 @@
     display: none;
   }
 }
+
+
+@media (max-width: 719px) {
+  .kb-crumbs {
+    flex: 1 1 auto;
+    gap: 6px;
+  }
+
+  .kb-crumb-tag {
+    order: 3;
+  }
+
+  .kb-crumb-counts {
+    order: 4;
+    flex-basis: 100%;
+    gap: 12px;
+  }
+
+  .kb-errorbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .kb-card-expanded {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .kb-card-timeline-scroll {
+    max-height: 280px;
+  }
+
+  .kb-list__toolbar {
+    gap: 6px;
+  }
+
+  .kb-list__count {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .kb-list__actions {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  .kb-media-thumb,
+  .kb-media-thumb img {
+    width: 72px;
+  }
+
+  .kb-media-thumb img {
+    height: 54px;
+  }
+
+  .kb-session__target {
+    flex-direction: column;
+  }
+
+  .kb-drawer__timeline-scroll {
+    max-height: none;
+    overflow-y: visible;
+  }
+}

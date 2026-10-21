@@ -15,6 +15,20 @@
 | 浏览器 | Google Chrome headless + playwright-core 1.64.1 |
 | 用户环境 | 未触碰 `~/.dsh/profiles/desktop`、未重启/操作正在运行的 GUI |
 
+## 1.1 v0.2 增量验证（2026-10-21）
+
+| 项 | 结果 |
+| --- | --- |
+| 服务端测试 | 55/55（新增多选审批、旧 resolution 迁移、`before` 分页边界） |
+| Web 单测 | 38/38（新增 activities 分页、列表分组、审批新旧 resolution 兼容） |
+| 构建 | tsc 0 error；dist JS 80KB gzip / CSS 10KB gzip |
+| 令牌 lint | 8 个 CSS：0 error / 0 warning |
+| 嵌入 DSH 实测 | 7 张卡片（含 1 张多选审批示例）；多选审批卡渲染 4 个 checkbox；主题 light/dark 均正常；49 令牌同步；console 0 error |
+| 交互回归（Playwright） | 多选审批提交 `optionIds:["unit-test","build"]` + labels；`GET activities?limit=1` 返回 `hasMore/nextBefore`；新建弹窗脏草稿点蒙层弹出「放弃未保存的修改？」；列表分组切换状态/项目/优先级；已完成列折叠；390 竖屏列表；console 0 error |
+| 截图 | `docs/assets/screens/`（embedded、board-wide/dark、approval-multi、board-list-groups、board-list-done、detail-drawer、portrait-*） |
+
+> 注意：桌面版新增服务端能力（审批多选、时间线分页）需要**重启 DSH** 才能生效；只刷新页面会继续使用旧服务端（前端已兼容旧接口，不会报错）。
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

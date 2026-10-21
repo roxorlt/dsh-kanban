@@ -61,15 +61,27 @@ web/
 - **实时**：`EventSource /api/kanban/events`，revision 变化后 150ms 拉 `/state`；断线 1s→30s 退避；
   `document.hidden` 或父页面 `kanban:visibility=false` 时断开，恢复后重连。
 - **乐观移动**：拖拽/菜单/键盘换列先本地改 `status + cardOrder`，失败整体回滚并 toast。
-- **审批**：折叠卡内即可 批准/拒绝（方案单选 + 备注）；成功后经桥发
-  `【看板·审批】已批准「…」：…`（`session.ensure`，优先用审批的 sessionId，否则主会话/卡片 cwd）。
+- **审批**：折叠卡内完整展示所有选项与说明；单选用 radio，`multiSelect` 用复选框，提交 `optionIds[]`
+  （同时带 `optionId` 兼容旧 dev-server）；resolved 展示所选 labels（兼容旧 `resolution.optionId/label`）。
+  成功后经桥发 `【看板·审批】已批准「…」：…`（`session.ensure`，详情里可用目标会话覆盖）。
+- **多会话**：详情抽屉列出卡片全部会话、主会话徽标、设为主会话（复用绑接口置顶）、解绑/打开；
+  >1 个会话时可选「回复与审批同步到」的目标会话。
+- **时间线分页**：`GET /cards/:id/activities?limit=&before=`（返回 `hasMore/nextBefore`）。
+  展开卡默认最近 3 条 +「加载更早」，展开区 max-height 内部滚动；详情首屏 20 条 + 分页加载。
+- **已完成**：看板 done 列只展示最近 5 张 +「查看全部 N」跳到列表并展开 done；列表 done 分组默认折叠、
+  分页加载更多；done 卡片菜单可「重新打开」。
+- **列表分组**：状态 / 项目 / 优先级三档切换，动作区固定宽度右对齐（窄屏换行左对齐）。
+- **通用审批**：拖拽/移动卡片进入「待你确认」且没有 pending approval 时，弹出可编辑的通用审批
+  （标题/详情/继续/停止文案）；取消则卡片回滚到原列。
 - **回复**：先 `POST /cards/:id/comments` 写时间线，再经桥 `session.ensure` 发
   `【看板·卡片「标题」】\n…`；失败自动复制文本并提示。
 - **时间线数据**：契约 `/state` 不含 activities；UI 在展开/打开卡片时按需请求
   `GET /cards/:id/activities`（builder-server 已实现），revision 变化时对可见卡片重拉；
   接口不可用时用卡片字段合成兜底节点。
 - **卡片归一化**：契约要求「一律返回完整 Card」，但种子/写回可能省略空数组字段；
-  `api.ts` 的 `normalizeCard` 补默认值，避免 UI 假设字段存在。
+  `api.ts` 的 `normalizeCard` 补默认值，避免 UI 假设字段存在；`normalizeApproval` 兼容新旧 resolution。
+- **草稿保护**：卡片表单 / 通用审批弹窗 / 详情抽屉（回复草稿）在 Esc、蒙层点击、关闭按钮时若有未保存内容，
+  先弹「放弃未保存的修改？」二次确认。
 - **键盘**：`⌘K`/`Ctrl+K`/`/` 聚焦搜索、`N` 新建、`B`/`L` 切视图、`Enter`/`O` 打开详情、
   `Space` 展开、`Alt+←/→` 换列、`Esc` 关闭浮层；拖拽另有菜单「移动到…」替代。
 
@@ -80,7 +92,7 @@ web/
 - `npm --prefix web run lint:tokens`：8 个 CSS 文件，0 error / 0 warning
   （`tokens.css` 是主题兜底值镜像，逐行标注了 `lint-tokens-ignore` 例外）。
 - `npm --prefix web run test`：24 个单测（分组 / 筛选 / 时间格式化）。
-- 截图：`design/screens/web-*.png`（宽屏看板、展开卡、详情抽屉、列表、暗色、390 竖屏看板/底部弹层/列表）。
+- 截图：`design/screens/web-*.png`（宽屏看板、列表分组、详情抽屉、多选审批、390 竖屏看板/底部弹层等）。
 
 ## 待服务端配合 / 契约建议
 

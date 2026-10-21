@@ -94,13 +94,14 @@ interface Approval {
   id: string;                    // "ap-" + 8 hex
   title: string;                 // "是否把迁移脚本跑到生产？"
   detail: string;                // 影响、风险、上下文，≤ 1200 字
-  options: ApprovalOption[];     // 1..4 个
+  multiSelect?: boolean;         // 默认 false=单选；true=多选（与 DSH user-questions 的 multi_select 语义对齐）
+  options: ApprovalOption[];     // 1..8 个；卡片内必须完整展示所有选项与说明，不折叠
   status: 'pending' | 'approved' | 'rejected' | 'dismissed';
   requestedBy: Actor;
   requestedAt: number;
   resolvedBy?: Actor;
   resolvedAt?: number;
-  resolution?: { optionId: string; label: string; comment?: string };   // 用户选择
+  resolution?: { optionIds: string[]; labels: string[]; comment?: string };   // 单选时 optionIds 长度为 1
   sessionId?: string;            // 请求来自哪个会话
 }
 

@@ -1,14 +1,16 @@
-import { useEffect, useId, useMemo, useRef } from 'react';
-import type { Activity, Card, SessionRow } from '../types';
+import { useEffect, useId, useRef, useState } from 'react';
+import type { Approval, Card, SessionRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { STATUS_TONE, isWarningStatus } from '../lib/status';
 import { elapsedMs, formatDateTime, formatDuration, formatRelative } from '../lib/time';
-import { cardTimeline } from '../lib/timeline';
+import type { ActivityFeed } from '../lib/activities';
 import { ApprovalPanel } from './ApprovalPanel';
+import type { ApprovalDecision } from './ApprovalPanel';
 import { Composer } from './Composer';
+import { ConfirmDialog } from './ConfirmDialog';
 import { SessionSection } from './SessionSection';
-import { Timeline } from './Timeline';
+import { Timeline, TimelineLoadMore } from './Timeline';
 import type { CardActionHandlers } from './types';
 import {
   IconArchive,
@@ -24,17 +26,27 @@ import {
 interface DetailDrawerProps {
   card: Card;
   boardName: string;
-  activities: Activity[] | undefined;
+  feed: ActivityFeed | undefined;
+  onLoadEarlier: () => void;
   sessions: SessionRow[];
   embedded: boolean;
   now: number;
   resolvingApprovalId: string | null;
   onClose: () => void;
   actions: CardActionHandlers;
-  onReply: (card: Card, text: string) => Promise<{ ok: boolean; error?: string }>;
+  onReply: (card: Card, text: string, sessionId: string | null) => Promise<{ ok: boolean; error?: string }>;
+  onResolveApproval: (
+    card: Card,
+    approval: Approval,
+    optionIds: string[],
+    comment: string,
+    decision: ApprovalDecision,
+    sessionId: string | null,
+  ) => void;
   onBindSession: (card: Card, sessionId: string) => void;
   onUnbindSession: (card: Card, sessionId: string) => void;
   onOpenSession: (sessionId: string) => void;
+  onSetPrimary: (card: Card, sessionId: string) => void;
   onCreateSession: (card: Card) => void;
 }
 
@@ -56,11 +68,12 @@ function artifactIcon(kind: string) {
   }
 }
 
-/** 卡片详情抽屉：宽屏右侧 440px，<720px 由 CSS 变成底部 92% 高 sheet。 */
+/** 卡片详情抽屉：多会话、分页时间线、媒体素材、草稿保护（<720px 变底部 sheet）。 */
 export function DetailDrawer({
   card,
   boardName,
-  activities,
+  feed,
+  onLoadEarlier,
   sessions,
   embedded,
   now,
@@ -68,18 +81,24 @@ export function DetailDrawer({
   onClose,
   actions,
   onReply,
+  onResolveApproval,
   onBindSession,
   onUnbindSession,
   onOpenSession,
+  onSetPrimary,
   onCreateSession,
 }: DetailDrawerProps) {
   const { t, lang } = useI18n();
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  const [targetSessionId, setTargetSessionId] = useState<string | null>(card.sessionIds[0] ?? null);
+  const [composerDirty, setComposerDirty] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   const tone = STATUS_TONE[card.status];
   const statusKey = `status.${card.status}` as I18nKey;
-  const timeline = useMemo(() => cardTimeline(card, activities), [card, activities]);
+  const activities = feed?.items ?? [];
+  const loadingActivities = feed?.loading ?? false;
   const elapsed = elapsedMs(card, now);
   const pendingApprovals = card.approvals.filter((approval) => approval.status === 'pending');
   const resolvedApprovals = card.approvals.filter((approval) => approval.status !== 'pending');
@@ -87,6 +106,19 @@ export function DetailDrawer({
   const checklistPercent = card.checklists.length
     ? Math.round((checklistDone / card.checklists.length) * 100)
     : 0;
+  const images = card.artifacts.filter((artifact) => artifact.kind === 'image' && artifact.url);
+  const otherArtifacts = card.artifacts.filter((artifact) => !(artifact.kind === 'image' && artifact.url));
+
+  useEffect(() => {
+    setTargetSessionId(card.sessionIds[0] ?? null);
+    setComposerDirty(false);
+    setDiscardOpen(false);
+  }, [card.id]);
+
+  useEffect(() => {
+    if (targetSessionId && card.sessionIds.includes(targetSessionId)) return;
+    setTargetSessionId(card.sessionIds[0] ?? null);
+  }, [card.sessionIds, targetSessionId]);
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -101,11 +133,17 @@ export function DetailDrawer({
     };
   }, []);
 
+  const requestClose = () => {
+    if (composerDirty) setDiscardOpen(true);
+    else onClose();
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        if (discardOpen) return;
+        requestClose();
         return;
       }
       if (event.key !== 'Tab' || !panelRef.current) return;
@@ -125,10 +163,17 @@ export function DetailDrawer({
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composerDirty, discardOpen, onClose]);
+
+  const targetSession = targetSessionId ?? card.sessionIds[0] ?? null;
 
   return (
-    <div className="kb-drawer-overlay" role="presentation" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div
+      className="kb-drawer-overlay"
+      role="presentation"
+      onPointerDown={(event) => event.target === event.currentTarget && requestClose()}
+    >
       <div
         ref={panelRef}
         className="kb-drawer"
@@ -188,7 +233,7 @@ export function DetailDrawer({
               type="button"
               className="kb-btn kb-btn--icon kb-btn--ghost"
               aria-label={t('drawer.close')}
-              onClick={onClose}
+              onClick={requestClose}
             >
               <span className="kb-icon" aria-hidden="true">
                 <IconClose />
@@ -199,7 +244,9 @@ export function DetailDrawer({
 
         <div className="kb-drawer__body">
           <div className="kb-drawer__chips">
-            <span className={`kb-pill${tone === 'business' ? ' kb-pill--business' : tone === 'warn' ? ' kb-pill--warn' : tone === 'success' ? ' kb-pill--success' : tone === 'error' ? ' kb-pill--error' : ''}`}>
+            <span
+              className={`kb-pill${tone === 'business' ? ' kb-pill--business' : tone === 'warn' ? ' kb-pill--warn' : tone === 'success' ? ' kb-pill--success' : tone === 'error' ? ' kb-pill--error' : ''}`}
+            >
               <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
               {t(statusKey)}
             </span>
@@ -242,9 +289,7 @@ export function DetailDrawer({
                   />
                 </div>
                 <span className="kb-progress__label">
-                  {card.progress.total
-                    ? `${card.progress.step}/${card.progress.total}`
-                    : `${card.progress.percent ?? 0}%`}
+                  {card.progress.total ? `${card.progress.step}/${card.progress.total}` : `${card.progress.percent ?? 0}%`}
                   {card.progress.text ? ` · ${card.progress.text}` : ''}
                 </span>
               </div>
@@ -267,8 +312,8 @@ export function DetailDrawer({
                   approval={approval}
                   busy={resolvingApprovalId === approval.id}
                   now={now}
-                  onResolve={(target, option, comment, decision) =>
-                    actions.onResolveApproval(card, target, option, comment, decision)
+                  onResolve={(target, optionIds, comment, decision) =>
+                    onResolveApproval(card, target, optionIds, comment, decision, targetSession)
                   }
                 />
               ))}
@@ -303,20 +348,28 @@ export function DetailDrawer({
 
           <section className="kb-drawer__section">
             <h3 className="kb-drawer__section-title">{t('drawer.timeline')}</h3>
-            <Timeline activities={timeline} now={now} variant="full" />
+            <div className="kb-drawer__timeline-scroll">
+              {loadingActivities && !activities.length ? (
+                <p className="kb-drawer__loading">
+                  <span className="kb-spinner" aria-hidden="true" />
+                  {t('common.loading')}
+                </p>
+              ) : (
+                <Timeline activities={activities} now={now} variant="full" />
+              )}
+            </div>
+            <TimelineLoadMore
+              hasMore={Boolean(feed?.hasMore)}
+              loading={Boolean(feed?.loading) && activities.length > 0}
+              onClick={onLoadEarlier}
+            />
           </section>
 
           {resolvedApprovals.length ? (
             <section className="kb-drawer__section">
               <h3 className="kb-drawer__section-title">{t('drawer.approvals')}</h3>
               {resolvedApprovals.map((approval) => (
-                <ApprovalPanel
-                  key={approval.id}
-                  approval={approval}
-                  busy={false}
-                  now={now}
-                  onResolve={() => undefined}
-                />
+                <ApprovalPanel key={approval.id} approval={approval} busy={false} now={now} onResolve={() => undefined} />
               ))}
             </section>
           ) : null}
@@ -324,30 +377,51 @@ export function DetailDrawer({
           {card.artifacts.length ? (
             <section className="kb-drawer__section">
               <h3 className="kb-drawer__section-title">{t('drawer.artifacts')}</h3>
-              <ul className="kb-artifacts">
-                {card.artifacts.map((artifact) => {
-                  const content = (
-                    <>
-                      <span className="kb-icon" aria-hidden="true">
-                        {artifactIcon(artifact.kind)}
-                      </span>
+              {images.length ? (
+                <div className="kb-media-grid">
+                  {images.map((artifact) => (
+                    <a
+                      className="kb-media-thumb"
+                      key={artifact.id}
+                      href={artifact.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      title={artifact.label}
+                    >
+                      <img src={artifact.url} alt={artifact.label} loading="lazy" referrerPolicy="no-referrer" />
                       <span>{artifact.label}</span>
-                      {artifact.path ? <code className="kb-artifacts__path">{artifact.path}</code> : null}
-                    </>
-                  );
-                  return (
-                    <li key={artifact.id} className="kb-artifacts__item">
-                      {artifact.url ? (
-                        <a href={artifact.url} target="_blank" rel="noreferrer noopener">
-                          {content}
-                        </a>
-                      ) : (
-                        <span>{content}</span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+              {otherArtifacts.length ? (
+                <ul className="kb-artifacts">
+                  {otherArtifacts.map((artifact) => {
+                    const content = (
+                      <>
+                        <span className="kb-icon" aria-hidden="true">
+                          {artifactIcon(artifact.kind)}
+                        </span>
+                        <span>{artifact.label}</span>
+                        {artifact.path && artifact.path !== artifact.label ? (
+                          <code className="kb-artifacts__path">{artifact.path}</code>
+                        ) : null}
+                      </>
+                    );
+                    return (
+                      <li key={artifact.id} className="kb-artifacts__item">
+                        {artifact.url ? (
+                          <a href={artifact.url} target="_blank" rel="noreferrer noopener">
+                            {content}
+                          </a>
+                        ) : (
+                          <span>{content}</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
             </section>
           ) : null}
 
@@ -358,9 +432,12 @@ export function DetailDrawer({
               sessions={sessions}
               embedded={embedded}
               busy={false}
+              targetSessionId={targetSessionId}
+              onTargetChange={setTargetSessionId}
               onOpenSession={onOpenSession}
               onBind={(sessionId) => onBindSession(card, sessionId)}
               onUnbind={(sessionId) => onUnbindSession(card, sessionId)}
+              onSetPrimary={(sessionId) => onSetPrimary(card, sessionId)}
               onCreateSession={() => onCreateSession(card)}
             />
           </section>
@@ -422,9 +499,31 @@ export function DetailDrawer({
         </div>
 
         <footer className="kb-drawer__footer">
-          <Composer embedded={embedded} onSubmit={(text) => onReply(card, text)} autoFocus={false} />
+          <Composer
+            embedded={embedded}
+            sessions={sessions}
+            targetSessionId={targetSession}
+            onSubmit={(text, sessionId) => onReply(card, text, sessionId)}
+            autoFocus={false}
+            onDirtyChange={setComposerDirty}
+          />
         </footer>
       </div>
+
+      {discardOpen ? (
+        <ConfirmDialog
+          title={t('common.discardTitle')}
+          message={t('common.discardBody')}
+          confirmLabel={t('common.discardConfirm')}
+          busyLabel={t('common.discardConfirm')}
+          onConfirm={() => {
+            setDiscardOpen(false);
+            setComposerDirty(false);
+            onClose();
+          }}
+          onClose={() => setDiscardOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

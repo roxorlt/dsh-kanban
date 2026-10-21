@@ -6,6 +6,7 @@ import type { I18nKey } from '../i18n';
 import type { ColumnGroups } from '../lib/grouping';
 import { COLUMNS } from '../lib/status';
 import { countByColumn, dropTarget } from '../lib/grouping';
+import { DONE_PREVIEW_LIMIT } from '../lib/listGroups';
 import { KanbanCard } from './KanbanCard';
 import type { CardActionHandlers, CardViewShared, Placement } from './types';
 import { IconCheckCircle, IconChevronRight, IconCircle, IconHand, IconPlus, IconSparkle } from './Icons';
@@ -14,6 +15,8 @@ interface BoardViewProps {
   board: Board;
   groups: ColumnGroups;
   cards: Card[];
+  /** 未筛选的已完成总数（用于「查看全部 N」） */
+  doneTotal: number;
   shared: CardViewShared;
   actions: CardActionHandlers;
   mobile: boolean;
@@ -21,6 +24,7 @@ interface BoardViewProps {
   onActiveColumnChange: (column: ColumnId) => void;
   onCreateInColumn: (column: ColumnId) => void;
   onMoveWithPlacement: (cardId: string, column: ColumnId, placement: Placement) => void;
+  onViewAllDone: () => void;
   filtering: boolean;
   onClearFilters: () => void;
 }
@@ -46,11 +50,12 @@ function columnIcon(column: ColumnId) {
   return <IconCircle />;
 }
 
-/** 看板视图：四列 / 竖屏单列 + 列分段；列头计数、折叠、新建；拖拽换列。 */
+/** 看板视图：四列 / 竖屏单列 + 列分段；列内 + 新建；done 只展示最近 5 张。 */
 export function BoardView({
   board,
   groups,
   cards,
+  doneTotal,
   shared,
   actions,
   mobile,
@@ -58,6 +63,7 @@ export function BoardView({
   onActiveColumnChange,
   onCreateInColumn,
   onMoveWithPlacement,
+  onViewAllDone,
   filtering,
   onClearFilters,
 }: BoardViewProps) {
@@ -109,9 +115,14 @@ export function BoardView({
   };
 
   const renderColumn = (column: ColumnId) => {
-    const columnCards = groups[column];
+    const allColumnCards = groups[column];
+    const isDone = column === 'done';
+    const visibleCards = isDone ? allColumnCards.slice(0, DONE_PREVIEW_LIMIT) : allColumnCards;
     const isOver = overColumn === column && draggedId !== null;
     const isCollapsed = collapsed.has(column) && !mobile;
+    const totalForColumn = isDone && !filtering ? doneTotal : allColumnCards.length;
+    const hiddenDone = isDone ? Math.max(0, totalForColumn - visibleCards.length) : 0;
+
     return (
       <section
         key={column}
@@ -173,98 +184,89 @@ export function BoardView({
             <span>{t('column.cardCount', { count: counts[column] })}</span>
           </div>
         ) : (
-          <>
-            <div className="kb-column__body" role="list" aria-label={t('column.cardCount', { count: columnCards.length })}>
-              {columnCards.length === 0 ? (
-                <div className="kb-column__empty">
-                  <span className="kb-empty-icon" aria-hidden="true">
-                    {filtering ? <IconCircle /> : <IconPlus />}
-                  </span>
-                  <span className="kb-column__empty-title">
-                    {filtering ? t('empty.filtered') : t('empty.columnTitle')}
-                  </span>
-                  <span className="kb-column__empty-desc">
-                    {filtering ? t('empty.filteredHint') : t('empty.columnHint')}
-                  </span>
-                  {filtering ? (
-                    <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={onClearFilters}>
-                      {t('app.clearFilters')}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="kb-btn kb-btn--sm kb-btn--ghost"
-                      onClick={() => onCreateInColumn(column)}
-                    >
-                      <span className="kb-icon" aria-hidden="true">
-                        <IconPlus />
-                      </span>
-                      {t('app.newCard')}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                columnCards.map((card) => (
-                  <div
-                    role="listitem"
-                    key={card.id}
-                    className={`kb-card-slot${
-                      isOver && overCardId === card.id ? ' kb-card-slot--drop-before' : ''
-                    }`}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      if (overCardId !== card.id) setOverCardId(card.id);
-                      if (overColumn !== column) setOverColumn(column);
+          <div className="kb-column__body" role="list" aria-label={t('column.cardCount', { count: allColumnCards.length })}>
+            {allColumnCards.length === 0 ? (
+              <div className="kb-column__empty">
+                <span className="kb-empty-icon" aria-hidden="true">
+                  {filtering ? <IconCircle /> : <IconPlus />}
+                </span>
+                <span className="kb-column__empty-title">
+                  {filtering ? t('empty.filtered') : t('empty.columnTitle')}
+                </span>
+                <span className="kb-column__empty-desc">
+                  {filtering ? t('empty.filteredHint') : t('empty.columnHint')}
+                </span>
+                {filtering ? (
+                  <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={onClearFilters}>
+                    {t('app.clearFilters')}
+                  </button>
+                ) : (
+                  <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => onCreateInColumn(column)}>
+                    <span className="kb-icon" aria-hidden="true">
+                      <IconPlus />
+                    </span>
+                    {t('app.newCard')}
+                  </button>
+                )}
+              </div>
+            ) : (
+              visibleCards.map((card) => (
+                <div
+                  role="listitem"
+                  key={card.id}
+                  className={`kb-card-slot${isOver && overCardId === card.id ? ' kb-card-slot--drop-before' : ''}`}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (overCardId !== card.id) setOverCardId(card.id);
+                    if (overColumn !== column) setOverColumn(column);
+                  }}
+                >
+                  <KanbanCard
+                    card={card}
+                    now={shared.now}
+                    expanded={shared.expandedIds.has(card.id)}
+                    selected={shared.activeCardId === card.id}
+                    dragging={draggedId === card.id}
+                    feed={shared.feeds[card.id]}
+                    onLoadEarlier={() => shared.loadEarlier(card.id)}
+                    sessions={shared.sessions}
+                    resolvingApprovalId={shared.resolvingApprovalId}
+                    onToggleExpanded={actions.onToggleExpanded}
+                    onOpenDetail={actions.onOpenDetail}
+                    onEdit={actions.onEdit}
+                    onArchive={actions.onArchive}
+                    onReopen={actions.onReopen}
+                    onMove={actions.onMove}
+                    onResolveApproval={actions.onResolveApproval}
+                    onReply={actions.onReply}
+                    onRetry={actions.onRetry}
+                    onSessionClick={actions.onSessionClick}
+                    onDragStart={(cardId) => {
+                      setDraggedId(cardId);
+                      setOverColumn(column);
                     }}
-                  >
-                    <KanbanCard
-                      card={card}
-                      now={shared.now}
-                      expanded={shared.expandedIds.has(card.id)}
-                      selected={shared.activeCardId === card.id}
-                      dragging={draggedId === card.id}
-                      activities={shared.activitiesByCard[card.id]}
-                      sessions={shared.sessions}
-                      resolvingApprovalId={shared.resolvingApprovalId}
-                      onToggleExpanded={actions.onToggleExpanded}
-                      onOpenDetail={actions.onOpenDetail}
-                      onEdit={actions.onEdit}
-                      onArchive={actions.onArchive}
-                      onMove={actions.onMove}
-                      onResolveApproval={actions.onResolveApproval}
-                      onReply={actions.onReply}
-                      onRetry={actions.onRetry}
-                      onSessionClick={actions.onSessionClick}
-                      onDragStart={(cardId) => {
-                        setDraggedId(cardId);
-                        setOverColumn(column);
-                      }}
-                      onDragEnd={() => {
-                        if (dropHandled.current) {
-                          dropHandled.current = false;
-                          return;
-                        }
-                        resetDrag();
-                      }}
-                    />
-                  </div>
-                ))
-              )}
-              {isOver && !overCardId ? <div className="kb-drop-line" aria-hidden="true" /> : null}
-            </div>
-            <button
-              type="button"
-              className="kb-column-add"
-              onClick={() => onCreateInColumn(column)}
-              aria-label={t('a11y.newCardInColumn', { column: t(`column.${column}` as I18nKey) })}
-            >
-              <span className="kb-icon" aria-hidden="true">
-                <IconPlus />
-              </span>
-              {t('app.newCard')}
-            </button>
-          </>
+                    onDragEnd={() => {
+                      if (dropHandled.current) {
+                        dropHandled.current = false;
+                        return;
+                      }
+                      resetDrag();
+                    }}
+                  />
+                </div>
+              ))
+            )}
+            {hiddenDone > 0 ? (
+              <button type="button" className="kb-column__more" onClick={onViewAllDone}>
+                {t('board.viewAllDone', { count: totalForColumn })}
+                <span className="kb-icon" aria-hidden="true">
+                  <IconChevronRight />
+                </span>
+              </button>
+            ) : null}
+            {isOver && !overCardId ? <div className="kb-drop-line" aria-hidden="true" /> : null}
+          </div>
         )}
       </section>
     );

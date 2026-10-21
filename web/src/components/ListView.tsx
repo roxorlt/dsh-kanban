@@ -1,11 +1,16 @@
+import { useMemo, useState } from 'react';
 import type { Card, ColumnId } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
-import type { ColumnGroups } from '../lib/grouping';
+import type { Board } from '../types';
 import { COLUMNS } from '../lib/status';
-import { countByColumn } from '../lib/grouping';
 import { elapsedMs, formatDuration } from '../lib/time';
-import { cardTimeline } from '../lib/timeline';
+import {
+  DONE_LIST_LIMIT,
+  LIST_GROUP_BY_OPTIONS,
+  groupCardsForList,
+} from '../lib/listGroups';
+import type { ListGroupBy } from '../lib/listGroups';
 import type { CardActionHandlers, CardViewShared } from './types';
 import { ApprovalPanel } from './ApprovalPanel';
 import { MenuButton } from './MenuButton';
@@ -14,15 +19,29 @@ import { Timeline } from './Timeline';
 import {
   IconArchive,
   IconChevronDown,
+  IconChevronRight,
   IconClock,
   IconEdit,
   IconMore,
   IconMove,
   IconOpen,
-  IconReply,
+  IconRedo,
   IconSearch,
   IconWrench,
 } from './Icons';
+
+interface ListViewProps {
+  cards: Card[];
+  cardOrder: Board['cardOrder'];
+  groupBy: ListGroupBy;
+  onGroupByChange: (groupBy: ListGroupBy) => void;
+  doneOpen: boolean;
+  onDoneOpenChange: (open: boolean) => void;
+  shared: CardViewShared;
+  actions: CardActionHandlers;
+  filtering: boolean;
+  onClearFilters: () => void;
+}
 
 const COLUMN_TONE: Record<ColumnId, string> = {
   backlog: 'tertiary',
@@ -31,47 +50,120 @@ const COLUMN_TONE: Record<ColumnId, string> = {
   done: 'success',
 };
 
-interface ListViewProps {
-  groups: ColumnGroups;
-  cards: Card[];
-  shared: CardViewShared;
-  actions: CardActionHandlers;
-  onCreateInColumn: (column: ColumnId) => void;
-}
-
-/** 列表视图：按列分组，行可展开看摘要 / 最近节点 / 审批 / 操作。 */
-export function ListView({ groups, cards, shared, actions, onCreateInColumn }: ListViewProps) {
+/** 列表视图：按状态/项目/优先级分组；done 分组默认折叠并可加载更多。 */
+export function ListView({
+  cards,
+  cardOrder,
+  groupBy,
+  onGroupByChange,
+  doneOpen,
+  onDoneOpenChange,
+  shared,
+  actions,
+  filtering,
+  onClearFilters,
+}: ListViewProps) {
   const { t } = useI18n();
-  const counts = countByColumn(cards);
+  const [doneVisible, setDoneVisible] = useState(DONE_LIST_LIMIT);
+  const groups = useMemo(() => groupCardsForList(cards, groupBy, cardOrder), [cards, groupBy, cardOrder]);
+
+  const groupLabel = (group: (typeof groups)[number]): string => {
+    if (group.label.startsWith('column.')) return t(group.label as I18nKey);
+    if (group.label.startsWith('priority.')) return t(group.label as I18nKey);
+    return group.label || t('list.noProject');
+  };
 
   return (
     <div className="kb-list" role="region" aria-label={t('app.viewList')}>
-      {COLUMNS.map((column) => (
-        <section className="kb-list__group" key={column} aria-label={t('a11y.columnRegion', { column: t(`column.${column}` as I18nKey), count: counts[column] })}>
-          <header className="kb-list__group-head">
-            <span className={`kb-dot kb-dot--${COLUMN_TONE[column]}`} aria-hidden="true" />
-            <h2 className="kb-list__group-title">{t(`column.${column}` as I18nKey)}</h2>
-            <span className="kb-pill kb-pill--count">{counts[column]}</span>
+      <div className="kb-list__toolbar">
+        <span className="kb-list__groupby-label">{t('list.groupBy')}</span>
+        <div className="kb-seg" role="group" aria-label={t('list.groupBy')}>
+          {LIST_GROUP_BY_OPTIONS.map((option) => (
             <button
+              key={option}
               type="button"
-              className="kb-btn kb-btn--sm kb-btn--ghost kb-list__group-add"
-              onClick={() => onCreateInColumn(column)}
-              aria-label={t('a11y.newCardInColumn', { column: t(`column.${column}` as I18nKey) })}
+              className={`kb-seg-btn${groupBy === option ? ' kb-seg-btn--active' : ''}`}
+              aria-pressed={groupBy === option}
+              onClick={() => onGroupByChange(option)}
             >
-              + {t('app.newCard')}
+              {option === 'status'
+                ? t('list.groupStatus')
+                : option === 'project'
+                  ? t('list.groupProject')
+                  : t('list.groupPriority')}
             </button>
-          </header>
-          {groups[column].length ? (
-            <ul className="kb-list__items">
-              {groups[column].map((card) => (
-                <ListRow key={card.id} card={card} shared={shared} actions={actions} />
-              ))}
-            </ul>
-          ) : (
-            <div className="kb-list__empty">{t('column.empty')}</div>
-          )}
-        </section>
-      ))}
+          ))}
+        </div>
+        <span className="kb-list__count">{t('app.cardCount', { count: cards.length })}</span>
+      </div>
+
+      {groups.map((group) => {
+        const isDoneStatus = groupBy === 'status' && group.key === 'status:done';
+        const collapsed = isDoneStatus && !doneOpen;
+        const visible = isDoneStatus ? group.cards.slice(0, doneVisible) : group.cards;
+        const hidden = isDoneStatus ? Math.max(0, group.count - visible.length) : 0;
+        return (
+          <section
+            className={`kb-list__group${collapsed ? ' kb-list__group--collapsed' : ''}`}
+            key={group.key}
+            aria-label={`${groupLabel(group)} ${group.count}`}
+          >
+            <header className="kb-list__group-head">
+              {group.column ? (
+                <span className={`kb-dot kb-dot--${COLUMN_TONE[group.column]}`} aria-hidden="true" />
+              ) : (
+                <span className="kb-dot kb-dot--tertiary" aria-hidden="true" />
+              )}
+              <h2 className="kb-list__group-title">{groupLabel(group)}</h2>
+              <span className="kb-pill kb-pill--count">{group.count}</span>
+              {isDoneStatus ? (
+                <button
+                  type="button"
+                  className="kb-btn kb-btn--sm kb-btn--ghost kb-list__group-toggle"
+                  aria-expanded={doneOpen}
+                  onClick={() => onDoneOpenChange(!doneOpen)}
+                >
+                  <span className={`kb-icon kb-list__chevron${doneOpen ? ' kb-list__chevron--open' : ''}`} aria-hidden="true">
+                    <IconChevronRight />
+                  </span>
+                  {doneOpen ? t('list.hideDone') : t('list.showDone', { count: group.count })}
+                </button>
+              ) : null}
+            </header>
+
+            {collapsed ? null : group.count === 0 ? (
+              <div className="kb-list__empty">
+                {filtering ? (
+                  <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={onClearFilters}>
+                    {t('empty.filtered')} · {t('app.clearFilters')}
+                  </button>
+                ) : (
+                  t('column.empty')
+                )}
+              </div>
+            ) : (
+              <>
+                <ul className="kb-list__items">
+                  {visible.map((card) => (
+                    <ListRow key={card.id} card={card} shared={shared} actions={actions} />
+                  ))}
+                </ul>
+                {isDoneStatus && hidden > 0 ? (
+                  <div className="kb-list__more">
+                    <button
+                      type="button"
+                      className="kb-btn kb-btn--sm kb-btn--ghost"
+                      onClick={() => setDoneVisible((current) => current + DONE_LIST_LIMIT)}
+                    >
+                      {t('list.loadMoreCount', { count: hidden })}
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -88,10 +180,23 @@ function ListRow({
   const { t, lang } = useI18n();
   const expanded = shared.expandedIds.has(card.id);
   const statusKey = `status.${card.status}` as I18nKey;
-  const tone = card.status === 'done' ? 'success' : card.status === 'running' ? 'business' : card.status === 'blocked' || card.status === 'failed' ? 'error' : card.status === 'needs_you' ? 'warn' : 'tertiary';
+  const tone =
+    card.status === 'done'
+      ? 'success'
+      : card.status === 'running'
+        ? 'business'
+        : card.status === 'blocked' || card.status === 'failed'
+          ? 'error'
+          : card.status === 'needs_you'
+            ? 'warn'
+            : 'tertiary';
   const elapsed = elapsedMs(card, shared.now);
   const pendingApproval = card.approvals.find((approval) => approval.status === 'pending');
-  const timeline = cardTimeline(card, shared.activitiesByCard[card.id]).slice(0, 4);
+  const resolvedApproval = pendingApproval
+    ? undefined
+    : [...card.approvals].reverse().find((approval) => approval.status !== 'pending');
+  const feed = shared.feeds[card.id];
+  const timeline = (feed?.items ?? []).slice(0, 5);
 
   const items: MenuEntry[] = [
     { id: 'open', label: t('card.openDetail'), icon: <IconOpen /> },
@@ -104,6 +209,9 @@ function ListRow({
       disabled: card.status === target,
       separatorBefore: index === 0,
     })),
+    ...(card.status === 'done' || card.status === 'canceled'
+      ? [{ id: 'reopen', label: t('card.reopen'), icon: <IconRedo /> }]
+      : []),
     { id: 'archive', label: t('card.archive'), icon: <IconArchive />, danger: true, separatorBefore: true },
   ];
 
@@ -148,7 +256,7 @@ function ListRow({
             aria-label={expanded ? t('list.collapseRow') : t('list.expandRow')}
             onClick={() => actions.onToggleExpanded(card.id)}
           >
-            <span className="kb-icon kb-list__chevron">
+            <span className={`kb-icon kb-list__chevron${expanded ? ' kb-list__chevron--open' : ''}`} aria-hidden="true">
               <IconChevronDown />
             </span>
           </button>
@@ -161,6 +269,7 @@ function ListRow({
               if (id === 'open') actions.onOpenDetail(card.id);
               else if (id === 'edit') actions.onEdit(card);
               else if (id === 'archive') actions.onArchive(card);
+              else if (id === 'reopen') actions.onReopen(card);
               else if (id.startsWith('move:')) {
                 const target = id.slice('move:'.length) as ColumnId;
                 if (COLUMNS.includes(target)) actions.onMove(card.id, target);
@@ -196,10 +305,12 @@ function ListRow({
               approval={pendingApproval}
               busy={shared.resolvingApprovalId === pendingApproval.id}
               now={shared.now}
-              onResolve={(approval, option, comment, decision) =>
-                actions.onResolveApproval(card, approval, option, comment, decision)
+              onResolve={(approval, optionIds, comment, decision) =>
+                actions.onResolveApproval(card, approval, optionIds, comment, decision)
               }
             />
+          ) : resolvedApproval ? (
+            <ApprovalPanel approval={resolvedApproval} busy={false} now={shared.now} onResolve={() => undefined} />
           ) : null}
           <div className="kb-list__section">
             <h3 className="kb-list__section-title">{t('list.recentNodes')}</h3>
@@ -209,18 +320,20 @@ function ListRow({
             <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => actions.onOpenDetail(card.id)}>
               {t('card.openDetail')}
             </button>
-            <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => actions.onOpenDetail(card.id)}>
-              <span className="kb-icon" aria-hidden="true">
-                <IconReply />
-              </span>
-              {t('card.reply')}
-            </button>
             <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => actions.onEdit(card)}>
               <span className="kb-icon" aria-hidden="true">
                 <IconEdit />
               </span>
               {t('card.edit')}
             </button>
+            {card.status === 'failed' ? (
+              <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => actions.onRetry(card)}>
+                <span className="kb-icon" aria-hidden="true">
+                  <IconRedo />
+                </span>
+                {t('card.retry')}
+              </button>
+            ) : null}
             <button type="button" className="kb-btn kb-btn--sm kb-btn--danger" onClick={() => actions.onArchive(card)}>
               <span className="kb-icon" aria-hidden="true">
                 <IconArchive />

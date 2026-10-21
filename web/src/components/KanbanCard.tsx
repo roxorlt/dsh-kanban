@@ -1,21 +1,24 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { Activity, Approval, ApprovalOption, Card, ColumnId, Priority, SessionRow } from '../types';
+import type { Approval, Card, ColumnId, Priority, SessionRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { COLUMN_OF_STATUS, COLUMNS, STATUS_OF_COLUMN, STATUS_TONE, isWarningStatus } from '../lib/status';
 import { elapsedMs, formatDuration } from '../lib/time';
-import { cardTimeline } from '../lib/timeline';
+import { CARD_TIMELINE_PREVIEW, CARD_TIMELINE_STEP, visibleActivities } from '../lib/activities';
+import type { ActivityFeed } from '../lib/activities';
 import { ApprovalPanel } from './ApprovalPanel';
 import type { ApprovalDecision } from './ApprovalPanel';
 import { MenuButton } from './MenuButton';
 import type { MenuEntry } from './MenuButton';
-import { Timeline } from './Timeline';
+import { Timeline, TimelineLoadMore } from './Timeline';
 import {
   IconArchive,
   IconChevronDown,
   IconEdit,
+  IconFile,
   IconFolder,
+  IconImage,
   IconLink,
   IconMore,
   IconMove,
@@ -33,18 +36,20 @@ interface KanbanCardProps {
   expanded: boolean;
   selected: boolean;
   dragging: boolean;
-  activities: Activity[] | undefined;
+  feed: ActivityFeed | undefined;
+  onLoadEarlier: () => void;
   sessions: SessionRow[];
   resolvingApprovalId: string | null;
   onToggleExpanded: (cardId: string) => void;
   onOpenDetail: (cardId: string) => void;
   onEdit: (card: Card) => void;
   onArchive: (card: Card) => void;
+  onReopen: (card: Card) => void;
   onMove: (cardId: string, column: ColumnId) => void;
   onResolveApproval: (
     card: Card,
     approval: Approval,
-    option: ApprovalOption,
+    optionIds: string[],
     comment: string,
     decision: ApprovalDecision,
   ) => void;
@@ -62,20 +67,22 @@ const PRIORITY_CODE: Record<Exclude<Priority, 'none'>, string> = {
   low: 'P3',
 };
 
-/** 折叠卡：标题/摘要/当前动作/属性行/页脚/审批；展开卡追加时间线与内联回复。 */
+/** 折叠卡：标题/摘要/当前动作/属性行/页脚/审批/素材；展开卡追加分页时间线与内联回复。 */
 export function KanbanCard({
   card,
   now,
   expanded,
   selected,
   dragging,
-  activities,
+  feed,
+  onLoadEarlier,
   sessions,
   resolvingApprovalId,
   onToggleExpanded,
   onOpenDetail,
   onEdit,
   onArchive,
+  onReopen,
   onMove,
   onResolveApproval,
   onReply,
@@ -88,17 +95,29 @@ export function KanbanCard({
   const [replyText, setReplyText] = useState('');
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(CARD_TIMELINE_PREVIEW);
 
   const tone = STATUS_TONE[card.status];
   const statusKey = `status.${card.status}` as I18nKey;
   const warning = isWarningStatus(card.status);
   const pendingApproval = card.approvals.find((approval) => approval.status === 'pending');
-  const allNodes = cardTimeline(card, activities);
-  const timeline = expanded ? allNodes.slice(0, 5) : [];
+  const resolvedApproval = pendingApproval
+    ? undefined
+    : [...card.approvals].reverse().find((approval) => approval.status !== 'pending');
   const elapsed = elapsedMs(card, now);
   const primarySession = card.sessionIds[0]
     ? sessions.find((session) => session.id === card.sessionIds[0])
     : undefined;
+
+  const timelineItems = useMemo(
+    () => visibleActivities(feed, expanded ? visibleCount : 0),
+    [feed, expanded, visibleCount],
+  );
+  const loadedCount = feed?.items.length ?? 0;
+  const canLoadEarlier = loadedCount > visibleCount || Boolean(feed?.hasMore);
+
+  const images = card.artifacts.filter((artifact) => artifact.kind === 'image' && artifact.url);
+  const mediaCount = card.artifacts.length;
 
   const moveItems: MenuEntry[] = COLUMNS.map((target, index) => ({
     id: `move:${target}`,
@@ -113,6 +132,9 @@ export function KanbanCard({
     { id: 'open', label: t('card.openDetail'), icon: <IconOpen /> },
     { id: 'edit', label: t('card.edit'), icon: <IconEdit /> },
     ...moveItems,
+    ...(card.status === 'done' || card.status === 'canceled'
+      ? [{ id: 'reopen', label: t('card.reopen'), icon: <IconRedo /> }]
+      : []),
     { id: 'archive', label: t('card.archive'), icon: <IconArchive />, danger: true, separatorBefore: true },
   ];
 
@@ -120,6 +142,7 @@ export function KanbanCard({
     if (id === 'open') onOpenDetail(card.id);
     else if (id === 'edit') onEdit(card);
     else if (id === 'archive') onArchive(card);
+    else if (id === 'reopen') onReopen(card);
     else if (id.startsWith('move:')) {
       const target = id.slice('move:'.length) as ColumnId;
       if (COLUMNS.includes(target)) onMove(card.id, target);
@@ -142,6 +165,11 @@ export function KanbanCard({
     setReplySending(false);
     if (result.ok) setReplyText('');
     else setReplyError(result.error ?? t('composer.replyFailed'));
+  };
+
+  const loadEarlier = () => {
+    setVisibleCount((current) => current + CARD_TIMELINE_STEP);
+    if (visibleCount >= loadedCount) onLoadEarlier();
   };
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
@@ -171,7 +199,6 @@ export function KanbanCard({
         : card.status === 'needs_you'
           ? 'warn'
           : 'idle';
-  const actionIcon = <IconSparkle />;
 
   return (
     <article
@@ -220,7 +247,7 @@ export function KanbanCard({
       {card.currentAction ? (
         <p className={`kb-card-action kb-card-action--${actionTone}`}>
           <span className="kb-icon" aria-hidden="true">
-            {actionIcon}
+            <IconSparkle />
           </span>
           <span>{card.currentAction}</span>
         </p>
@@ -247,6 +274,37 @@ export function KanbanCard({
         ))}
         {extraLabels > 0 ? <span className="kb-tag">+{extraLabels}</span> : null}
       </div>
+
+      {mediaCount ? (
+        <div className="kb-media-row">
+          <span className="kb-media-row__thumbs" aria-hidden="true">
+            {(images.length ? images : card.artifacts).slice(0, 2).map((artifact) =>
+              artifact.kind === 'image' && artifact.url ? (
+                <img
+                  key={artifact.id}
+                  className="kb-media-row__thumb"
+                  src={artifact.url}
+                  alt=""
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="kb-media-row__thumb kb-media-row__thumb--icon" key={artifact.id}>
+                  {artifact.kind === 'image' ? <IconImage /> : artifact.kind === 'file' ? <IconFile /> : <IconLink />}
+                </span>
+              ),
+            )}
+          </span>
+          <span className="kb-media-row__count">{t('card.mediaCount', { count: mediaCount })}</span>
+          <button
+            type="button"
+            className="kb-link-btn kb-media-row__action"
+            onClick={() => (card.sessionIds.length ? onSessionClick(card) : onOpenDetail(card.id))}
+          >
+            {card.sessionIds.length ? t('card.viewInSession') : t('card.viewInDetail')}
+          </button>
+        </div>
+      ) : null}
 
       <div className="kb-card-foot">
         <span className={`kb-foot-status kb-foot-status--${tone}`}>
@@ -287,10 +345,12 @@ export function KanbanCard({
           approval={pendingApproval}
           busy={resolvingApprovalId === pendingApproval.id}
           now={now}
-          onResolve={(approval, option, comment, decision) =>
-            onResolveApproval(card, approval, option, comment, decision)
+          onResolve={(approval, optionIds, comment, decision) =>
+            onResolveApproval(card, approval, optionIds, comment, decision)
           }
         />
+      ) : resolvedApproval ? (
+        <ApprovalPanel approval={resolvedApproval} busy={false} now={now} onResolve={() => undefined} />
       ) : null}
 
       {expanded ? (
@@ -302,7 +362,10 @@ export function KanbanCard({
               {t('card.openDetail')}
             </button>
           </div>
-          <Timeline activities={timeline} now={now} variant="compact" />
+          <div className="kb-card-timeline-scroll">
+            <Timeline activities={timelineItems} now={now} variant="compact" />
+            <TimelineLoadMore hasMore={canLoadEarlier} loading={Boolean(feed?.loading) && loadedCount > 0} onClick={loadEarlier} />
+          </div>
 
           {card.status === 'failed' ? (
             <button type="button" className="kb-btn kb-btn--outline kb-btn--sm kb-card-retry" onClick={() => onRetry(card)}>
@@ -338,7 +401,6 @@ export function KanbanCard({
               </span>
             </button>
           </form>
-          <p className="kb-card-reply__hint">{t('card.replySyncedHint')}</p>
           {replyError ? (
             <p className="kb-card-reply__error" role="alert">
               {replyError}

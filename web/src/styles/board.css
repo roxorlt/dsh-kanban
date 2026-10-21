@@ -555,11 +555,23 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 420px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   margin-top: 2px;
   padding-top: 8px;
   border-top: 0.5px solid var(--dsw-alias-border-l1);
   cursor: default;
   animation: kb-reveal var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-card-timeline-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @keyframes kb-reveal {
@@ -806,15 +818,6 @@
 .kb-decision-risk span {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.kb-card-expanded .kb-decision-risk span,
-.kb-drawer .kb-decision-risk span {
-  -webkit-line-clamp: 8;
 }
 
 .kb-decision-resolved {
@@ -898,4 +901,109 @@
 
 .kb-decision--resolved .kb-decision-q .kb-dot {
   margin-top: 0;
+}
+
+
+/* ------------------------------------------------ 列尾「查看全部 N」 */
+.kb-column__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 28px;
+  margin-top: 2px;
+  border: 0.5px dashed var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-link);
+  font: var(--dsw-font-xxxs-strong-11);
+}
+
+.kb-column__more:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-column__more .kb-icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* ---------------------------------------------------- 卡片素材紧凑媒体行 */
+.kb-media-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-media-row__thumbs {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+}
+
+.kb-media-row__thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  object-fit: cover;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kb-media-row__thumb--icon {
+  display: inline-grid;
+  place-items: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-media-row__thumb--icon .kb-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.kb-media-row__count {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.kb-media-row__action {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------ 时间线加载更早 / 审批多选 */
+.kb-timeline-more {
+  align-self: flex-start;
+  height: 26px;
+  padding: 0 6px;
+  color: var(--dsw-alias-link);
+}
+
+.kb-timeline-more .kb-spinner {
+  width: 12px;
+  height: 12px;
+}
+
+.kb-decision-multi-hint {
+  padding: 0 2px 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-decision-options {
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.kb-decision-validation {
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xxxs-11);
 }

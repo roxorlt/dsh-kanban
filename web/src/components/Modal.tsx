@@ -7,6 +7,8 @@ import { IconClose } from './Icons';
 interface ModalProps {
   title: string;
   onClose: () => void;
+  /** Esc / 蒙层 / 右上角关闭时调用；缺省等同 onClose。用于脏草稿二次确认。 */
+  onRequestClose?: () => void;
   children: ReactNode;
   footer?: ReactNode;
   /** 初始聚焦的元素选择器，默认聚焦第一个可交互元素 */
@@ -18,8 +20,17 @@ const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** 居中模态（<720px 时由 CSS 变成底部弹层）。Esc 关闭、焦点归还、滚动锁定。 */
-export function Modal({ title, onClose, children, footer, initialFocus, size = 'md' }: ModalProps) {
+export function Modal({
+  title,
+  onClose,
+  onRequestClose,
+  children,
+  footer,
+  initialFocus,
+  size = 'md',
+}: ModalProps) {
   const titleId = useId();
+  const requestClose = onRequestClose ?? onClose;
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
@@ -41,7 +52,7 @@ export function Modal({ title, onClose, children, footer, initialFocus, size = '
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        requestClose();
       }
       if (event.key !== 'Tab' || !panelRef.current) return;
       const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
@@ -61,12 +72,12 @@ export function Modal({ title, onClose, children, footer, initialFocus, size = '
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, [requestClose]);
 
   const { t } = useI18n();
 
   return createPortal(
-    <div className="kb-overlay" role="presentation" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="kb-overlay" role="presentation" onPointerDown={(event) => event.target === event.currentTarget && requestClose()}>
       <div
         ref={panelRef}
         className={`kb-modal kb-modal--${size}`}
@@ -79,7 +90,7 @@ export function Modal({ title, onClose, children, footer, initialFocus, size = '
           <h2 id={titleId} className="kb-modal__title">
             {title}
           </h2>
-          <button type="button" className="kb-btn kb-btn--icon kb-btn--ghost" aria-label={t('common.close')} onClick={onClose}>
+          <button type="button" className="kb-btn kb-btn--icon kb-btn--ghost" aria-label={t('common.close')} onClick={requestClose}>
             <span className="kb-icon">
               <IconClose />
             </span>

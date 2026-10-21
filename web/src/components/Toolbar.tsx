@@ -8,12 +8,10 @@ import type { I18nKey } from '../i18n';
 import { FilterMenu } from './FilterMenu';
 import {
   IconBoard,
-  IconChevronRight,
   IconClose,
   IconGlobe,
   IconList,
   IconPlus,
-  IconRefresh,
   IconSearch,
 } from './Icons';
 
@@ -22,7 +20,9 @@ export type SyncState = 'connected' | 'connecting' | 'reconnecting' | 'standalon
 
 interface ToolbarProps {
   boardName: string;
-  cardCount: number;
+  totalCards: number;
+  needsYouCount: number;
+  sessionsRunning: number;
   view: ViewMode;
   onViewChange: (view: ViewMode) => void;
   filters: CardFilters;
@@ -32,10 +32,10 @@ interface ToolbarProps {
   lang: Lang;
   onToggleLang: () => void;
   onNewCard: () => void;
-  onRefresh: () => void;
-  refreshing: boolean;
   syncState: SyncState;
-  runningCount: number;
+  /** 数据刷新失败时的内联错误条（重试入口，替代刷新按钮） */
+  syncError: string | null;
+  onRetry: () => void;
 }
 
 function Chip({ label, onRemove, removeLabel }: { label: string; onRemove: () => void; removeLabel: string }) {
@@ -51,10 +51,12 @@ function Chip({ label, onRemove, removeLabel }: { label: string; onRemove: () =>
   );
 }
 
-/** 顶部两行：面包屑 / 视图切换 / 新建 + 搜索 / 筛选 / 实时状态 / 刷新。 */
+/** 顶栏：看板名 + 计数（待你确认 / 会话运行中），Board/List、搜索/筛选、状态点；列表视图才有新建。 */
 export function Toolbar({
   boardName,
-  cardCount,
+  totalCards,
+  needsYouCount,
+  sessionsRunning,
   view,
   onViewChange,
   filters,
@@ -64,10 +66,9 @@ export function Toolbar({
   lang,
   onToggleLang,
   onNewCard,
-  onRefresh,
-  refreshing,
   syncState,
-  runningCount,
+  syncError,
+  onRetry,
 }: ToolbarProps) {
   const { t } = useI18n();
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -85,61 +86,87 @@ export function Toolbar({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const anchorViews: { id: ViewMode; icon: ReactNode; key: I18nKey }[] = [
+  const views: { id: ViewMode; icon: ReactNode; key: I18nKey }[] = [
     { id: 'board', icon: <IconBoard />, key: 'app.viewBoard' },
     { id: 'list', icon: <IconList />, key: 'app.viewList' },
   ];
+  const syncLabel =
+    syncState === 'standalone'
+      ? t('app.syncStandalone')
+      : syncState === 'connecting'
+        ? t('app.syncConnecting')
+        : syncState === 'reconnecting'
+          ? t('app.syncReconnecting')
+          : t('app.syncConnected');
+  const syncTone =
+    syncState === 'connected'
+      ? 'success'
+      : syncState === 'reconnecting'
+        ? 'warn'
+        : syncState === 'connecting'
+          ? 'business'
+          : 'tertiary';
 
   return (
     <>
       <header className="kb-topbar">
-        <nav className="kb-crumbs" aria-label="breadcrumb">
-          <span className="kb-crumb">{t('app.breadcrumbRoot')}</span>
-          <span className="kb-crumb-sep" aria-hidden="true">
-            <IconChevronRight size={12} />
+        <div className="kb-crumbs">
+        <h1 className="kb-crumb-current">{boardName}</h1>
+        <span className="kb-crumb-tag" title={t('app.boardCardCountTooltip', { count: totalCards })}>
+          {t('app.cardCountTotal', { count: totalCards })}
+        </span>
+        <span className="kb-crumb-counts">
+          <span className="kb-crumb-count kb-crumb-count--needs">
+            <span className="kb-dot kb-dot--warn" aria-hidden="true" />
+            {t('app.needsYouCount', { count: needsYouCount })}
           </span>
-          <h1 className="kb-crumb-current">{boardName}</h1>
-          <span className="kb-crumb-tag">{t('app.cardCount', { count: cardCount })}</span>
-        </nav>
+          <span className="kb-crumb-count kb-crumb-count--running">
+            <span className="kb-dot kb-dot--business" aria-hidden="true" />
+            {t('app.sessionsRunning', { count: sessionsRunning })}
+          </span>
+        </span>
+      </div>
 
         <div className="kb-topbar-actions">
-          <div className="kb-seg" role="tablist" aria-label={t('app.viewBoard')}>
-            {anchorViews.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                role="tab"
-                aria-selected={view === entry.id}
-                className={`kb-seg-btn${view === entry.id ? ' kb-seg-btn--active' : ''}`}
-                onClick={() => onViewChange(entry.id)}
-              >
-                <span className="kb-icon" aria-hidden="true">
-                  {entry.icon}
-                </span>
-                <span className="kb-seg-label">{t(entry.key)}</span>
-              </button>
-            ))}
-          </div>
+        <div className="kb-seg" role="tablist" aria-label={t('app.viewBoard')}>
+          {views.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              role="tab"
+              aria-selected={view === entry.id}
+              className={`kb-seg-btn${view === entry.id ? ' kb-seg-btn--active' : ''}`}
+              onClick={() => onViewChange(entry.id)}
+            >
+              <span className="kb-icon" aria-hidden="true">
+                {entry.icon}
+              </span>
+              <span className="kb-seg-label">{t(entry.key)}</span>
+            </button>
+          ))}
+        </div>
 
-          <button
-            type="button"
-            className="kb-icon-btn kb-lang-btn"
-            onClick={onToggleLang}
-            aria-label={t('app.language')}
-            title={t('app.language')}
-          >
-            <span className="kb-icon" aria-hidden="true">
-              <IconGlobe />
-            </span>
-            <span className="kb-lang-label">{lang === 'zh' ? '中' : 'EN'}</span>
-          </button>
+        <button
+          type="button"
+          className="kb-icon-btn kb-lang-btn"
+          onClick={onToggleLang}
+          aria-label={t('app.language')}
+          title={t('app.language')}
+        >
+          <span className="kb-icon" aria-hidden="true">
+            <IconGlobe />
+          </span>
+          <span className="kb-lang-label">{lang === 'zh' ? '中' : 'EN'}</span>
+        </button>
 
+        {view === 'list' ? (
           <button type="button" className="kb-btn kb-btn--primary kb-new-btn" onClick={onNewCard}>
             <span className="kb-icon" aria-hidden="true">
               <IconPlus />
             </span>
             <span className="kb-new-btn__text">{t('app.newCard')}</span>
           </button>
+        ) : null}
         </div>
       </header>
 
@@ -209,26 +236,20 @@ export function Toolbar({
 
         <div className="kb-toolbar-spacer" />
 
-        <span className="kb-agent-live" title={t('app.syncConnected')}>
-          <span
-            className={`kb-dot kb-dot--${syncState === 'connected' ? 'success' : syncState === 'connecting' ? 'business' : syncState === 'reconnecting' ? 'warn' : 'tertiary'}`}
-            aria-hidden="true"
-          />
-          {runningCount > 0 ? t('app.liveCount', { count: runningCount }) : t('app.syncConnected')}
+        <span className="kb-agent-live" title={syncLabel}>
+          <span className={`kb-dot kb-dot--${syncTone}`} aria-hidden="true" />
+          {syncLabel}
         </span>
-
-        <button
-          type="button"
-          className="kb-icon-btn"
-          onClick={onRefresh}
-          aria-label={t('app.refresh')}
-          title={t('app.refresh')}
-        >
-          <span className={`kb-icon${refreshing ? ' kb-spin' : ''}`} aria-hidden="true">
-            <IconRefresh />
-          </span>
-        </button>
       </div>
+
+      {syncError ? (
+        <div className="kb-errorbar" role="alert">
+          <span className="kb-errorbar__message">{t('app.inlineSyncError', { message: syncError })}</span>
+          <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={onRetry}>
+            {t('app.retry')}
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

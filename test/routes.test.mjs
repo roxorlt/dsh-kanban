@@ -40,14 +40,14 @@ test('GET /state 返回看板快照、列计数、按列排序的卡片，不内
   assert.equal(body.activities, undefined)
   assert.equal(body.boards.length, 1)
   assert.equal(body.board.id, 'board-default')
-  assert.equal(body.boards[0].counts.total, 6)
-  assert.equal(body.cards.length, 6)
+  assert.equal(body.boards[0].counts.total, 7)
+  assert.equal(body.cards.length, 7)
   assert.equal(body.revision, 1)
   assert.ok(body.serverTime > 0)
   // 按列展开：backlog 在最前，每张卡只出现一次
   assert.equal(body.cards[0].status, 'backlog')
   assert.deepEqual(body.cards.map(card => card.id).sort(), [...new Set(body.cards.map(card => card.id))].sort())
-  assert.equal(body.board.cardOrder.needs_you.length, 3)
+  assert.equal(body.board.cardOrder.needs_you.length, 4)
 
   const scoped = await api(server, '/api/kanban/state?boardId=board-default')
   assert.equal(scoped.status, 200)
@@ -87,7 +87,7 @@ test('看板 CRUD：创建/改名/删除；默认看板与含卡看板不可删'
 
   const boards = await api(server, '/api/kanban/boards')
   assert.equal(boards.json.boards.length, 2)
-  assert.equal(boards.json.boards[0].counts.total, 6)
+  assert.equal(boards.json.boards[0].counts.total, 7)
 })
 
 test('卡片创建：字段白名单、默认值、version=1、created 时间线', async t => {
@@ -192,6 +192,7 @@ test('审批：创建→待你确认、选项解析、解决→已批准/已拒�
   assert.match(approval.id, /^ap-[a-f0-9]{8}$/)
   assert.equal(approval.status, 'pending')
   assert.equal(created.json.card.status, 'needs_you')
+  assert.equal(created.json.approval.multiSelect, false)
   const state = await api(server, '/api/kanban/state')
   assert.equal(state.json.board.cardOrder.needs_you[0], card.id)
 
@@ -200,6 +201,8 @@ test('审批：创建→待你确认、选项解析、解决→已批准/已拒�
   const approved = await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, { method: 'POST', body: { optionId: 'option-1', comment: '可以' } })
   assert.equal(approved.status, 200)
   assert.equal(approved.json.approval.status, 'approved')
+  assert.deepEqual(approved.json.approval.resolution.optionIds, ['option-1'])
+  assert.deepEqual(approved.json.approval.resolution.labels, ['上线'])
   assert.equal(approved.json.approval.resolution.comment, '可以')
   assert.match(approved.json.approval.resolvedBy.name, /你/)
   const timeline = await api(server, `/api/kanban/cards/${card.id}/activities`)
@@ -228,9 +231,12 @@ test('评论与时间线接口：倒序、limit 上限、空文本 400、卡片�
   for (let index = 1; index < all.json.activities.length; index++) {
     assert.ok(all.json.activities[index - 1].at >= all.json.activities[index].at)
   }
+  assert.equal(all.json.hasMore, false)
+  assert.equal(all.json.nextBefore, null)
   const limited = await api(server, `/api/kanban/cards/${card.id}/activities?limit=2`)
   assert.equal(limited.json.activities.length, 2)
   assert.equal(limited.json.activities[0].text, '第三条')
+  assert.equal(limited.json.hasMore, true)
   const clamped = await api(server, `/api/kanban/cards/${card.id}/activities?limit=999`)
   assert.equal(clamped.json.activities.length, 4)
   assert.equal((await api(server, `/api/kanban/cards/${card.id}/comments`, { method: 'POST', body: { text: '   ' } })).status, 400)
@@ -260,6 +266,126 @@ test('会话绑定/解绑/重复绑定去重、ack 写入已读节点', async t 
   assert.equal(timeline.json.activities[0].type, 'ack')
 })
 
+test('多选审批：multiSelect + optionIds resolve、全 danger 判 rejected、单选拒绝多个/空/不存在选项', async t => {
+  const { server } = await setup(t)
+  const card = await createCard(server)
+  const created = await api(server, `/api/kanban/cards/${card.id}/approvals`, {
+    method: 'POST',
+    body: {
+      title: '发布前要带哪些检查？',
+      multiSelect: true,
+      options: [
+        { id: 'unit-test', label: '单元测试' },
+        { id: 'build', label: '构建' },
+        { id: 'no', label: '本次不发布', tone: 'danger' },
+      ],
+    },
+  })
+  assert.equal(created.status, 200)
+  assert.equal(created.json.approval.multiSelect, true)
+  const approval = created.json.approval
+  const approved = await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST', body: { optionIds: ['build', 'unit-test', 'build'], comment: '两项都过' },
+  })
+  assert.equal(approved.status, 200)
+  assert.equal(approved.json.approval.status, 'approved')
+  assert.deepEqual(approved.json.approval.resolution.optionIds, ['build', 'unit-test'])
+  assert.deepEqual(approved.json.approval.resolution.labels, ['构建', '单元测试'])
+  assert.match(approved.json.approval.resolvedBy.name, /你/)
+  const timeline = await api(server, `/api/kanban/cards/${card.id}/activities`)
+  assert.ok(timeline.json.activities.some(item => item.type === 'approval_resolved' && item.data.optionIds.length === 2))
+
+  // 全部选中 danger 选项 → rejected
+  const rejectCard = await createCard(server, { title: '全 danger 审批' })
+  const created2 = await api(server, `/api/kanban/cards/${rejectCard.id}/approvals`, {
+    method: 'POST',
+    body: { title: '是否全部取消？', multiSelect: true, options: [{ id: 'no', label: '全部取消', tone: 'danger' }, { id: 'reject', label: '拒绝', tone: 'danger' }] },
+  })
+  const rejected = await api(server, `/api/kanban/cards/${rejectCard.id}/approvals/${created2.json.approval.id}/resolve`, {
+    method: 'POST', body: { optionIds: ['no', 'reject'] },
+  })
+  assert.equal(rejected.json.approval.status, 'rejected')
+
+  // 单选审批不允许多个 optionIds
+  const singleCard = await createCard(server, { title: '单选审批' })
+  const single = await api(server, `/api/kanban/cards/${singleCard.id}/approvals`, { method: 'POST', body: { title: '单选', options: ['A', 'B'] } })
+  assert.equal(single.json.approval.multiSelect, false)
+  assert.equal((await api(server, `/api/kanban/cards/${singleCard.id}/approvals/${single.json.approval.id}/resolve`, {
+    method: 'POST', body: { optionIds: ['option-1', 'option-2'] },
+  })).status, 400)
+  assert.equal((await api(server, `/api/kanban/cards/${singleCard.id}/approvals/${single.json.approval.id}/resolve`, {
+    method: 'POST', body: { optionIds: [] },
+  })).status, 400)
+  assert.equal((await api(server, `/api/kanban/cards/${singleCard.id}/approvals/${single.json.approval.id}/resolve`, {
+    method: 'POST', body: { optionIds: ['nope'] },
+  })).status, 400)
+  // 旧 optionId 仍兼容
+  const legacy = await api(server, `/api/kanban/cards/${singleCard.id}/approvals/${single.json.approval.id}/resolve`, {
+    method: 'POST', body: { optionId: 'option-1' },
+  })
+  assert.equal(legacy.status, 200)
+  assert.deepEqual(legacy.json.approval.resolution.optionIds, ['option-1'])
+
+  // 8 个选项可创建，9 个 400
+  const eight = await api(server, `/api/kanban/cards/${singleCard.id}/approvals`, {
+    method: 'POST', body: { title: '8 个选项', options: Array.from({ length: 8 }, (_, index) => `选项${index + 1}`) },
+  })
+  assert.equal(eight.status, 200)
+  assert.equal(eight.json.approval.options.length, 8)
+  assert.equal((await api(server, `/api/kanban/cards/${singleCard.id}/approvals`, {
+    method: 'POST', body: { title: '9 个选项', options: Array.from({ length: 9 }, (_, index) => `选项${index + 1}`) },
+  })).status, 400)
+})
+
+test('时间线分页：before 游标/hasMore/nextBefore、limit 默认 30 上限 100、非法游标 400', async t => {
+  const { server, store } = await setup(t)
+  const card = await createCard(server)
+  const base = Date.now() - 120_000
+  await store.update(draft => {
+    for (let index = 0; index < 120; index++) {
+      draft.activities.push({
+        id: 'ev-' + String(index).padStart(8, '0'),
+        cardId: card.id, type: 'progress', actor: { kind: 'agent', name: 'DSH Agent' },
+        text: `节点 ${index}`, at: base + index,
+      })
+    }
+    return null
+  })
+  const first = await api(server, `/api/kanban/cards/${card.id}/activities`)
+  assert.equal(first.status, 200)
+  assert.equal(first.json.activities.length, 30) // 默认 30
+  assert.equal(first.json.hasMore, true)
+  assert.equal(first.json.nextBefore, first.json.activities.at(-1).id)
+  for (let index = 1; index < first.json.activities.length; index++) {
+    assert.ok(first.json.activities[index - 1].at >= first.json.activities[index].at)
+  }
+  const second = await api(server, `/api/kanban/cards/${card.id}/activities?limit=10&before=${first.json.nextBefore}`)
+  assert.equal(second.json.activities.length, 10)
+  const firstIds = new Set(first.json.activities.map(item => item.id))
+  assert.ok(second.json.activities.every(item => !firstIds.has(item.id)))
+  assert.equal(second.json.hasMore, true)
+
+  let page = first.json
+  const seen = new Set(page.activities.map(item => item.id))
+  let guard = 0
+  while (page.hasMore && guard++ < 10) {
+    const response = await api(server, `/api/kanban/cards/${card.id}/activities?before=${page.nextBefore}&limit=30`)
+    page = response.json
+    for (const activity of page.activities) {
+      assert.ok(!seen.has(activity.id), '分页不应重复')
+      seen.add(activity.id)
+    }
+  }
+  assert.equal(seen.size, 121) // 120 条直写 + 1 条 created
+  assert.equal(page.hasMore, false)
+  assert.equal(page.nextBefore, null)
+
+  const capped = await api(server, `/api/kanban/cards/${card.id}/activities?limit=999`)
+  assert.equal(capped.json.activities.length, 100) // 上限 100
+  assert.equal((await api(server, `/api/kanban/cards/${card.id}/activities?before=ev-ffffffff`)).status, 400)
+  assert.equal((await api(server, `/api/kanban/cards/${card.id}/activities?before=not-an-id`)).status, 400)
+})
+
 test('POST /seed：demo/empty/reset、revision 单调，非法模式 400', async t => {
   const { server } = await setup(t)
   const empty = await api(server, '/api/kanban/seed', { method: 'POST', body: { mode: 'empty' } })
@@ -268,7 +394,7 @@ test('POST /seed：demo/empty/reset、revision 单调，非法模式 400', async
   const demo = await api(server, '/api/kanban/seed', { method: 'POST', body: { mode: 'demo' } })
   assert.equal(demo.json.revision, empty.json.revision + 1)
   const state = await api(server, '/api/kanban/state')
-  assert.equal(state.json.cards.length, 6)
+  assert.equal(state.json.cards.length, 7)
   assert.equal(state.json.revision, demo.json.revision)
   assert.equal((await api(server, '/api/kanban/seed', { method: 'POST', body: { mode: 'nope' } })).status, 400)
 })
@@ -401,6 +527,6 @@ test('并发的写请求串行落盘，最终 state 与 revision 一致', async 
   const revisions = responses.map(res => res.json.revision)
   assert.equal(new Set(revisions).size, 10)
   const state = await api(server, '/api/kanban/state')
-  assert.equal(state.json.cards.length, 16)
+  assert.equal(state.json.cards.length, 17)
   assert.equal(state.json.revision, store.peek().meta.revision)
 })

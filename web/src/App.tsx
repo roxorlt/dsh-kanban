@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Activity, Board, BoardSummary, Card, ColumnId, SessionRow } from './types';
+import type { Approval, Board, BoardSummary, Card, ColumnId, SessionRow } from './types';
 import { KanbanApiError, api } from './api';
 import { bridge, useBridgeState } from './bridge';
 import type { HostInfo } from './types';
@@ -8,11 +8,18 @@ import type { I18nKey, Lang, TranslateVars } from './i18n';
 import { copyText } from './lib/clipboard';
 import { hasActiveFilters, EMPTY_FILTERS, extractLabels, extractProjects, filterCards } from './lib/filter';
 import type { CardFilters } from './lib/filter';
-import { groupCardsByColumn, type ColumnGroups } from './lib/grouping';
-import { COLUMNS, COLUMN_OF_STATUS, STATUS_OF_COLUMN, isWarningStatus } from './lib/status';
+import { countByColumn, groupCardsByColumn } from './lib/grouping';
+import type { ColumnGroups } from './lib/grouping';
+import { COLUMN_OF_STATUS, COLUMNS, STATUS_OF_COLUMN } from './lib/status';
+import { doneCardsOf } from './lib/listGroups';
+import type { ListGroupBy } from './lib/listGroups';
+import { applyPage, EMPTY_FEED } from './lib/activities';
+import type { ActivityFeed } from './lib/activities';
 import { useMediaQuery } from './lib/useMediaQuery';
 import { useRealtime } from './lib/useRealtime';
 import { BoardView } from './components/BoardView';
+import { ApprovalDraftModal } from './components/ApprovalDraftModal';
+import type { ApprovalDraftValues } from './components/ApprovalDraftModal';
 import { CardFormModal } from './components/CardFormModal';
 import type { CardFormValues } from './components/CardFormModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -23,7 +30,6 @@ import { ToastRegion, useToasts } from './components/Toast';
 import { Toolbar } from './components/Toolbar';
 import type { SyncState, ViewMode } from './components/Toolbar';
 import type { ApprovalDecision } from './components/ApprovalPanel';
-import type { Approval, ApprovalOption } from './types';
 import type { CardActionHandlers, Placement } from './components/types';
 
 const VIEW_STORAGE_KEY = 'dsh-kanban.view';
@@ -33,7 +39,6 @@ interface Snapshot {
   boards: BoardSummary[];
   board: Board | null;
   cards: Card[];
-  activities: Activity[];
   revision: number;
 }
 
@@ -45,6 +50,14 @@ interface LoadError {
 type FormState =
   | { mode: 'create'; column: ColumnId }
   | { mode: 'edit'; card: Card };
+
+interface ApprovalDraftState {
+  card: Card;
+  previous: Snapshot;
+  fromColumn: ColumnId;
+  busy: boolean;
+  error: string | null;
+}
 
 function readStoredView(): ViewMode {
   try {
@@ -116,16 +129,17 @@ export function App() {
   useEffect(() => {
     document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
   }, [lang]);
-  const t = useCallback(
-    (key: I18nKey, vars?: TranslateVars) => translate(lang, key, vars),
-    [lang],
-  );
+  const t = useCallback((key: I18nKey, vars?: TranslateVars) => translate(lang, key, vars), [lang]);
   const i18nValue = useMemo(() => ({ lang, t, setLang }), [lang, t, setLang]);
 
   // ------------------------------------------------------------------ 数据
-  const [snapshot, setSnapshot] = useState<Snapshot>({ boards: [], board: null, cards: [], activities: [], revision: -1 });
+  const [snapshot, setSnapshot] = useState<Snapshot>({
+    boards: [],
+    board: null,
+    cards: [],
+    revision: -1,
+  });
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
@@ -141,7 +155,6 @@ export function App() {
 
   const refresh = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
-    if (!silent) setRefreshing(true);
     try {
       const payload = await api.getState(boardIdRef.current ?? undefined);
       boardIdRef.current = payload.board?.id ?? null;
@@ -149,17 +162,15 @@ export function App() {
         boards: payload.boards ?? [],
         board: payload.board ?? null,
         cards: payload.cards ?? [],
-        activities: payload.activities ?? [],
         revision: payload.revision ?? 0,
       });
       setLoadError(null);
     } catch (error) {
       const next = toLoadError(error);
-      if (!silent) setLoadError(next);
-      else notifyRef.current(next.message, 'error');
+      setLoadError(next);
+      if (silent) notifyRef.current(next.message, 'error');
     } finally {
       setLoading(false);
-      if (!silent) setRefreshing(false);
     }
   }, []);
 
@@ -172,6 +183,56 @@ export function App() {
     revision: snapshot.revision,
     onRefresh: () => void refresh({ silent: true }),
   });
+
+  // ------------------------------------------------------------------ 时间线分页缓存
+  const [feeds, setFeeds] = useState<Record<string, ActivityFeed>>({});
+  const feedsRef = useRef(feeds);
+  feedsRef.current = feeds;
+  const feedInFlight = useRef<Set<string>>(new Set());
+
+  const fetchFeed = useCallback(async (cardId: string, options: { reset?: boolean; limit?: number } = {}) => {
+    if (feedInFlight.current.has(cardId)) return;
+    feedInFlight.current.add(cardId);
+    const reset = options.reset ?? false;
+    const limit = options.limit ?? 20;
+    const before = reset ? undefined : feedsRef.current[cardId]?.nextBefore;
+    setFeeds((current) => ({
+      ...current,
+      [cardId]: {
+        ...(reset ? EMPTY_FEED : current[cardId] ?? EMPTY_FEED),
+        items: reset ? [] : current[cardId]?.items ?? [],
+        loading: true,
+      },
+    }));
+    try {
+      const page = await api.getCardActivities(cardId, {
+        limit,
+        ...(before ? { before } : {}),
+      });
+      setFeeds((current) => ({
+        ...current,
+        [cardId]: applyPage(current[cardId] ?? EMPTY_FEED, page, { reset }),
+      }));
+    } catch (error) {
+      setFeeds((current) => ({
+        ...current,
+        [cardId]: {
+          ...(current[cardId] ?? EMPTY_FEED),
+          loading: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      }));
+    } finally {
+      feedInFlight.current.delete(cardId);
+    }
+  }, []);
+
+  const loadEarlier = useCallback(
+    (cardId: string) => {
+      void fetchFeed(cardId, { limit: 20 });
+    },
+    [fetchFeed],
+  );
 
   // ------------------------------------------------------------------ 会话 / 宿主
   const [fallbackSessions, setFallbackSessions] = useState<SessionRow[]>([]);
@@ -198,7 +259,7 @@ export function App() {
   const sessions = bridgeState.sessions.length ? bridgeState.sessions : fallbackSessions;
 
   // ------------------------------------------------------------------ 视图状态
-  const [view, setView] = useState<ViewMode>(readStoredView);
+  const [view, setViewState] = useState<ViewMode>(readStoredView);
   const [filters, setFilters] = useState<CardFilters>(EMPTY_FILTERS);
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
@@ -208,7 +269,10 @@ export function App() {
   const [archiveTarget, setArchiveTarget] = useState<Card | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [resolvingApprovalId, setResolvingApprovalId] = useState<string | null>(null);
+  const [approvalDraft, setApprovalDraft] = useState<ApprovalDraftState | null>(null);
   const [activeColumn, setActiveColumn] = useState<ColumnId>('running');
+  const [listGroupBy, setListGroupBy] = useState<ListGroupBy>('status');
+  const [doneOpen, setDoneOpen] = useState(false);
   const [now, setNow] = useState<number>(() => Date.now());
 
   useEffect(() => {
@@ -217,7 +281,7 @@ export function App() {
   }, []);
 
   const handleViewChange = useCallback((next: ViewMode) => {
-    setView(next);
+    setViewState(next);
     storeView(next);
   }, []);
 
@@ -229,6 +293,9 @@ export function App() {
   const projects = useMemo(() => extractProjects(snapshot.cards), [snapshot.cards]);
   const labels = useMemo(() => extractLabels(snapshot.cards), [snapshot.cards]);
   const activeCard = activeCardId ? snapshot.cards.find((card) => card.id === activeCardId) ?? null : null;
+  const doneTotal = useMemo(() => doneCardsOf(snapshot.cards).length, [snapshot.cards]);
+  const needsYouCount = countByColumn(snapshot.cards).needs_you;
+  const sessionsRunning = snapshot.cards.filter((card) => card.status === 'running' && !card.archived).length;
 
   // 首次有数据时把移动端默认列指向最需要看的列
   const pickedInitialColumn = useRef(false);
@@ -242,53 +309,39 @@ export function App() {
     setActiveColumn(counts.needs_you > 0 ? 'needs_you' : counts.running > 0 ? 'running' : 'backlog');
   }, [snapshot.board, snapshot.cards]);
 
-  // ------------------------------------------------------------------ 时间线
-  const baseActivitiesByCard = useMemo(() => {
-    const map: Record<string, Activity[]> = {};
-    for (const activity of snapshot.activities) {
-      (map[activity.cardId] ??= []).push(activity);
-    }
-    return map;
-  }, [snapshot.activities]);
-  const [extraActivities, setExtraActivities] = useState<Record<string, Activity[]>>({});
-  const activitiesByCard = useMemo(() => {
-    const merged: Record<string, Activity[]> = { ...baseActivitiesByCard };
-    for (const [cardId, list] of Object.entries(extraActivities)) {
-      if (!merged[cardId]?.length) merged[cardId] = list;
-    }
-    return merged;
-  }, [baseActivitiesByCard, extraActivities]);
-  const requestedActivities = useRef<Set<string>>(new Set());
-  const lastActivityRevision = useRef<number>(-1);
-
-  // 展开/打开卡片时按需拉时间线；revision 变化后对当前可见卡片重新拉取。
-  useEffect(() => {
-    const ids = new Set<string>(expandedIds);
-    if (activeCardId) ids.add(activeCardId);
-    const revisionChanged = lastActivityRevision.current !== snapshot.revision;
-    if (revisionChanged) {
-      lastActivityRevision.current = snapshot.revision;
-      requestedActivities.current.clear();
-    }
-    for (const cardId of ids) {
-      const cached = (activitiesByCard[cardId]?.length ?? 0) > 0;
-      if (cached && !revisionChanged) continue;
-      if (!revisionChanged && requestedActivities.current.has(cardId)) continue;
-      requestedActivities.current.add(cardId);
-      void api
-        .getCardActivities(cardId)
-        .then((list) => {
-          if (list.length) setExtraActivities((current) => ({ ...current, [cardId]: list }));
-        })
-        .catch(() => undefined);
-    }
-  }, [snapshot.revision, expandedIds, activeCardId, activitiesByCard]);
-
   useEffect(() => {
     if (!activeCardId) return;
     if (snapshot.cards.some((card) => card.id === activeCardId)) return;
     setActiveCardId(null);
   }, [snapshot.cards, activeCardId]);
+
+  const lastFeedRevision = useRef(-1);
+  useEffect(() => {
+    const first = lastFeedRevision.current === -1;
+    if (lastFeedRevision.current === snapshot.revision) return;
+    lastFeedRevision.current = snapshot.revision;
+    if (first) return;
+    const ids = new Set<string>(expandedIds);
+    if (activeCardId) ids.add(activeCardId);
+    for (const id of ids) {
+      const current = feedsRef.current[id];
+      if (!current) continue;
+      void fetchFeed(id, { reset: true, limit: Math.max(20, current.items.length) });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot.revision]);
+
+  useEffect(() => {
+    const ids = new Set<string>(expandedIds);
+    if (activeCardId) ids.add(activeCardId);
+    for (const id of ids) {
+      const current = feedsRef.current[id];
+      if (!current || (current.items.length === 0 && !current.loading && !current.error)) {
+        void fetchFeed(id, { reset: true, limit: 20 });
+      }
+    }
+  }, [expandedIds, activeCardId, fetchFeed]);
+
 
   // ------------------------------------------------------------------ 动作
   const notifyToast = useCallback(
@@ -346,10 +399,10 @@ export function App() {
       const card = current.cards.find((item) => item.id === cardId);
       if (!card) return;
       const previous = current;
-      const optimistic = applyOptimisticMove(current, cardId, column, placement);
-      setSnapshot(optimistic);
+      const fromColumn = COLUMN_OF_STATUS[card.status];
+      setSnapshot(applyOptimisticMove(current, cardId, column, placement));
       try {
-        await api.moveCard(cardId, column, {
+        const result = await api.moveCard(cardId, column, {
           version: card.version,
           ...(placement?.beforeId ? { beforeId: placement.beforeId } : {}),
           ...(placement?.afterId ? { afterId: placement.afterId } : {}),
@@ -357,39 +410,89 @@ export function App() {
         const movedText = t('toast.moved', { column: t(`column.${column}` as I18nKey) });
         notifyToast(movedText, 'success');
         announce(movedText);
-        if (column === 'needs_you' && !card.approvals.some((approval) => approval.status === 'pending')) {
-          notifyToast(t('card.pendingApproval'), 'info');
-        }
         await refresh({ silent: true });
+        const movedCard = result.card;
+        if (column === 'needs_you' && !movedCard.approvals.some((approval) => approval.status === 'pending')) {
+          setApprovalDraft({ card: movedCard, previous, fromColumn, busy: false, error: null });
+        }
       } catch (error) {
         setSnapshot(previous);
-        const message = error instanceof KanbanApiError && error.code === 'VERSION_CONFLICT'
-          ? t('toast.versionConflict')
-          : t('toast.moveFailed');
+        const message =
+          error instanceof KanbanApiError && error.code === 'VERSION_CONFLICT'
+            ? t('toast.versionConflict')
+            : t('toast.moveFailed');
         notifyToast(message, 'error');
         await refresh({ silent: true });
       }
     },
-    [notifyToast, refresh, t],
+    [announce, notifyToast, refresh, t],
   );
+
+  const handleApprovalDraftSubmit = useCallback(
+    async (values: ApprovalDraftValues) => {
+      const draft = approvalDraft;
+      if (!draft) return;
+      setApprovalDraft({ ...draft, busy: true, error: null });
+      try {
+        await api.createApproval(draft.card.id, {
+          title: values.title,
+          detail: values.detail,
+          options: [
+            { id: 'continue', label: values.continueLabel, tone: 'primary' },
+            { id: 'stop', label: values.stopLabel, tone: 'danger' },
+          ],
+          multiSelect: false,
+          ...(draft.card.sessionIds[0] ? { sessionId: draft.card.sessionIds[0] } : {}),
+        });
+        notifyToast(t('toast.approvalCreated'), 'success');
+        setApprovalDraft(null);
+        await refresh({ silent: true });
+      } catch (error) {
+        setApprovalDraft({
+          ...draft,
+          busy: false,
+          error: error instanceof Error ? error.message : t('toast.approvalFailed'),
+        });
+      }
+    },
+    [approvalDraft, notifyToast, refresh, t],
+  );
+
+  const handleApprovalDraftCancel = useCallback(async () => {
+    const draft = approvalDraft;
+    setApprovalDraft(null);
+    if (!draft) return;
+    setSnapshot(draft.previous);
+    try {
+      await api.moveCard(draft.card.id, draft.fromColumn, { version: draft.card.version });
+    } catch {
+      /* 回滚失败时以刷新结果为准 */
+    }
+    await refresh({ silent: true });
+  }, [approvalDraft, refresh]);
 
   const handleResolveApproval = useCallback(
     async (
       card: Card,
       approval: Approval,
-      option: ApprovalOption,
+      optionIds: string[],
       comment: string,
       decision: ApprovalDecision,
+      sessionIdOverride?: string,
     ) => {
       setResolvingApprovalId(approval.id);
       try {
-        await api.resolveApproval(card.id, approval.id, option.id, comment || undefined);
+        await api.resolveApproval(card.id, approval.id, optionIds, comment || undefined);
+        const labels = optionIds
+          .map((optionId) => approval.options.find((option) => option.id === optionId)?.label ?? optionId)
+          .filter(Boolean);
         const header = decision === 'approve' ? '已批准' : '已拒绝';
         const note = comment ? `\n备注：${comment}` : '';
-        const text = `【看板·审批】${header}「${approval.title}」：${option.label}${note}`;
+        const text = `【看板·审批】${header}「${approval.title}」：${labels.join('、')}${note}`;
+        const sessionId = sessionIdOverride ?? approval.sessionId ?? card.sessionIds[0];
         const sessionResult = await sendToSession({
           text,
-          ...(approval.sessionId ? { sessionId: approval.sessionId } : card.sessionIds[0] ? { sessionId: card.sessionIds[0] } : {}),
+          ...(sessionId ? { sessionId } : {}),
           ...(card.cwd ? { cwd: card.cwd } : {}),
         });
         if (sessionResult.ok) {
@@ -406,20 +509,21 @@ export function App() {
         setResolvingApprovalId(null);
       }
     },
-    [notifyToast, refresh, sendToSession, t],
+    [announce, notifyToast, refresh, sendToSession, t],
   );
 
   const handleReply = useCallback(
-    async (card: Card, text: string): Promise<{ ok: boolean; error?: string }> => {
+    async (card: Card, text: string, sessionId?: string | null): Promise<{ ok: boolean; error?: string }> => {
       try {
         await api.addComment(card.id, text);
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : t('composer.replyFailed') };
       }
       const prefixed = `【看板·卡片「${card.title}」】\n${text}`;
+      const targetSessionId = sessionId ?? card.sessionIds[0];
       const result = await sendToSession({
         text: prefixed,
-        ...(card.sessionIds[0] ? { sessionId: card.sessionIds[0] } : {}),
+        ...(targetSessionId ? { sessionId: targetSessionId } : {}),
         ...(card.cwd ? { cwd: card.cwd } : {}),
       });
       await refresh({ silent: true });
@@ -434,11 +538,39 @@ export function App() {
     [embedded, notifyToast, refresh, sendToSession, t],
   );
 
+  const handleReopen = useCallback(
+    async (card: Card) => {
+      try {
+        await api.moveCard(card.id, 'running', { version: card.version });
+        notifyToast(t('toast.reopened'), 'success');
+        announce(t('toast.reopened'));
+        await refresh({ silent: true });
+      } catch (error) {
+        notifyToast(error instanceof Error ? error.message : t('toast.moveFailed'), 'error');
+        await refresh({ silent: true });
+      }
+    },
+    [announce, notifyToast, refresh, t],
+  );
+
   const handleBindSession = useCallback(
     async (card: Card, sessionId: string) => {
       try {
         await api.bindSession(card.id, sessionId);
         notifyToast(t('toast.sessionBound'), 'success');
+        await refresh({ silent: true });
+      } catch (error) {
+        notifyToast(error instanceof Error ? error.message : t('toast.sessionFailed'), 'error');
+      }
+    },
+    [notifyToast, refresh, t],
+  );
+
+  const handleSetPrimary = useCallback(
+    async (card: Card, sessionId: string) => {
+      try {
+        await api.bindSession(card.id, sessionId);
+        notifyToast(t('toast.primarySet'), 'success');
         await refresh({ silent: true });
       } catch (error) {
         notifyToast(error instanceof Error ? error.message : t('toast.sessionFailed'), 'error');
@@ -471,24 +603,6 @@ export function App() {
     [notifyToast, t],
   );
 
-  const handleRetry = useCallback(
-    (card: Card) => {
-      notifyToast(t('toast.retried'), 'success');
-      announce(t('toast.retried'));
-      void handleMove(card.id, 'running');
-    },
-    [announce, handleMove, notifyToast, t],
-  );
-
-  const handleSessionClick = useCallback(
-    (card: Card) => {
-      const sessionId = card.sessionIds[0];
-      if (sessionId && embedded) void handleOpenSession(sessionId);
-      else setActiveCardId(card.id);
-    },
-    [embedded, handleOpenSession],
-  );
-
   const handleCreateSession = useCallback(
     async (card: Card) => {
       try {
@@ -507,10 +621,34 @@ export function App() {
     [notifyToast, refresh, t],
   );
 
+  const handleRestart = useCallback(
+    (card: Card) => {
+      notifyToast(t('toast.retried'), 'success');
+      announce(t('toast.retried'));
+      void handleMove(card.id, 'running');
+    },
+    [announce, handleMove, notifyToast, t],
+  );
+
+  const handleSessionClick = useCallback(
+    (card: Card) => {
+      const sessionId = card.sessionIds[0];
+      if (sessionId && embedded) void handleOpenSession(sessionId);
+      else setActiveCardId(card.id);
+    },
+    [embedded, handleOpenSession],
+  );
+
   const handleCreateCard = useCallback(() => {
     setFormError(null);
     setFormState({ mode: 'create', column: mobile ? activeColumn : 'backlog' });
   }, [activeColumn, mobile]);
+
+  const handleViewAllDone = useCallback(() => {
+    handleViewChange('list');
+    setListGroupBy('status');
+    setDoneOpen(true);
+  }, [handleViewChange]);
 
   const handleSubmitForm = useCallback(
     async (values: CardFormValues) => {
@@ -527,6 +665,7 @@ export function App() {
               priority: values.priority,
               labels: values.labels,
               project: values.project || undefined,
+              cwd: values.cwd || undefined,
             });
             notifyToast(t('toast.saved'), 'success');
           } catch (error) {
@@ -546,6 +685,7 @@ export function App() {
             priority: values.priority,
             labels: values.labels,
             project: values.project || undefined,
+            cwd: values.cwd || undefined,
           });
           notifyToast(t('toast.created'), 'success');
           announce(t('toast.created'));
@@ -560,7 +700,7 @@ export function App() {
         setFormBusy(false);
       }
     },
-    [formState, notifyToast, refresh, snapshot.board, t],
+    [announce, formState, notifyToast, refresh, snapshot.board, t],
   );
 
   const handleArchiveConfirm = useCallback(async () => {
@@ -580,7 +720,7 @@ export function App() {
     } finally {
       setArchiveBusy(false);
     }
-  }, [activeCardId, archiveTarget, notifyToast, refresh, t]);
+  }, [activeCardId, announce, archiveTarget, notifyToast, refresh, t]);
 
   const actions = useMemo<CardActionHandlers>(
     () => ({
@@ -588,11 +728,12 @@ export function App() {
       onOpenDetail: handleOpenDetail,
       onEdit: handleEdit,
       onArchive: handleArchiveRequest,
+      onReopen: (card) => void handleReopen(card),
       onMove: (cardId, column, placement) => void handleMove(cardId, column, placement),
-      onResolveApproval: (card, approval, option, comment, decision) =>
-        void handleResolveApproval(card, approval, option, comment, decision),
-      onReply: handleReply,
-      onRetry: handleRetry,
+      onResolveApproval: (card, approval, optionIds, comment, decision) =>
+        void handleResolveApproval(card, approval, optionIds, comment, decision),
+      onReply: (card, text) => handleReply(card, text),
+      onRetry: handleRestart,
       onSessionClick: handleSessionClick,
     }),
     [
@@ -600,9 +741,10 @@ export function App() {
       handleEdit,
       handleMove,
       handleOpenDetail,
+      handleReopen,
       handleReply,
       handleResolveApproval,
-      handleRetry,
+      handleRestart,
       handleSessionClick,
       handleToggleExpanded,
     ],
@@ -611,22 +753,22 @@ export function App() {
   const shared = useMemo(
     () => ({
       now,
-      activitiesByCard,
       sessions,
       expandedIds,
       resolvingApprovalId,
       activeCardId,
+      feeds,
+      loadEarlier,
     }),
-    [now, activitiesByCard, sessions, expandedIds, resolvingApprovalId, activeCardId],
+    [now, sessions, expandedIds, resolvingApprovalId, activeCardId, feeds, loadEarlier],
   );
 
   const totalCards = snapshot.cards.filter((card) => !card.archived).length;
-  const runningCount = snapshot.cards.filter((card) => card.status === 'running' && !card.archived).length;
   const toggleLang = useCallback(() => setLang(lang === 'zh' ? 'en' : 'zh'), [lang, setLang]);
   const syncState: SyncState =
     bridgeState.mode === 'standalone'
       ? 'standalone'
-      : loadError
+      : loadError && snapshot.board
         ? 'reconnecting'
         : loading && !snapshot.board
           ? 'connecting'
@@ -640,13 +782,17 @@ export function App() {
           ? t('app.syncReconnecting')
           : t('app.syncConnected');
 
-  // 键盘快捷键：N 新建（输入类元素内不触发）
+  // 键盘快捷键：N 新建、B/L 切视图、/ 聚焦搜索（输入态不触发）
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
       const typing =
-        target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable);
       if (typing) return;
       const key = event.key.toLowerCase();
       if (key === 'n') {
@@ -667,7 +813,6 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [handleCreateCard, handleViewChange]);
 
-  // ------------------------------------------------------------------ 渲染
   const main = (() => {
     if (loading && !snapshot.board) return <SkeletonBoard />;
     if (loadError && !snapshot.board) {
@@ -687,14 +832,16 @@ export function App() {
     if (view === 'list') {
       return (
         <ListView
-          groups={groups}
           cards={filteredCards}
+          cardOrder={snapshot.board.cardOrder}
+          groupBy={listGroupBy}
+          onGroupByChange={setListGroupBy}
+          doneOpen={doneOpen}
+          onDoneOpenChange={setDoneOpen}
           shared={shared}
           actions={actions}
-          onCreateInColumn={(column) => {
-            setFormError(null);
-            setFormState({ mode: 'create', column });
-          }}
+          filtering={hasActiveFilters(filters)}
+          onClearFilters={() => setFilters({ query: '', project: null, label: null })}
         />
       );
     }
@@ -703,6 +850,7 @@ export function App() {
         board={snapshot.board}
         groups={groups}
         cards={filteredCards}
+        doneTotal={doneTotal}
         shared={shared}
         actions={actions}
         mobile={mobile}
@@ -713,6 +861,7 @@ export function App() {
           setFormState({ mode: 'create', column });
         }}
         onMoveWithPlacement={(cardId, column, placement) => void handleMove(cardId, column, placement)}
+        onViewAllDone={handleViewAllDone}
         filtering={hasActiveFilters(filters)}
         onClearFilters={() => setFilters({ query: '', project: null, label: null })}
       />
@@ -724,7 +873,9 @@ export function App() {
       <div className="kb-app-scope">
         <Toolbar
           boardName={snapshot.board?.name ?? t('app.boardFallback')}
-          cardCount={totalCards}
+          totalCards={totalCards}
+          needsYouCount={needsYouCount}
+          sessionsRunning={sessionsRunning}
           view={view}
           onViewChange={handleViewChange}
           filters={filters}
@@ -734,14 +885,16 @@ export function App() {
           lang={lang}
           onToggleLang={toggleLang}
           onNewCard={handleCreateCard}
-          onRefresh={() => void refresh()}
-          refreshing={refreshing}
           syncState={syncState}
-          runningCount={runningCount}
+          syncError={loadError && snapshot.board ? loadError.message : null}
+          onRetry={() => void refresh()}
         />
         <main className={`kb-main${loading ? ' kb-main--loading' : ''}`}>{main}</main>
         <footer className="kb-statusbar">
-          <span className={`kb-dot kb-dot--${syncState === 'connected' ? 'success' : syncState === 'reconnecting' ? 'warn' : syncState === 'connecting' ? 'business' : 'tertiary'}`} aria-hidden="true" />
+          <span
+            className={`kb-dot kb-dot--${syncState === 'connected' ? 'success' : syncState === 'reconnecting' ? 'warn' : syncState === 'connecting' ? 'business' : 'tertiary'}`}
+            aria-hidden="true"
+          />
           <span>{syncLabel}</span>
           <span className="kb-statusbar__spacer" />
           {bridgeState.mode === 'standalone' ? (
@@ -763,7 +916,8 @@ export function App() {
           <DetailDrawer
             card={activeCard}
             boardName={snapshot.board?.name ?? t('app.boardFallback')}
-            activities={activitiesByCard[activeCard.id]}
+            feed={feeds[activeCard.id]}
+            onLoadEarlier={() => loadEarlier(activeCard.id)}
             sessions={sessions}
             embedded={embedded}
             now={now}
@@ -771,9 +925,13 @@ export function App() {
             onClose={() => setActiveCardId(null)}
             actions={actions}
             onReply={handleReply}
+            onResolveApproval={(card, approval, optionIds, comment, decision, sessionId) =>
+              void handleResolveApproval(card, approval, optionIds, comment, decision, sessionId ?? undefined)
+            }
             onBindSession={(card, sessionId) => void handleBindSession(card, sessionId)}
             onUnbindSession={(card, sessionId) => void handleUnbindSession(card, sessionId)}
             onOpenSession={(sessionId) => void handleOpenSession(sessionId)}
+            onSetPrimary={(card, sessionId) => void handleSetPrimary(card, sessionId)}
             onCreateSession={(card) => void handleCreateSession(card)}
           />
         ) : null}
@@ -791,6 +949,16 @@ export function App() {
             onClose={() => {
               if (!formBusy) setFormState(null);
             }}
+          />
+        ) : null}
+
+        {approvalDraft ? (
+          <ApprovalDraftModal
+            card={approvalDraft.card}
+            busy={approvalDraft.busy}
+            error={approvalDraft.error}
+            onSubmit={(values) => void handleApprovalDraftSubmit(values)}
+            onCancel={() => void handleApprovalDraftCancel()}
           />
         ) : null}
 
@@ -815,9 +983,4 @@ export function App() {
       </div>
     </I18nContext.Provider>
   );
-}
-
-/** 供测试引用：看板是否应显示警示（blocked/failed 归入待你确认列）。 */
-export function shouldWarn(card: Card): boolean {
-  return isWarningStatus(card.status);
 }

@@ -12,6 +12,49 @@
   padding: 16px var(--kb-pad-x) 24px;
 }
 
+.kb-list__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+
+.kb-list__groupby-label {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-list__count {
+  margin-left: auto;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-list__group-toggle {
+  margin-left: auto;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kb-list__group--collapsed .kb-list__group-head {
+  border-radius: var(--kb-r-card);
+}
+
+.kb-list__more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.kb-list__chevron {
+  transition: transform var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-list__chevron--open {
+  transform: rotate(90deg);
+}
+
 .kb-list__group {
   flex: none;
   border: 0.5px solid var(--dsw-alias-border-l2);
@@ -211,6 +254,10 @@
 .kb-list__actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   flex-wrap: wrap;
+  width: fit-content;
+  min-width: 260px;
+  margin-left: auto;
 }

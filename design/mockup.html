@@ -200,7 +200,7 @@
     --kb-status-needs: var(--dsw-alias-state-warn-primary);
     --kb-status-needs-text: var(--dsw-alias-state-warn-label);
     --kb-status-done: var(--dsw-alias-state-success-primary);
-    --kb-status-blocked: var(--dsw-alias-state-warn-label);
+    --kb-status-blocked: var(--dsw-alias-state-error-primary);
     --kb-status-failed: var(--dsw-alias-state-error-primary);
     --kb-agent-active: var(--dsw-alias-state-business-primary);
     --kb-surface-column: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, var(--dsw-alias-bg-base));
@@ -1303,7 +1303,7 @@
   [data-layout="narrow"] .search input { font: var(--dsw-font-s-14); }
   [data-layout="narrow"] .filter-btn { height: 36px; }
   [data-layout="narrow"] .filter-chips, [data-layout="narrow"] .toolbar-spacer { display: none; }
-  [data-layout="narrow"] .agent-live { margin-left: auto; }
+  [data-layout="narrow"] .session-live { margin-left: auto; }
   [data-layout="narrow"] .col-tabs { display: flex; }
   [data-layout="narrow"] .board { display: flex; flex-direction: column; padding: 10px 12px 12px; gap: 0; overflow: hidden; }
   [data-layout="narrow"] .column { display: none; flex: 1; min-height: 0; }
@@ -1352,6 +1352,282 @@
   [data-layout="narrow"] .help-btn { display: none; }
   [data-layout="narrow"] .drawer .attr-grid { gap: 9px 12px; }
 
+
+  /* ============================================================ v2 增补 */
+  /* 顶部：看板名 + 未归档/待确认/会话运行中计数 */
+  .board-title { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+  .board-name { display: flex; align-items: center; gap: 8px; font: var(--dsw-font-s-strong-14); color: var(--dsw-alias-label-primary); white-space: nowrap; }
+  .board-meta-sep { width: 0.5px; height: 12px; background: var(--dsw-alias-border-l2); }
+  .board-metas { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .board-meta { display: inline-flex; align-items: center; gap: 4px; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); white-space: nowrap; }
+  .board-meta .dot { width: 6px; height: 6px; }
+  .board-meta strong { color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-strong-11); font-variant-numeric: tabular-nums; }
+  .board-meta + .board-meta::before { content: ""; width: 0.5px; height: 10px; margin-right: 4px; background: var(--dsw-alias-border-l2); }
+  .board-meta--warn { color: var(--kb-status-needs-text); }
+  .board-meta--live { color: var(--kb-status-running); }
+
+  .session-live { display: inline-flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); white-space: nowrap; }
+  .session-live .dot { color: var(--kb-agent-active); }
+  .session-live strong { color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-strong-11); }
+
+  .group-control { display: inline-flex; align-items: center; }
+  .group-select {
+    height: 32px;
+    padding: 0 8px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: 8px;
+    background: var(--dsw-specific-input-major);
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxs-strong-12);
+  }
+  .group-select:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+  .toolbar-new { height: 32px; }
+
+  .sync-error {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px var(--kb-pad-x);
+    border-bottom: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-error-primary) 24%, transparent);
+    background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 7%, var(--dsw-alias-bg-base));
+    color: var(--dsw-alias-state-error-primary);
+    font: var(--dsw-font-xxs-12);
+  }
+  .sync-error-icon { display: inline-flex; flex: none; }
+  .sync-error-icon .ic { width: 14px; height: 14px; }
+  .sync-error-text { flex: 1; min-width: 0; color: var(--dsw-alias-label-secondary); }
+  .sync-error .btn { height: 26px; padding: 0 10px; flex: none; }
+  .sync-error .icon-btn { width: 24px; height: 24px; flex: none; }
+
+  /* 审批：所有选项 + 说明 + 备注（单选 / 多选） */
+  .decision-title { flex: 1; min-width: 0; font: var(--dsw-font-xxs-strong-12); }
+  .decision-meta { margin: -4px 0 0 19px; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+  .decision-options { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
+  .opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    padding: 6px 8px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: 8px;
+    background: var(--dsw-alias-bg-layer-1);
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xxs-12);
+    cursor: pointer;
+  }
+  .opt:hover { background: var(--dsw-alias-interactive-bg-hover); }
+  .opt input { width: 13px; height: 13px; margin: 3px 0 0; flex: none; accent-color: var(--dsw-alias-state-business-primary); }
+  .opt-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .opt-label { font: var(--dsw-font-xxs-strong-12); }
+  .opt-desc { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+  .opt.is-selected {
+    border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 42%, var(--dsw-alias-border-l2));
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 5%, var(--dsw-alias-bg-layer-1));
+  }
+  .opt[data-tone="danger"] .opt-label { color: var(--dsw-alias-state-error-primary); }
+  .decision-hint { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+  .approval-note {
+    width: 100%;
+    height: 30px;
+    padding: 0 8px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: 7px;
+    background: var(--dsw-alias-bg-layer-1);
+    color: var(--dsw-alias-label-primary);
+    font: var(--dsw-font-xxs-12);
+  }
+  .approval-note:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 1px; }
+
+  /* 已完成折叠 / 时间线加载更早 */
+  .column-more { display: flex; justify-content: center; flex: none; padding: 4px 10px 0; }
+  .column-more .btn { height: 26px; color: var(--dsw-alias-link); font: var(--dsw-font-xxxs-strong-11); }
+  .timeline-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    align-self: flex-start;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--dsw-alias-link);
+    font: var(--dsw-font-xxxs-strong-11);
+    cursor: pointer;
+  }
+  .timeline-more:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .card-expanded { max-height: 360px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+  .list-expanded { max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
+
+  /* 紧凑媒体行：缩略图 + 数量 + 在会话中查看 */
+  .media-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 7px;
+    border: 0.5px solid var(--dsw-alias-border-l1);
+    border-radius: 8px;
+    background: var(--dsw-alias-markdown-code-block);
+    min-width: 0;
+  }
+  .media-thumbs { display: flex; gap: 3px; flex: none; }
+  .media-thumb {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+    color: var(--dsw-alias-label-tertiary);
+  }
+  .media-thumb .ic { width: 13px; height: 13px; }
+  .media-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .media-title { color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-strong-11); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .media-sub { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+  .media-link { flex: none; padding: 0; border: 0; background: none; color: var(--dsw-alias-link); font: var(--dsw-font-xxxs-strong-11); cursor: pointer; white-space: nowrap; }
+  .media-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  /* 多会话选择器 */
+  .session-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+  .session-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: 8px;
+    background: var(--dsw-alias-bg-layer-1);
+    min-width: 0;
+  }
+  .session-row.is-primary { border-color: var(--dsw-alias-border-l3); }
+  .session-row .ic { width: 14px; height: 14px; color: var(--dsw-alias-label-tertiary); flex: none; }
+  .session-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .session-name { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--dsw-alias-label-primary); font: var(--dsw-font-xxs-strong-12); }
+  .session-name .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-id { color: var(--dsw-alias-label-caption); font: var(--dsw-font-markdown-code-block-small); }
+  .session-meta { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+  .session-badge {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 17px;
+    padding: 0 5px;
+    border-radius: 5px;
+    background: var(--dsw-alias-state-business-tertiary);
+    color: var(--dsw-alias-state-business-primary);
+    font: var(--dsw-font-xxxs-strong-11);
+  }
+  .session-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+  .session-actions .btn { height: 24px; padding: 0 6px; font: var(--dsw-font-xxxs-strong-11); }
+  .reply-target { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+  .reply-target select {
+    height: 26px;
+    max-width: 190px;
+    padding: 0 4px;
+    border: 0.5px solid var(--dsw-alias-border-l2);
+    border-radius: 6px;
+    background: var(--dsw-specific-input-major);
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxxs-11);
+  }
+  .composer-hint { margin-top: 4px; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+
+  /* 列表：动作区固定宽度、右对齐；窄屏换行左对齐 */
+  .row-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+  .row-actions .btn { width: 64px; height: 26px; padding: 0; font: var(--dsw-font-xxxs-strong-11); }
+  .row-actions .btn--retry { width: 64px; }
+  .list-done-fold {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-top: 0.5px solid var(--dsw-alias-border-l1);
+    background: transparent;
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxs-12);
+    text-align: left;
+    cursor: pointer;
+  }
+  .list-done-fold:hover { background: var(--dsw-alias-interactive-bg-hover); }
+  .list-done-fold span { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+  .list-more { display: flex; justify-content: center; padding: 8px; border-top: 0.5px solid var(--dsw-alias-border-l1); }
+  .list-more .btn { height: 28px; color: var(--dsw-alias-link); font: var(--dsw-font-xxxs-strong-11); }
+
+  /* 新建卡片：项目 / 标签 / 执行上下文说明 */
+  .form-explain {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--dsw-alias-bg-module-platform);
+    color: var(--dsw-alias-label-secondary);
+    font: var(--dsw-font-xxxs-11);
+  }
+  .form-explain strong { color: var(--dsw-alias-label-primary); font: var(--dsw-font-xxxs-strong-11); }
+  .form-explain code { font: var(--dsw-font-markdown-code-block-small); color: var(--dsw-alias-label-secondary); }
+  .form-inherit { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+  .form-inherit .ic { width: 12px; height: 12px; }
+
+  /* 脏草稿二次确认 */
+  .confirm-backdrop { position: absolute; inset: 0; background: var(--dsw-alias-bg-mask-2); -webkit-backdrop-filter: var(--dsw-mask-blur); backdrop-filter: var(--dsw-mask-blur); }
+  .confirm-layer { position: fixed; inset: 0; z-index: 85; display: grid; place-items: center; padding: 16px; }
+  .confirm-modal {
+    position: relative;
+    width: min(420px, 100%);
+    padding: 18px 20px 16px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--dsw-alias-bg-layer-1);
+    box-shadow: var(--dsw-elevation-prominent);
+  }
+  .confirm-title { color: var(--dsw-alias-label-primary); font: var(--dsw-font-base-strong-16); }
+  .confirm-desc { margin-top: 6px; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); }
+  .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  /* 审批编辑器 */
+  .option-editor { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .option-editor-row { display: flex; align-items: center; gap: 8px; }
+  .option-editor-row .tag { flex: none; }
+
+  .tl-src {
+    display: inline-flex;
+    align-items: center;
+    height: 15px;
+    margin-left: 5px;
+    padding: 0 4px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+    color: var(--dsw-alias-label-caption);
+    font: var(--dsw-font-xxxs-11);
+    vertical-align: 1px;
+    white-space: nowrap;
+  }
+  .muted { color: var(--dsw-alias-label-tertiary); }
+
+  /* ===== v2 响应式增补 ===== */
+  [data-layout="narrow"] .board-title { flex: 1; min-width: 0; }
+  [data-layout="narrow"] .board-metas { gap: 6px; }
+  [data-layout="narrow"] .board-meta { font: var(--dsw-font-xxxs-11); }
+  [data-layout="narrow"] .session-live { display: none; }
+  [data-layout="narrow"] .group-select { height: 36px; }
+  [data-layout="narrow"] .toolbar-new { height: 40px; padding: 0 12px; }
+  [data-layout="narrow"] .sync-error { flex-wrap: wrap; padding: 8px 12px; }
+  [data-layout="narrow"] .sync-error-text { flex: 1 1 100%; order: 3; }
+  [data-layout="narrow"] .card-expanded { max-height: 46dvh; }
+  [data-layout="narrow"] .list-expanded { max-height: 46dvh; }
+  [data-layout="narrow"] .row-actions { width: 100%; justify-content: flex-start; margin-top: 4px; }
+  [data-layout="narrow"] .row-actions .btn { width: 72px; height: 32px; }
+  [data-layout="narrow"] .session-row { flex-wrap: wrap; }
+  [data-layout="narrow"] .session-actions { width: 100%; justify-content: flex-end; }
+  [data-layout="compact"] .row-actions .btn { width: 56px; }
+  [data-layout="scroll"] .row-actions .btn { width: 56px; }
+  [data-layout="narrow"] .confirm-modal { width: 100%; border-radius: 16px; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
@@ -1379,12 +1655,10 @@
 
   <main class="main" id="main">
     <header class="topbar">
-      <nav class="crumbs" aria-label="面包屑">
-        <span class="crumb">Agents</span>
-        <span class="crumb-sep" aria-hidden="true">/</span>
-        <h1 class="crumb-current">看板</h1>
-        <span class="crumb-tag">11 张卡片</span>
-      </nav>
+      <div class="board-title">
+        <h1 class="board-name"><span id="boardName">看板</span><span class="board-meta-sep" aria-hidden="true"></span></h1>
+        <div class="board-metas" id="boardMetas" aria-label="看板概览"></div>
+      </div>
       <div class="topbar-actions">
         <div class="seg" role="tablist" aria-label="视图切换">
           <button type="button" class="seg-btn is-active" id="viewBoard" role="tab" aria-selected="true" data-action="view" data-view="board" aria-label="看板视图">
@@ -1398,10 +1672,6 @@
         </div>
         <button type="button" class="icon-btn" id="themeBtn" data-action="theme" aria-label="切换明暗主题" title="切换明暗主题（T）"></button>
         <button type="button" class="icon-btn help-btn" id="helpBtn" data-action="help" aria-label="键盘快捷键与帮助" title="快捷键（?）"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.5 2.2c-.7.3-1.1.9-1.1 1.7"/><circle cx="12" cy="17" r=".7" fill="currentColor" stroke="none"/></svg></button>
-        <button type="button" class="btn btn-primary new-btn" data-action="new-card" aria-label="新建卡片">
-          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-          <span class="btn-text">新建卡片</span>
-        </button>
       </div>
     </header>
 
@@ -1420,9 +1690,28 @@
       </button>
       <div class="filter-chips" id="filterChips" aria-label="当前筛选条件"></div>
       <div class="toolbar-spacer"></div>
-      <span class="agent-live" id="agentLive"></span>
-      <button type="button" class="icon-btn" id="simBtn" data-action="simulate" aria-label="模拟 Agent 自主推进（演示）" title="模拟 Agent 自主推进"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg></button>
-      <button type="button" class="icon-btn" id="refreshBtn" data-action="refresh" aria-label="刷新看板" title="刷新（演示加载态）"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></svg></button>
+      <span class="session-live" id="sessionLive"></span>
+      <label class="group-control" id="groupControl" hidden>
+        <span class="sr-only">列表分组方式</span>
+        <select class="group-select" id="groupSelect">
+          <option value="status">按状态分组</option>
+          <option value="project">按项目分组</option>
+          <option value="priority">按优先级分组</option>
+        </select>
+      </label>
+      <button type="button" class="btn btn-primary toolbar-new" id="listNewBtn" data-action="new-card" hidden>
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        <span class="btn-text">新建卡片</span>
+      </button>
+    </div>
+
+    <div class="sync-error" id="syncError" role="alert" hidden>
+      <span class="sync-error-icon" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 3.5 19h17L12 4Z"/><path d="M12 9v4.5"/><circle cx="12" cy="16.6" r=".7" fill="currentColor" stroke="none"/></svg></span>
+      <span class="sync-error-text" id="syncErrorText">实时同步中断，看板可能不是最新；会话中的修改会在恢复后补上。</span>
+      <button type="button" class="btn btn-secondary btn-sm" data-action="retry-sync">重试</button>
+      <button type="button" class="icon-btn" data-action="dismiss-sync-error" aria-label="忽略实时同步错误">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
     </div>
 
     <div class="col-tabs" id="colTabs" role="tablist" aria-label="看板列切换"></div>
@@ -1434,9 +1723,9 @@
 
     <footer class="statusbar">
       <span class="dot" data-state="done" aria-hidden="true"></span>
-      <span id="syncStatus">DSH 会话已连接 · Agent 状态同步中</span>
+      <span id="syncStatus">SSE 实时同步 · 最后更新刚刚</span>
       <span class="statusbar-spacer"></span>
-      <span class="statusbar-mock" id="mockNote">演示数据 · 设计稿 v1</span>
+      <span class="statusbar-mock" id="mockNote">演示数据 · 设计稿 v2</span>
       <span aria-hidden="true">·</span>
       <span><span class="kbd">⌘K</span> 搜索</span>
       <span><span class="kbd">N</span> 新建</span>
@@ -1449,6 +1738,10 @@
   <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" hidden></aside>
   <div id="popoverLayer"></div>
   <div class="modal-layer" id="modalLayer" hidden></div>
+  <div class="confirm-layer" id="confirmLayer" hidden>
+    <div class="confirm-backdrop" data-action="confirm-cancel"></div>
+    <div class="confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmDesc" id="confirmModal"></div>
+  </div>
   <div class="toast-layer" id="toastLayer" role="status" aria-live="polite"></div>
   <div class="sr-only" id="live" role="status" aria-live="polite"></div>
 </div>
@@ -1492,7 +1785,14 @@
     copy: '<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
     arrowRight: '<path d="M4 12h16M14 6l6 6-6 6"/>',
     refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
-    redo: '<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v5h5"/>'
+    redo: '<path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v5h5"/>',
+    info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><circle cx="12" cy="8" r=".8" fill="currentColor" stroke="none"/>',
+    image: '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m5 17 4.5-4 3 2.5L16 11l3 3"/>',
+    file: '<path d="M6 3.5h7l5 5V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M13 3.5V9h5"/>',
+    video: '<rect x="3.5" y="6" width="12" height="12" rx="2"/><path d="m15.5 10 4-2.5v9l-4-2.5"/>',
+    report: '<path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M9 12h6M9 16h6M9 8h2"/>',
+    archive: '<path d="M4 7h16v3H4z"/><path d="M5.5 10v9a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-9"/><path d="M10 14h4"/>',
+    session: '<rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M7.5 9h6M7.5 13h9"/>'
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -1508,7 +1808,7 @@
   const STATUS = {
     todo: { label: '待办', tone: 'backlog', dot: 'idle' },
     running: { label: '进行中', tone: 'running', dot: 'ongoing' },
-    blocked: { label: '受阻', tone: 'blocked', dot: 'warning' },
+    blocked: { label: '受阻', tone: 'failed', dot: 'error' },
     needs: { label: '待你确认', tone: 'needs', dot: 'warning' },
     done: { label: '已完成', tone: 'done', dot: 'done' },
     failed: { label: '失败', tone: 'failed', dot: 'error' }
@@ -1518,23 +1818,28 @@
   const FIXED = { view: 'board', theme: 'light', layout: 'wide' };
 
   /* ------------------------------------------------------------------ data */
+  /* 术语：运行中的实体是「会话」；Agent 只作为时间线 actor / 会话内的发言者。
+     审批结构对齐 DSH user-questions / kanban_request_approval：
+     { title, detail, multiSelect, options:[{id,label,description,tone,outcome}] } */
   const cards = [
     {
       id: 'c-101', col: 'backlog', title: '补齐筛选结果的空态文案', status: 'todo', priority: 'P2', project: '插件市场', tags: ['前端', '空态'],
       summary: '把四个筛选条件合并成一个查询，并补上「无结果」时的引导文案。',
-      action: '等待 Agent 领取', tools: 0, searches: 0, elapsed: '—', updated: '12 分钟前', agent: 'K2.5', session: 'dsh-4b1c',
+      action: '等待会话领取', tools: 0, searches: 0, elapsed: '—', updated: '12 分钟前', agent: 'K2.5',
+      session: 'dsh-4b1c', workspace: '插件市场', cwd: '/Users/roxor/Desktop/dsh/plugin-market',
       nodes: [
         { ago: '12 分钟前', text: '由你在看板创建卡片', state: 'done' },
-        { ago: '—', text: '等待 Agent 领取', state: 'pending' }
+        { ago: '—', text: '等待会话领取', state: 'pending' }
       ],
-      thread: [{ from: 'agent', text: '收到。领取后我会先跑一遍现有筛选用例，再补空态。', time: '11 分钟前' }]
+      thread: [{ from: 'agent', text: '收到。领取后我会先跑一遍现有筛选用例，再补空态。', time: '11 分钟前', sessionId: 'dsh-4b1c' }]
     },
     {
       id: 'c-102', col: 'backlog', title: '评审 Prompt 缓存方案', status: 'todo', priority: 'P1', project: '内核', tags: ['架构'],
       summary: '对比本地 LRU 与会话级缓存，给出取舍建议和迁移成本估算。',
-      action: '排队中 · 预计 2 分钟后开始', tools: 0, searches: 1, elapsed: '0m 00s', updated: '8 分钟前', agent: 'Opus 5.5', session: 'dsh-7f3a',
+      action: '排队中 · 预计 2 分钟后开始', tools: 0, searches: 1, elapsed: '0m 00s', updated: '8 分钟前', agent: 'Opus 5.5',
+      session: 'dsh-7f3a', workspace: '内核', cwd: '/Users/roxor/Desktop/dsh/core',
       nodes: [
-        { ago: '8 分钟前', text: 'Agent 读取需求与相关代码', state: 'done' },
+        { ago: '8 分钟前', text: '读取需求与相关代码', state: 'done' },
         { ago: '—', text: '等待上一个任务释放并发槽位', state: 'pending' }
       ],
       thread: []
@@ -1542,9 +1847,10 @@
     {
       id: 'c-103', col: 'backlog', title: '拆分看板卡片的属性组件', status: 'todo', priority: 'P2', project: '看板', tags: ['重构', '组件'],
       summary: '把状态、耗时与工具调用拆成可复用的属性行，减少卡片重复渲染。',
-      action: '等待领取 · 依赖 #482', tools: 0, searches: 0, elapsed: '—', updated: '20 分钟前', agent: '待分配', session: 'dsh-11a0',
+      action: '等待领取 · 依赖 #482', tools: 0, searches: 0, elapsed: '—', updated: '20 分钟前', agent: '待分配',
+      session: 'dsh-11a0', workspace: '看板', cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
       nodes: [
-        { ago: '20 分钟前', text: '由 Agent 从评审结论拆出任务卡', state: 'done' },
+        { ago: '20 分钟前', text: '由评审结论拆出任务卡', state: 'done' },
         { ago: '—', text: '等待领取（依赖 #482 合入）', state: 'pending' }
       ],
       thread: []
@@ -1552,104 +1858,232 @@
     {
       id: 'c-201', col: 'running', title: '重写任务卡片的拖拽排序', status: 'running', priority: 'P1', project: '看板', tags: ['交互', '拖拽'],
       summary: '用 pointer events 统一鼠标与触屏，保留键盘方向键移动。',
-      action: '正在修改 board-drag.ts', tools: 12, searches: 3, elapsed: '6m 48s', updated: '刚刚', agent: 'Opus 5.5', session: 'dsh-7f3a',
-      nodes: [
-        { ago: '6 分钟前', text: '读取拖拽相关代码与现有测试', state: 'done' },
-        { ago: '4 分钟前', text: '替换 HTML5 drag 为 pointer events', state: 'done' },
-        { ago: '2 分钟前', text: '补键盘移动的单测（Alt + 方向键）', state: 'done' },
-        { ago: '刚刚', text: '正在跑交互回归用例', state: 'current' }
+      action: '正在修回归失败的 2 条用例', tools: 12, searches: 3, elapsed: '6m 48s', updated: '刚刚', agent: 'Opus 5.5',
+      session: 'dsh-7f3a', workspace: '看板', cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
+      sessions: [
+        { id: 'dsh-7f3a', title: '拖拽排序重构', running: true, primary: true },
+        { id: 'dsh-9d02', title: '交互回归用例', running: true, primary: false }
       ],
-      thread: [{ from: 'agent', text: '触屏长按会与看板滚动冲突，我改成 260ms 长按阈值，仍在验证。', time: '3 分钟前' }]
+      media: { images: 6, videos: 1, files: 1, title: '拖拽回归截图与录屏' },
+      nodes: [
+        { ago: '12 分钟前', text: '读取拖拽相关代码与现有测试', state: 'done', source: 'session' },
+        { ago: '10 分钟前', text: '替换 HTML5 drag 为 pointer events', state: 'done', source: 'session' },
+        { ago: '7 分钟前', text: '补键盘移动的单测（Alt + 方向键）', state: 'done', source: 'session' },
+        { ago: '4 分钟前', text: '编写触屏长按与滚动冲突的处理', state: 'done', source: 'session' },
+        { ago: '2 分钟前', text: '跑交互回归用例，2 条失败', state: 'done', source: 'session' },
+        { ago: '刚刚', text: '正在修回归失败的 2 条用例', state: 'current', source: 'session' }
+      ],
+      thread: [
+        { from: 'agent', text: '触屏长按会与看板滚动冲突，我改成 260ms 长按阈值，仍在验证。', time: '3 分钟前', sessionId: 'dsh-7f3a' },
+        { from: 'agent', text: '回归里 2 条拖拽落点断言失败，正在对齐新的插入索引。', time: '1 分钟前', sessionId: 'dsh-9d02' }
+      ]
     },
     {
       id: 'c-202', col: 'running', title: '汇总本周三次评审的结论', status: 'running', priority: 'P2', project: '运营', tags: ['数据', '周报'],
       summary: '从三个项目的会话里抽取决策点，写入 docs/weekly.md。',
-      action: '正在读取第 2/3 个会话', tools: 17, searches: 9, elapsed: '4m 12s', updated: '1 分钟前', agent: 'K2.5', session: 'dsh-2c9e',
+      action: '正在读取第 3/3 个会话', tools: 17, searches: 9, elapsed: '4m 12s', updated: '1 分钟前', agent: 'K2.5',
+      session: 'dsh-2c9e', workspace: '运营', cwd: '/Users/roxor/Desktop/dsh/ops',
       nodes: [
-        { ago: '4 分钟前', text: '扫描 12 个 DSH 会话', state: 'done' },
-        { ago: '2 分钟前', text: '抽取 36 条决策点', state: 'done' },
-        { ago: '刚刚', text: '读取第 2/3 个项目的补充材料', state: 'current' }
+        { ago: '4 分钟前', text: '扫描 12 个 DSH 会话', state: 'done', source: 'session' },
+        { ago: '3 分钟前', text: '抽取 36 条决策点', state: 'done', source: 'session' },
+        { ago: '2 分钟前', text: '读取第 1/3 个项目的补充材料', state: 'done', source: 'session' },
+        { ago: '1 分钟前', text: '读取第 2/3 个项目的补充材料', state: 'done', source: 'session' },
+        { ago: '刚刚', text: '正在读取第 3/3 个项目的补充材料', state: 'current', source: 'session' }
       ],
       thread: []
     },
     {
-      id: 'c-203', col: 'running', title: '修复暗色模式下卡片描边发亮', status: 'blocked', priority: 'P1', project: '插件市场', tags: ['bug', '主题'],
+      id: 'c-203', col: 'needs', title: '修复暗色模式下卡片描边发亮', status: 'blocked', priority: 'P1', project: '插件市场', tags: ['bug', '主题'],
       summary: '卡片发丝线在暗色下叠加了两次，定位到主题层的 l3 令牌。',
-      action: '受阻：等待 ui-theme 修复 l3 令牌', tools: 6, searches: 2, elapsed: '12m 05s', updated: '6 分钟前', agent: 'Opus 5.5', session: 'dsh-96b2',
+      action: '受阻：等待 ui-theme 修复 l3 令牌', tools: 6, searches: 2, elapsed: '12m 05s', updated: '6 分钟前', agent: 'Opus 5.5',
+      session: 'dsh-96b2', workspace: '插件市场', cwd: '/Users/roxor/Desktop/dsh/plugin-market',
       nodes: [
-        { ago: '11 分钟前', text: '复现暗色下描边发亮的问题', state: 'done' },
-        { ago: '8 分钟前', text: '定位到 elevation 阴影第一层 + border 叠加', state: 'done' },
-        { ago: '6 分钟前', text: '阻塞：需要 ui-theme 提供 l3 令牌修复', state: 'error', detail: '已在 DSH 会话中向主题维护者提问' }
+        { ago: '11 分钟前', text: '复现暗色下描边发亮的问题', state: 'done', source: 'session' },
+        { ago: '8 分钟前', text: '定位到 elevation 阴影第一层 + border 叠加', state: 'done', source: 'session' },
+        { ago: '6 分钟前', text: '阻塞：需要 ui-theme 提供 l3 令牌修复', state: 'error', detail: '已向主题维护者提问，等待回复', source: 'session' }
       ],
-      thread: [{ from: 'agent', text: '按规范浮层不能同时写 border 和 elevation；但卡片不是浮层，需要主题侧确认。', time: '6 分钟前' }]
+      thread: [{ from: 'agent', text: '按规范浮层不能同时写 border 和 elevation；但卡片不是浮层，需要主题侧确认。', time: '6 分钟前', sessionId: 'dsh-96b2' }]
     },
     {
       id: 'c-301', col: 'needs', title: '在生产库执行迁移 0042_split_users', status: 'needs', priority: 'P0', project: '内核', tags: ['迁移', '高风险'],
       summary: '已在 staging 跑通，涉及 3 张表、约 12 万行；等待你授权后在生产执行。',
-      action: '等待你授权 · 生产变更', tools: 14, searches: 9, elapsed: '6m 48s', updated: '1 分钟前', agent: 'Opus 5.5', session: 'dsh-7f3a',
-      approval: { question: '授权在生产库执行 3 条 DDL，预计锁表 40 秒？', risk: '不可逆迁移 · 已生成回滚脚本 0042_down.sql' },
-      nodes: [
-        { ago: '6 分钟前', text: '读取 schema 与 14 个迁移文件', state: 'done' },
-        { ago: '4 分钟前', text: '写入迁移 0042_split_users', state: 'done' },
-        { ago: '2 分钟前', text: '在 staging 演练通过，无报错', state: 'done' },
-        { ago: '1 分钟前', text: '等待你批准后在 production 执行', state: 'current' }
+      action: '等待你授权 · 生产变更', tools: 14, searches: 9, elapsed: '6m 48s', updated: '1 分钟前', agent: 'Opus 5.5',
+      session: 'dsh-7f3a', workspace: '内核', cwd: '/srv/dsh/core',
+      sessions: [
+        { id: 'dsh-7f3a', title: '迁移 0042 设计与演练', running: true, primary: true },
+        { id: 'dsh-2c9e', title: '发布窗口协调', running: false, primary: false }
       ],
-      thread: [{ from: 'agent', text: '迁移脚本已写好并在 staging 跑通。请确认是否在生产执行；批准后我会立刻开始，并在完成时回到看板汇报。', time: '1 分钟前' }]
+      media: { images: 0, videos: 0, files: 2, reports: 1, title: '迁移报告与回滚脚本' },
+      approval: {
+        title: '需要你确认：在生产库执行迁移 0042_split_users？',
+        detail: '3 条 DDL，锁表约 40 秒；已生成回滚脚本 0042_down.sql。批准后会话继续执行，驳回则卡片回到待办。',
+        multiSelect: false,
+        options: [
+          { id: 'yes', label: '继续执行', description: '在 production 执行 3 条 DDL；完成后回写结果。', tone: 'primary', outcome: 'running' },
+          { id: 'no', label: '停止，先补充演练', description: '不执行；卡片回到待办，等待新的方案。', tone: 'danger', outcome: 'backlog' }
+        ]
+      },
+      nodes: [
+        { ago: '9 分钟前', text: '读取 schema 与 14 个迁移文件', state: 'done', source: 'session' },
+        { ago: '7 分钟前', text: '写入迁移 0042_split_users', state: 'done', source: 'session' },
+        { ago: '5 分钟前', text: '在 staging 演练通过，无报错', state: 'done', source: 'session' },
+        { ago: '4 分钟前', text: '生成回滚脚本 0042_down.sql', state: 'done', source: 'session' },
+        { ago: '3 分钟前', text: '检查生产库锁与连接数', state: 'done', source: 'session' },
+        { ago: '1 分钟前', text: '请求人工授权：在生产执行 DDL', state: 'done', source: 'session' },
+        { ago: '刚刚', text: '等待你批准后在 production 执行', state: 'current', source: 'session' }
+      ],
+      thread: [
+        { from: 'agent', text: '迁移脚本已写好并在 staging 跑通。请确认是否在生产执行；批准后我会立刻开始，并在完成时回到看板汇报。', time: '1 分钟前', sessionId: 'dsh-7f3a' },
+        { from: 'agent', text: '发布窗口协调会话已确认 14:30–14:45 可执行。', time: '2 分钟前', sessionId: 'dsh-2c9e' }
+      ]
     },
     {
       id: 'c-302', col: 'needs', title: '确认新版欢迎语的措辞', status: 'needs', priority: 'P2', project: '文档', tags: ['文案'],
       summary: '给出三个版本，我建议 B；确认后批量替换 6 处文案。',
-      action: '等待你选择方案 B', tools: 5, searches: 2, elapsed: '3m 10s', updated: '3 分钟前', agent: 'K2.5', session: 'dsh-5e18',
-      approval: { question: '采用方案 B「先给结果，再给选项」，替换 6 处文案？', risk: '仅改文档文案，可随时回滚' },
+      action: '等待你选择方案', tools: 5, searches: 2, elapsed: '3m 10s', updated: '3 分钟前', agent: 'K2.5',
+      session: 'dsh-5e18', workspace: '文档', cwd: '/Users/roxor/Desktop/dsh/docs',
+      approval: {
+        title: '需要你确认：新版欢迎语采用哪个版本？',
+        detail: '三个版本均已写入文档草稿；确认后批量替换 6 处文案。仅改文案，可随时回滚。',
+        multiSelect: false,
+        options: [
+          { id: 'a', label: '方案 A · 更正式', description: '「欢迎使用 DeepSeek Harness，请选择你要开始的方式。」', tone: 'ghost' },
+          { id: 'b', label: '方案 B · 先给结果（推荐）', description: '「告诉我目标，我先做一版给你看。」更短、动作更明确。', tone: 'primary' },
+          { id: 'c', label: '方案 C · 更口语', description: '「先说说你想做什么，我直接开干。」', tone: 'ghost' }
+        ]
+      },
       nodes: [
-        { ago: '3 分钟前', text: '整理三个候选版本与差异', state: 'done' },
-        { ago: '2 分钟前', text: '在 6 处文档中标注替换点', state: 'done' },
-        { ago: '刚刚', text: '等待你确认方案 B', state: 'current' }
+        { ago: '4 分钟前', text: '整理三个候选版本与差异', state: 'done', source: 'session' },
+        { ago: '3 分钟前', text: '在 6 处文档中标注替换点', state: 'done', source: 'session' },
+        { ago: '2 分钟前', text: '把三个版本写入会话便于对比', state: 'done', source: 'session' },
+        { ago: '刚刚', text: '等待你确认版本', state: 'current', source: 'session' }
       ],
-      thread: [{ from: 'agent', text: 'A 更正式、B 更直接、C 更口语。我建议 B，已把 6 处替换点列在会话里。', time: '2 分钟前' }]
+      thread: [{ from: 'agent', text: 'A 更正式、B 更直接、C 更口语。我建议 B，已把 6 处替换点列在会话里。', time: '2 分钟前', sessionId: 'dsh-5e18' }]
     },
     {
-      id: 'c-303', col: 'needs', title: '讨论：看板要不要单开「受阻」列', status: 'needs', priority: 'P2', project: '看板', tags: ['设计', '讨论'],
-      summary: '我倾向不单开列，把受阻做成卡片状态；想听你的判断。',
-      action: '等待你参与讨论', tools: 3, searches: 4, elapsed: '2m 05s', updated: '2 分钟前', agent: 'Opus 5.5', session: 'dsh-7f3a',
+      id: 'c-303', col: 'needs', title: '确认受阻/失败在列上的表达', status: 'needs', priority: 'P2', project: '看板', tags: ['设计', '讨论'],
+      summary: '你已拍板不单开列；请确认卡片状态的具体表达与颜色。',
+      action: '等待你确认状态表达', tools: 3, searches: 4, elapsed: '2m 05s', updated: '2 分钟前', agent: 'Opus 5.5',
+      session: 'dsh-7f3a', workspace: '看板', cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
+      approval: {
+        title: '需要你确认：受阻/失败在 4 列里的表达方式？',
+        detail: '已拍板保持 4 列、归入「待你确认」并在卡片上呈现受阻/失败状态。这里确认视觉与文案，不再改列结构。',
+        multiSelect: false,
+        options: [
+          { id: 'status', label: '保持现状：卡片状态 + 一行原因（推荐）', description: '受阻/失败在「待你确认」列内用状态点与原因文案表达，列数不变。', tone: 'primary' },
+          { id: 'badge', label: '改为独立的失败标记', description: '在卡片右上角增加红色失败标记，但仍在 4 列内。', tone: 'ghost' }
+        ]
+      },
       nodes: [
-        { ago: '2 分钟前', text: '对比 3 个看板产品的受阻表达', state: 'done' },
-        { ago: '1 分钟前', text: '给出「状态而非列」的建议', state: 'done' },
-        { ago: '刚刚', text: '等待你回复后继续细化方案', state: 'current' }
+        { ago: '3 分钟前', text: '对比 3 个看板产品的受阻表达', state: 'done', source: 'session' },
+        { ago: '2 分钟前', text: '记录拍板结论：保持 4 列', state: 'done' },
+        { ago: '刚刚', text: '等待你确认状态表达', state: 'current', source: 'session' }
       ],
-      thread: [{ from: 'agent', text: '单开一列会让 4 列变成 5 列，横屏更挤；受阻本质是 running 的子状态。我建议用橙点 + 一行原因，等你拍板。', time: '1 分钟前' }]
+      thread: [{ from: 'agent', text: '列结构已定：4 列。接下来只确认状态文案与颜色，我建议保持现状。', time: '1 分钟前', sessionId: 'dsh-7f3a' }]
+    },
+    {
+      id: 'c-304', col: 'needs', title: '选择要同步的发布渠道', status: 'needs', priority: 'P1', project: '运维', tags: ['发布', '多渠道'],
+      summary: 'v0.2 已构建完成，请选择要同时同步的渠道（可多选）。',
+      action: '等待你选择同步渠道', tools: 7, searches: 2, elapsed: '1m 40s', updated: '刚刚', agent: 'K2.5',
+      session: 'dsh-2c9e', workspace: '运维', cwd: '/Users/roxor/Desktop/dsh/ops',
+      approval: {
+        title: '需要你确认：v0.2 同步到哪些发布渠道？',
+        detail: '可多选，至少选择 1 个渠道。选择后会并行发布，失败会在会话里回写。',
+        multiSelect: true,
+        options: [
+          { id: 'metrics', label: '同步到 #metrics', description: '发布结果与变化摘要。', tone: 'primary' },
+          { id: 'weekly', label: '同步到周报文档', description: '把结果追加到本周的周报草稿。', tone: 'ghost' },
+          { id: 'team', label: '同步给项目组', description: '在项目组会话中 @ 相关成员。', tone: 'ghost' }
+        ]
+      },
+      nodes: [
+        { ago: '2 分钟前', text: '构建 v0.2 并生成变更摘要', state: 'done', source: 'session' },
+        { ago: '1 分钟前', text: '检查三个渠道的发送权限', state: 'done', source: 'session' },
+        { ago: '刚刚', text: '等待你选择发布渠道', state: 'current', source: 'session' }
+      ],
+      thread: [{ from: 'agent', text: '三个渠道都可用，可以多选。我建议至少同步 #metrics 和周报。', time: '刚刚', sessionId: 'dsh-2c9e' }]
     },
     {
       id: 'c-401', col: 'done', title: '周报数字汇总', status: 'done', priority: 'P2', project: '运营', tags: ['数据'],
       summary: '从 3 个数据源取数并发布到 #metrics，附上口径说明。',
-      action: '已完成 · 结果已发布', tools: 8, searches: 3, elapsed: '4m 12s', updated: '22 分钟前', agent: 'K2.5', session: 'dsh-2c9e',
+      action: '已完成 · 结果已发布', tools: 8, searches: 3, elapsed: '4m 12s', updated: '22 分钟前', agent: 'K2.5',
+      session: 'dsh-2c9e', workspace: '运营', cwd: '/Users/roxor/Desktop/dsh/ops',
       nodes: [
-        { ago: '24 分钟前', text: '读取 3 个数据源', state: 'done' },
-        { ago: '22 分钟前', text: '生成摘要并发布到 #metrics', state: 'done' },
-        { ago: '22 分钟前', text: '回写结果：+12 次浏览、3 条讨论', state: 'done' }
+        { ago: '24 分钟前', text: '读取 3 个数据源', state: 'done', source: 'session' },
+        { ago: '22 分钟前', text: '生成摘要并发布到 #metrics', state: 'done', source: 'session' },
+        { ago: '22 分钟前', text: '回写结果：+12 次浏览、3 条讨论', state: 'done', source: 'session' }
       ],
-      thread: [{ from: 'agent', text: '已发布，附了口径说明和两个异常值备注。', time: '22 分钟前' }]
+      thread: [{ from: 'agent', text: '已发布，附了口径说明和两个异常值备注。', time: '22 分钟前', sessionId: 'dsh-2c9e' }]
     },
     {
       id: 'c-402', col: 'done', title: '归档 v0.9 发布说明', status: 'done', priority: 'P2', project: '文档', tags: ['发布'],
       summary: '把 23 个合并请求整理成功能与修复两组，已归档。',
-      action: '已完成 · 已归档到 docs/releases', tools: 9, searches: 1, elapsed: '2m 30s', updated: '40 分钟前', agent: 'Opus 5.5', session: 'dsh-4b1c',
+      action: '已完成 · 已归档到 docs/releases', tools: 9, searches: 1, elapsed: '2m 30s', updated: '40 分钟前', agent: 'Opus 5.5',
+      session: 'dsh-4b1c', workspace: '文档', cwd: '/Users/roxor/Desktop/dsh/docs',
+      media: { images: 0, videos: 0, files: 3, reports: 1, title: '发布说明与变更清单' },
       nodes: [
-        { ago: '42 分钟前', text: '抓取 23 个合并请求', state: 'done' },
-        { ago: '40 分钟前', text: '按功能 / 修复分组并归档', state: 'done' }
+        { ago: '42 分钟前', text: '抓取 23 个合并请求', state: 'done', source: 'session' },
+        { ago: '40 分钟前', text: '按功能 / 修复分组并归档', state: 'done', source: 'session' }
       ],
       thread: []
     },
     {
-      id: 'c-403', col: 'done', title: '清理 CRM 的重复联系人', status: 'failed', priority: 'P1', project: 'CRM', tags: ['数据清理'],
+      id: 'c-403', col: 'needs', title: '清理 CRM 的重复联系人', status: 'failed', priority: 'P1', project: 'CRM', tags: ['数据清理'],
       summary: '匹配到 1,312 条疑似重复；合并时触发 API 限流，任务中止。',
-      action: '失败 · API 限流（429）', tools: 6, searches: 2, elapsed: '2m 30s', updated: '1 小时前', agent: 'K2.5', session: 'dsh-96b2',
+      action: '失败 · API 限流（429）', tools: 6, searches: 2, elapsed: '2m 30s', updated: '1 小时前', agent: 'K2.5',
+      session: 'dsh-96b2', workspace: 'CRM', cwd: '/Users/roxor/Desktop/dsh/crm',
       nodes: [
-        { ago: '1 小时前', text: '匹配到 1,312 条疑似重复', state: 'done' },
-        { ago: '58 分钟前', text: '开始合并，写入 214 条', state: 'done' },
-        { ago: '56 分钟前', text: '触发 CRM API 限流（429），任务中止', state: 'error', detail: '建议 10 分钟后重试，或降低并发到 2' }
+        { ago: '1 小时前', text: '匹配到 1,312 条疑似重复', state: 'done', source: 'session' },
+        { ago: '58 分钟前', text: '开始合并，写入 214 条', state: 'done', source: 'session' },
+        { ago: '56 分钟前', text: '触发 CRM API 限流（429），任务中止', state: 'error', detail: '建议 10 分钟后重试，或降低并发到 2', source: 'session' }
       ],
-      thread: [{ from: 'agent', text: '限流来自 CRM 侧，已保留断点。重试会从第 215 条继续，不会重复写入。', time: '55 分钟前' }]
+      thread: [{ from: 'agent', text: '限流来自 CRM 侧，已保留断点。重试会从第 215 条继续，不会重复写入。', time: '55 分钟前', sessionId: 'dsh-96b2' }]
+    },
+    {
+      id: 'c-404', col: 'done', title: '同步设计令牌到 tokens.css', status: 'done', priority: 'P2', project: '看板', tags: ['主题'],
+      summary: '把 49 个 alias 令牌接入看板样式，亮暗两态通过同一组变量表达。',
+      action: '已完成 · 令牌 lint 0/0', tools: 4, searches: 2, elapsed: '3m 08s', updated: '1 小时前', agent: 'Opus 5.5',
+      session: 'dsh-7f3a', workspace: '看板', cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
+      nodes: [
+        { ago: '1 小时前', text: '对照 dsh-tokens.md 生成局部语义变量', state: 'done', source: 'session' },
+        { ago: '1 小时前', text: '跑 lint-tokens，0 error / 0 warning', state: 'done', source: 'session' }
+      ],
+      thread: []
+    },
+    {
+      id: 'c-405', col: 'done', title: '补齐审批接口的 409 分支测试', status: 'done', priority: 'P1', project: '看板', tags: ['测试'],
+      summary: '覆盖重复审批、乐观锁冲突与已归档会话三种失败路径。',
+      action: '已完成 · 24 个用例通过', tools: 11, searches: 4, elapsed: '5m 20s', updated: '2 小时前', agent: 'K2.5',
+      session: 'dsh-7f3a', workspace: '看板', cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
+      nodes: [
+        { ago: '2 小时前', text: '补 3 组 409 场景的集成测试', state: 'done', source: 'session' },
+        { ago: '2 小时前', text: '测试 24/24 通过', state: 'done', source: 'session' }
+      ],
+      thread: []
+    },
+    {
+      id: 'c-406', col: 'done', title: '重写列表视图的键盘导航', status: 'done', priority: 'P2', project: '看板', tags: ['a11y'],
+      summary: '列表行支持 Enter 展开、O 打开详情、Alt+方向键换列。',
+      action: '已完成 · 键盘路径覆盖', tools: 6, searches: 1, elapsed: '3m 44s', updated: '3 小时前', agent: 'Opus 5.5',
+      session: 'dsh-11a0', workspace: '看板', cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
+      nodes: [{ ago: '3 小时前', text: '补齐列表行的键盘事件与焦点归还', state: 'done', source: 'session' }],
+      thread: []
+    },
+    {
+      id: 'c-407', col: 'done', title: '修复 iframe 内主题令牌同步', status: 'done', priority: 'P1', project: '插件市场', tags: ['主题', 'iframe'],
+      summary: '宿主切换主题时，iframe 内的看板通过 postMessage 收到 themeMode 并即时更新。',
+      action: '已完成 · 亮暗切换通过', tools: 7, searches: 3, elapsed: '4m 02s', updated: '昨天', agent: 'K2.5',
+      session: 'dsh-4b1c', workspace: '插件市场', cwd: '/Users/roxor/Desktop/dsh/plugin-market',
+      nodes: [{ ago: '昨天', text: '接入宿主 themeMode 消息并补降级', state: 'done', source: 'session' }],
+      thread: []
+    },
+    {
+      id: 'c-408', col: 'done', title: '初始化看板插件骨架', status: 'done', priority: 'P2', project: '看板', tags: ['脚手架'],
+      summary: '服务端 store/routes/tools + 客户端 shell 与插槽注册的最小可运行版本。',
+      action: '已完成 · 插件可加载', tools: 15, searches: 5, elapsed: '8m 10s', updated: '昨天', agent: 'Opus 5.5',
+      session: 'dsh-11a0', workspace: '看板', cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
+      nodes: [{ ago: '昨天', text: '完成 store / routes / SSE 与 web shell', state: 'done', source: 'session' }],
+      thread: []
     }
   ];
 
@@ -1667,9 +2101,23 @@
     drawerTab: 'nodes',
     editing: false,
     popover: null,
-    refreshing: false,
     toast: null,
-    toastTimer: 0
+    toastTimer: 0,
+    /* v2 */
+    doneAll: false,
+    doneListExpanded: false,
+    doneListAll: false,
+    groupBy: 'status',
+    syncError: false,
+    syncRetrying: false,
+    approvalSel: {},
+    approvalNotes: {},
+    replyTarget: {},
+    timelineShown: {},
+    confirm: null,
+    approvalEditorId: null,
+    formInitial: null,
+    editInitial: null
   };
 
   const app = $('#app');
@@ -1687,10 +2135,58 @@
   const filterBtn = $('#filterBtn');
   const filterChips = $('#filterChips');
   const helpBtn = $('#helpBtn');
+  const boardMetas = $('#boardMetas');
+  const sessionLive = $('#sessionLive');
+  const groupSelect = $('#groupSelect');
+  const groupControl = $('#groupControl');
+  const listNewBtn = $('#listNewBtn');
+  const syncErrorBar = $('#syncError');
+  const confirmLayer = $('#confirmLayer');
+  const confirmModal = $('#confirmModal');
 
   const findCard = (id) => cards.find((c) => c.id === id);
   const colById = (id) => COLUMNS.find((c) => c.id === id);
   const statusOf = (s) => STATUS[s] || STATUS.todo;
+  const unarchived = () => cards.filter((c) => !c.archived);
+
+  /* 会话：运行中的实体；Agent 只作为时间线 actor / 会话内发言者 */
+  function sessionList(card) {
+    if (card.sessions && card.sessions.length) return card.sessions;
+    return [{ id: card.session, title: '主会话', running: card.status === 'running', primary: true }];
+  }
+  function primarySession(card) {
+    const list = sessionList(card);
+    return list.find((s) => s.primary) || list[0];
+  }
+  function sessionTitle(card, id) {
+    const s = sessionList(card).find((x) => x.id === id);
+    return s ? s.title : id;
+  }
+  function approvalSelection(card) {
+    const a = card.approval;
+    if (!a) return [];
+    const stored = state.approvalSel[card.id];
+    if (stored && stored.length) return stored;
+    if (a.multiSelect) return [];
+    const def = a.options.find((o) => o.tone === 'primary') || a.options[0];
+    return def ? [def.id] : [];
+  }
+  function runningSessionsCount() {
+    const ids = new Set();
+    unarchived().forEach(function (card) {
+      sessionList(card).forEach(function (session) { if (session.running) ids.add(session.id); });
+    });
+    return ids.size;
+  }
+  function mediaLabel(media) {
+    if (!media) return '';
+    const parts = [];
+    if (media.images) parts.push(media.images + ' 张截图');
+    if (media.videos) parts.push(media.videos + ' 个录屏');
+    if (media.reports) parts.push(media.reports + ' 份报告');
+    if (media.files) parts.push(media.files + ' 个文件');
+    return parts.join(' · ');
+  }
 
   function visibleCards() {
     const q = state.search.trim().toLowerCase();
@@ -1698,7 +2194,7 @@
       if (state.filters.projects.size && !state.filters.projects.has(c.project)) return false;
       if (state.filters.priorities.size && !state.filters.priorities.has(c.priority)) return false;
       if (q) {
-        const hay = [c.title, c.summary, c.project, c.action, c.tags.join(' '), c.agent, c.session].join(' ').toLowerCase();
+        const hay = [c.title, c.summary, c.project, c.action, c.tags.join(' '), c.agent, c.session, sessionList(c).map((x) => x.title).join(' ')].join(' ').toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -1735,42 +2231,87 @@
       '<span class="metric" title="工具调用 ' + card.tools + ' 次">' + icon('tool') + card.tools + '</span>' +
       '<span class="metric" title="搜索 ' + card.searches + ' 次">' + icon('search') + card.searches + '</span>' +
       '<span class="divider-v" aria-hidden="true"></span>' +
-      '<button type="button" class="metric metric-link" data-action="session" data-id="' + card.id + '" aria-label="打开 DSH 会话 ' + esc(card.session) + '" title="DSH 会话 ' + esc(card.session) + '">' + icon('link') + '</button>' +
+      '<button type="button" class="metric metric-link" data-action="session" data-id="' + card.id + '" aria-label="打开会话：' + esc(primarySession(card).title) + '" title="会话：' + esc(primarySession(card).title) + '">' + icon('link') + '</button>' +
       '</span>';
   }
   function decisionHTML(card) {
     if (!card.approval || card.status !== 'needs') return '';
-    return '<div class="decision" role="group" aria-label="待你确认">' +
-      '<div class="decision-q">' + icon('alert') + '<span>' + esc(card.approval.question) + '</span></div>' +
-      '<div class="decision-risk">' + icon('clock') + '<span>' + esc(card.approval.risk) + '</span></div>' +
-      '<div class="decision-actions">' +
-        '<button type="button" class="btn btn-secondary" data-action="reject" data-id="' + card.id + '" aria-label="驳回：' + esc(card.title) + '">驳回<span class="btn-en">Reject</span></button>' +
-        '<button type="button" class="btn btn-primary" data-action="approve" data-id="' + card.id + '" aria-label="批准：' + esc(card.title) + '">批准<span class="btn-en">Approve</span></button>' +
+    const a = card.approval;
+    const sel = approvalSelection(card);
+    const note = state.approvalNotes[card.id] || '';
+    const primary = primarySession(card);
+    const inputType = a.multiSelect ? 'checkbox' : 'radio';
+    return '<section class="decision" role="group" aria-label="待你确认">' +
+      '<div class="decision-q">' + icon('alert') +
+        '<span class="decision-title">' + esc(a.title) + '</span>' +
       '</div>' +
-    '</div>';
+      '<div class="decision-meta">' + esc(primary.title) + ' · ' + esc(card.updated) + '</div>' +
+      (a.detail ? '<p class="decision-risk">' + icon('info') + '<span>' + esc(a.detail) + '</span></p>' : '') +
+      '<fieldset class="decision-options"><legend class="sr-only">' + (a.multiSelect ? '可多选' : '选择一个选项') + '</legend>' +
+        a.options.map(function (o) {
+          const checked = sel.indexOf(o.id) >= 0;
+          return '<label class="opt' + (checked ? ' is-selected' : '') + '" data-tone="' + esc(o.tone || 'ghost') + '">' +
+            '<input type="' + inputType + '" name="ap-' + card.id + '" value="' + o.id + '" data-approval-option="' + card.id + '"' + (checked ? ' checked' : '') + '>' +
+            '<span class="opt-body"><span class="opt-label">' + esc(o.label) + '</span>' +
+            (o.description ? '<span class="opt-desc">' + esc(o.description) + '</span>' : '') + '</span></label>';
+        }).join('') +
+      '</fieldset>' +
+      (a.multiSelect ? '<p class="decision-hint">可多选，至少选择 1 项</p>' : '') +
+      '<input class="approval-note" data-approval-note="' + card.id + '" value="' + esc(note) + '" placeholder="备注（可选）" aria-label="审批备注">' +
+      '<div class="decision-actions">' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-action="reject" data-id="' + card.id + '">驳回</button>' +
+        '<button type="button" class="btn btn-primary btn-sm" data-action="approve" data-id="' + card.id + '">提交选择</button>' +
+      '</div></section>';
   }
-  function timelineHTML(card) {
-    return '<ol class="timeline" aria-label="重要节点">' + card.nodes.map((n) =>
-      '<li class="tl-node" data-state="' + esc(n.state) + '">' +
-        '<span class="tl-text">' + esc(n.text) + '</span>' +
+  function timelineHTML(card, opts) {
+    const o = opts || {};
+    const all = card.nodes || [];
+    let nodes = all;
+    let hidden = 0;
+    if (o.limit) {
+      const shown = Math.max(o.limit, state.timelineShown[card.id] || o.limit);
+      hidden = Math.max(0, all.length - shown);
+      nodes = all.slice(hidden);
+    }
+    const more = hidden > 0
+      ? '<button type="button" class="timeline-more" data-action="timeline-earlier" data-id="' + card.id + '">' + icon('chevronDown') + '加载更早的 ' + hidden + ' 条</button>'
+      : '';
+    return more + '<ol class="timeline" aria-label="重要节点">' + nodes.map(function (n) {
+      return '<li class="tl-node" data-state="' + esc(n.state) + '">' +
+        '<span class="tl-text">' + esc(n.text) + (n.source === 'session' ? '<span class="tl-src">摘要</span>' : '') + '</span>' +
         '<span class="tl-time">' + esc(n.ago) + '</span>' +
         (n.detail ? '<span class="tl-detail">' + esc(n.detail) + '</span>' : '') +
-      '</li>'
-    ).join('') + '</ol>';
+      '</li>';
+    }).join('') + '</ol>';
+  }
+  function mediaRowHTML(card) {
+    const m = card.media;
+    if (!m) return '';
+    const thumbs = [];
+    if (m.images) thumbs.push(icon('image'));
+    if (m.videos) thumbs.push(icon('video'));
+    if (m.reports) thumbs.push(icon('report'));
+    if (m.files) thumbs.push(icon('file'));
+    return '<div class="media-row">' +
+      '<span class="media-thumbs">' + thumbs.slice(0, 3).map(function (t) { return '<span class="media-thumb">' + t + '</span>'; }).join('') + '</span>' +
+      '<span class="media-copy"><span class="media-title">' + esc(m.title || '会话素材') + '</span><span class="media-sub">' + esc(mediaLabel(m)) + '</span></span>' +
+      '<button type="button" class="media-link" data-action="media" data-id="' + card.id + '">在会话中查看</button>' +
+    '</div>';
   }
   function replyHTML(card, where) {
-    const id = where + '-' + card.id;
+    const id = 'reply-' + where + '-' + card.id;
+    const target = primarySession(card);
     return '<form class="reply" data-reply="' + card.id + '" data-reply-where="' + where + '">' +
-      '<label class="sr-only" for="' + id + '">回复 Agent，同步到 DSH 会话</label>' +
-      '<input id="' + id + '" name="reply" type="text" placeholder="回复 Agent，同步到 DSH 会话…" autocomplete="off">' +
-      '<button type="submit" class="icon-btn reply-send" aria-label="发送回复并同步到 DSH 会话">' + icon('send') + '</button>' +
+      '<label class="sr-only" for="' + id + '">回复会话</label>' +
+      '<input id="' + id + '" name="reply" type="text" placeholder="回复到「' + esc(target.title) + '」…" autocomplete="off">' +
+      '<button type="submit" class="icon-btn reply-send" aria-label="发送回复到会话">' + icon('send') + '</button>' +
     '</form>';
   }
   function cardHTML(card) {
     const s = statusOf(card.status);
     const expanded = state.expanded.has(card.id);
     const selected = state.drawerId === card.id;
-    const actionTone = card.status === 'needs' ? ' is-warn' : card.status === 'failed' ? ' is-error' : card.status === 'blocked' ? ' is-warn' : card.status === 'todo' ? ' is-idle' : '';
+    const actionTone = card.status === 'needs' ? ' is-warn' : (card.status === 'failed' || card.status === 'blocked') ? ' is-error' : card.status === 'todo' ? ' is-idle' : '';
     const actionIcon = card.status === 'needs' ? 'hand' : card.status === 'blocked' ? 'alert' : card.status === 'failed' ? 'alert' : card.status === 'done' ? 'check' : 'sparkle';
     return '<article class="card' + (expanded ? ' is-expanded' : '') + (selected ? ' is-selected' : '') + '" data-card-id="' + card.id + '" data-status="' + card.status + '" tabindex="0" role="group" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '，优先级 ' + card.priority + '，项目 ' + esc(card.project) + '">' +
       '<div class="card-head">' +
@@ -1786,10 +2327,10 @@
       decisionHTML(card) +
       (expanded ? '<div class="card-expanded" id="exp-' + card.id + '">' +
         '<div class="exp-head"><span>重要节点</span><button type="button" class="link-btn" data-action="open" data-id="' + card.id + '">详情' + icon('chevronRight') + '</button></div>' +
-        timelineHTML(card) +
+        timelineHTML(card, { limit: 3 }) +
+        mediaRowHTML(card) +
         (card.status === 'failed' ? '<button type="button" class="btn btn-secondary btn-sm" data-action="retry" data-id="' + card.id + '">' + icon('redo') + '重试任务</button>' : '') +
         replyHTML(card, 'card') +
-        '<div class="reply-hint">' + icon('link') + '回复会写入 DSH 会话 ' + esc(card.session) + '，并追加一条看板节点</div>' +
       '</div>' : '') +
     '</article>';
   }
@@ -1798,7 +2339,7 @@
     return '<div class="empty">' +
       '<span class="empty-icon">' + icon(filtering ? 'search' : 'plus') + '</span>' +
       '<span class="empty-title">' + (filtering ? '没有匹配的卡片' : '这一列还没有卡片') + '</span>' +
-      '<span class="empty-desc">' + (filtering ? '换个关键词，或清除筛选条件。' : '从其他列拖入，或让 Agent 领取一个新任务。') + '</span>' +
+      '<span class="empty-desc">' + (filtering ? '换个关键词，或清除筛选条件。' : '从其他列拖入，或新建一张卡片让会话领取。') + '</span>' +
       (filtering
         ? '<button type="button" class="btn btn-ghost btn-sm" data-action="clear-filters">清除筛选</button>'
         : '<button type="button" class="btn btn-ghost btn-sm" data-action="add-col" data-col="' + col.id + '">' + icon('plus') + '新建卡片</button>') +
@@ -1810,11 +2351,19 @@
   }
   function renderColumn(col) {
     const visible = visibleCards().filter((c) => c.col === col.id);
-    const total = cards.filter((c) => c.col === col.id).length;
-    const collapsed = state.collapsedCols.has(col.id);
+    const total = unarchived().filter((c) => c.col === col.id).length;
+    const isDone = col.id === 'done';
+    const shown = isDone && !state.doneAll ? visible.slice(0, 5) : visible;
+    const collapsed = state.collapsedCols.has('col:' + col.id);
     const active = state.activeCol === col.id;
     const filtering = isFiltering();
-    const countTitle = filtering ? '筛选命中 ' + visible.length + ' 张，共 ' + total + ' 张' : total + ' 张卡片';
+    const countTitle = filtering
+      ? '筛选命中 ' + visible.length + ' 张，共 ' + total + ' 张未归档卡片'
+      : total + ' 张未归档卡片' + (isDone ? '（默认显示最近 5 张）' : '');
+    const more = isDone && visible.length > 5
+      ? '<div class="column-more"><button type="button" class="btn btn-ghost btn-sm" data-action="done-all">' +
+          (state.doneAll ? '收起，只看最近 5 张' : '查看全部 ' + visible.length + ' 张') + icon(state.doneAll ? 'chevronDown' : 'chevronRight') + '</button></div>'
+      : '';
     return '<section class="column' + (collapsed ? ' is-collapsed' : '') + (active ? ' is-active' : '') + '" data-col="' + col.id + '" data-tone="' + col.tone + '" aria-label="' + col.name + '，' + countTitle + '">' +
       '<header class="column-head">' +
         '<span class="col-icon">' + icon(col.icon) + '</span>' +
@@ -1827,7 +2376,8 @@
       '</header>' +
       (collapsed
         ? '<div class="column-collapsed">已折叠 · ' + visible.length + ' 张卡片<span>拖入卡片可直接移入</span></div>'
-        : '<div class="column-body">' + (state.refreshing ? skeletonHTML() : (visible.length ? visible.map(cardHTML).join('') : emptyHTML(col))) + '</div>' +
+        : '<div class="column-body">' + (visible.length ? shown.map(cardHTML).join('') : emptyHTML(col)) + '</div>' +
+          more +
           '<button type="button" class="column-add" data-action="add-col" data-col="' + col.id + '">' + icon('plus') + '新建卡片</button>') +
     '</section>';
   }
@@ -1836,12 +2386,21 @@
     const s = statusOf(card.status);
     const expanded = state.expanded.has(card.id);
     const selected = state.drawerId === card.id;
+    const pendingApproval = card.approval && card.status === 'needs';
+    const rowActions = pendingApproval
+      ? '<span class="row-actions">' +
+          '<button type="button" class="btn btn-secondary" data-action="reject" data-id="' + card.id + '">驳回</button>' +
+          '<button type="button" class="btn btn-primary" data-action="approve" data-id="' + card.id + '">批准</button>' +
+        '</span>'
+      : card.status === 'failed'
+        ? '<span class="row-actions"><button type="button" class="btn btn-secondary btn--retry" data-action="retry" data-id="' + card.id + '">重试</button></span>'
+        : '';
     return '<div class="list-row' + (selected ? ' is-selected' : '') + '" data-card-id="' + card.id + '" tabindex="0" role="group" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '">' +
       '<div class="list-row-main" data-action="expand" data-id="' + card.id + '">' +
         dot(s.dot) +
         '<div class="list-main">' +
           '<div class="list-title-row"><span class="list-title">' + esc(card.title) + '</span>' +
-            (card.approval && card.status === 'needs' ? '<span class="tag">待授权</span>' : '') + '</div>' +
+            (pendingApproval ? '<span class="tag">待确认</span>' : '') + '</div>' +
           '<p class="list-summary">' + esc(card.summary) + '</p>' +
         '</div>' +
         '<div class="list-meta">' +
@@ -1850,16 +2409,38 @@
           statusFoot(card) +
           '<span class="metric" title="工具调用 ' + card.tools + ' 次">' + icon('tool') + card.tools + '</span>' +
           '<span class="metric" title="搜索 ' + card.searches + ' 次">' + icon('search') + card.searches + '</span>' +
+          rowActions +
           '<button type="button" class="icon-btn" data-action="open" data-id="' + card.id + '" aria-label="打开详情：' + esc(card.title) + '">' + icon('chevronRight') + '</button>' +
           '<button type="button" class="icon-btn" data-action="menu" data-id="' + card.id + '" aria-label="卡片操作：' + esc(card.title) + '">' + icon('kebab') + '</button>' +
         '</div>' +
       '</div>' +
       (expanded ? '<div class="list-expanded">' +
         '<div class="exp-head"><span>重要节点</span><button type="button" class="link-btn" data-action="open" data-id="' + card.id + '">详情' + icon('chevronRight') + '</button></div>' +
-        timelineHTML(card) + decisionHTML(card) +
+        timelineHTML(card, { limit: 3 }) + mediaRowHTML(card) + decisionHTML(card) +
         (card.status === 'failed' ? '<button type="button" class="btn btn-secondary btn-sm" data-action="retry" data-id="' + card.id + '">' + icon('redo') + '重试任务</button>' : '') +
         replyHTML(card, 'list') + '</div>' : '') +
     '</div>';
+  }
+
+  function listGroupsData() {
+    const visible = visibleCards();
+    if (state.groupBy === 'status') {
+      return COLUMNS.map((col) => ({
+        key: 'col:' + col.id, id: col.id, title: col.name, en: col.en, icon: col.icon, tone: col.tone,
+        cards: visible.filter((c) => c.col === col.id), isStatus: true, column: col.id
+      }));
+    }
+    if (state.groupBy === 'project') {
+      const extra = Array.from(new Set(visible.map((c) => c.project))).filter((p) => PROJECTS.indexOf(p) < 0);
+      return PROJECTS.concat(extra).map((p) => ({
+        key: 'project:' + p, id: p, title: '项目 · ' + p, en: '', icon: 'folder', tone: 'backlog',
+        cards: visible.filter((c) => c.project === p), isStatus: false
+      })).filter((g) => g.cards.length);
+    }
+    return ['P0', 'P1', 'P2'].map((p) => ({
+      key: 'priority:' + p, id: p, title: p + ' · ' + (PRIORITY_LABEL[p] || ''), en: '', icon: 'circle', tone: p === 'P0' ? 'needs' : p === 'P1' ? 'running' : 'backlog',
+      cards: visible.filter((c) => c.priority === p), isStatus: false
+    })).filter((g) => g.cards.length);
   }
 
   function renderBoard() {
@@ -1868,23 +2449,37 @@
     list.hidden = state.view !== 'list';
   }
   function renderList() {
-    list.innerHTML = COLUMNS.map((col) => {
-      const visible = visibleCards().filter((c) => c.col === col.id);
-      const total = cards.filter((c) => c.col === col.id).length;
-      const collapsed = state.collapsedCols.has(col.id);
-      return '<section class="list-group' + (collapsed ? ' is-collapsed' : '') + '" data-col="' + col.id + '" aria-label="' + col.name + '分组">' +
+    const groups = listGroupsData();
+    list.innerHTML = groups.map((g) => {
+      const isDone = g.isStatus && g.id === 'done';
+      const collapsed = isDone ? !state.doneListExpanded : state.collapsedCols.has(g.key);
+      const shown = isDone && state.doneListExpanded && !state.doneListAll ? g.cards.slice(0, 5) : g.cards;
+      let body = '';
+      if (isDone && !state.doneListExpanded) {
+        body = '<button type="button" class="list-done-fold" data-action="done-list-toggle">展开已完成（' + g.cards.length + '）<span>默认只看最近 5 张</span></button>';
+      } else if (!collapsed) {
+        body = g.cards.length
+          ? shown.map(renderListRow).join('') +
+            (isDone && g.cards.length > 5
+              ? '<div class="list-more"><button type="button" class="btn btn-ghost btn-sm" data-action="done-list-more">' +
+                  (state.doneListAll ? '收起，只看最近 5 张' : '加载更多（剩余 ' + (g.cards.length - shown.length) + ' 张）') + '</button></div>'
+              : '')
+          : '<div class="empty" style="margin:12px">' +
+              '<span class="empty-title">' + (isFiltering() ? '没有匹配的卡片' : '这一组还没有卡片') + '</span>' +
+              '<span class="empty-desc">' + (isFiltering() ? '换个关键词，或清除筛选条件。' : '切换到看板视图，在列内新建卡片。') + '</span></div>';
+      }
+      const collapseAction = isDone ? 'done-list-toggle' : g.isStatus ? 'collapse-col' : 'collapse-group';
+      const collapseAttr = isDone ? '' : (g.isStatus ? ' data-col="' + g.id + '"' : ' data-group="' + esc(g.key) + '"');
+      return '<section class="list-group' + (collapsed && !isDone ? ' is-collapsed' : '') + '" data-group-key="' + esc(g.key) + '"' + (g.isStatus ? ' data-col="' + g.id + '"' : '') + ' aria-label="' + esc(g.title) + '分组，' + g.cards.length + ' 张卡片">' +
         '<header class="list-group-head">' +
-          '<span class="col-icon">' + icon(col.icon) + '</span>' +
-          '<h2 class="col-title">' + col.name + '<span class="col-en">' + col.en + '</span></h2>' +
-          '<span class="count-pill" title="' + (isFiltering() ? '筛选命中 ' + visible.length + ' 张，共 ' + total + ' 张' : total + ' 张卡片') + '">' + visible.length + '</span>' +
+          '<span class="col-icon">' + icon(g.icon) + '</span>' +
+          '<h2 class="col-title">' + esc(g.title) + (g.en ? '<span class="col-en">' + g.en + '</span>' : '') + '</h2>' +
+          '<span class="count-pill" title="' + g.cards.length + ' 张卡片">' + g.cards.length + '</span>' +
           '<span class="col-head-actions">' +
-            '<button type="button" class="icon-btn" data-action="collapse-col" data-col="' + col.id + '" aria-expanded="' + !collapsed + '" aria-label="' + (collapsed ? '展开' : '折叠') + col.name + '分组">' + icon(collapsed ? 'chevronRight' : 'chevronDown') + '</button>' +
-            '<button type="button" class="icon-btn" data-action="add-col" data-col="' + col.id + '" aria-label="在' + col.name + '新建卡片">' + icon('plus') + '</button>' +
+            '<button type="button" class="icon-btn" data-action="' + collapseAction + '"' + collapseAttr + ' aria-expanded="' + (!collapsed) + '" aria-label="' + (collapsed ? '展开' : '折叠') + esc(g.title) + '分组">' + icon(collapsed ? 'chevronRight' : 'chevronDown') + '</button>' +
           '</span>' +
         '</header>' +
-        (visible.length ? visible.map(renderListRow).join('') : '<div class="empty" style="margin:12px">' +
-          '<span class="empty-title">' + (isFiltering() ? '没有匹配的卡片' : '这一列还没有卡片') + '</span>' +
-          '<span class="empty-desc">' + (isFiltering() ? '换个关键词，或清除筛选条件。' : '从其他列拖入，或新建一张卡片。') + '</span></div>') +
+        body +
       '</section>';
     }).join('');
     list.hidden = state.view !== 'list';
@@ -1911,13 +2506,16 @@
       filterChips.insertAdjacentHTML('beforeend', '<button type="button" class="filter-chip" data-action="remove-project" data-value="' + esc(p) + '" aria-label="移除项目筛选 ' + esc(p) + '">' + esc(p) + icon('x') + '</button>');
     });
     state.filters.priorities.forEach((p) => {
-      filterChips.insertAdjacentHTML('beforeend', '<button type="button" class="filter-chip" data-action="remove-priority" data-value="' + esc(p) + '" aria-label="移除优先级筛选 ' + p + '">' + p + icon('x') + '</button>');
+      filterChips.insertAdjacentHTML('beforeend', '<button type="button" class="filter-chip" data-action="remove-priority" data-value="' + p + '" aria-label="移除优先级筛选 ' + p + '">' + p + icon('x') + '</button>');
     });
     if (state.search.trim()) {
       filterChips.insertAdjacentHTML('beforeend', '<button type="button" class="filter-chip" data-action="clear-search" aria-label="清除搜索">搜索：' + esc(state.search.trim()) + icon('x') + '</button>');
     }
-    const running = cards.filter((c) => c.col === 'running').length;
-    $('#agentLive').innerHTML = '<span class="dot" data-state="ongoing" aria-hidden="true"></span><strong>' + running + '</strong> 个 Agent 运行中';
+    const un = unarchived();
+    const running = un.filter((c) => c.col === 'running').length;
+    const needs = un.filter((c) => c.col === 'needs').length;
+    const runningSessions = runningSessionsCount();
+    sessionLive.innerHTML = '<span class="dot" data-state="ongoing" aria-hidden="true"></span><strong>' + runningSessions + '</strong> 个会话运行中 · SSE 实时';
     $('#viewBoard').classList.toggle('is-active', state.view === 'board');
     $('#viewList').classList.toggle('is-active', state.view === 'list');
     $('#viewBoard').setAttribute('aria-selected', String(state.view === 'board'));
@@ -1926,9 +2524,19 @@
     themeBtn.innerHTML = icon(state.theme === 'dark' ? 'sun' : 'moon');
     themeBtn.setAttribute('aria-pressed', String(state.theme === 'dark'));
     themeBtn.setAttribute('aria-label', state.theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题');
-    $('#syncStatus').textContent = 'DSH 会话已连接 · ' + cards.filter((c) => c.col === 'running').length + ' 个 Agent 运行中 · 最后同步刚刚';
-    const visibleCount = visibleCards().length;
-    $('.crumb-tag').textContent = visibleCount < cards.length ? visibleCount + ' / ' + cards.length + ' 张卡片' : cards.length + ' 张卡片';
+    $('#syncStatus').textContent = state.syncError ? 'SSE 同步中断 · 可手动重试' : 'SSE 实时同步 · 最后更新刚刚';
+    $('#syncStatus').parentElement.querySelector('.dot').dataset.state = state.syncError ? 'error' : 'done';
+    boardMetas.innerHTML =
+      '<span class="board-meta"><strong>' + un.length + '</strong> 张未归档卡片</span>' +
+      '<span class="board-meta board-meta--warn">' + dot('warning', true) + '<strong>' + needs + '</strong> 待你确认</span>' +
+      '<span class="board-meta board-meta--live">' + dot('ongoing', true) + '<strong>' + runningSessions + '</strong> 会话运行中</span>';
+    groupControl.hidden = state.view !== 'list';
+    listNewBtn.hidden = state.view !== 'list';
+    groupSelect.value = state.groupBy;
+    syncErrorBar.hidden = !state.syncError;
+    $('#syncErrorText').textContent = state.syncRetrying
+      ? '正在重新连接实时同步…'
+      : '实时同步中断，看板可能不是最新；会话中的修改会在恢复后补上。';
   }
 
   function captureScroll() {
@@ -1997,7 +2605,20 @@
     if (col) announce('已切换到' + col.name + '列');
   }
 
-  function moveCard(id, colId, index) {
+  function defaultApproval(card) {
+    return {
+      title: '需要你确认：' + card.title,
+      detail: '由你从看板发起的人工确认。默认选项可继续或停止；保存前可以修改问题与选项。',
+      multiSelect: false,
+      options: [
+        { id: 'yes', label: '继续', description: '会话继续执行这张卡片。', tone: 'primary', outcome: 'running' },
+        { id: 'no', label: '停止', description: '暂停执行，卡片回到待办。', tone: 'danger', outcome: 'backlog' }
+      ]
+    };
+  }
+
+  function moveCard(id, colId, index, opts) {
+    const o = opts || {};
     const card = findCard(id);
     if (!card) return false;
     const from = card.col;
@@ -2017,12 +2638,13 @@
     card.col = colId;
     if (from !== colId) {
       card.status = toCol.defaultStatus;
-      if (colId === 'needs' && !card.approval) {
-        card.approval = { question: '确认是否继续：' + card.title + '？', risk: '由 Agent 发起的人工确认 · 变更前可回滚' };
+      if (colId === 'needs') {
+        card.approval = defaultApproval(card);
+      } else {
+        card.approval = null;
       }
-      if (colId !== 'needs' && card.status !== 'needs') card.approval = null;
       card.action = colId === 'backlog' ? '已回到待办 · 等待重新领取'
-        : colId === 'running' ? '已被 Agent 接收 · 正在执行'
+        : colId === 'running' ? '已被会话接收 · 正在执行'
         : colId === 'needs' ? '等待你确认'
         : '已完成 · 由看板移入';
       card.updated = '刚刚';
@@ -2035,62 +2657,104 @@
     Array.prototype.push.apply(cards, others);
     renderAll({ focus: id });
     announce('卡片已移到' + toCol.name + (index != null ? '第 ' + (index + 1) + ' 位' : ''));
-    toast('已移到「' + toCol.name + '」· 已同步到 DSH 会话', { icon: 'check' });
+    toast('已移到「' + toCol.name + '」', { icon: 'check' });
+    if (toCol.id === 'needs' && from !== 'needs' && o.human) {
+      setTimeout(function () { openApprovalEditor(id); }, motionMs(120));
+    }
     return true;
+  }
+
+  function applyApprovalOutcome(card, outcome) {
+    const target = outcome === 'backlog' ? 'backlog' : outcome === 'done' ? 'done' : 'running';
+    card.col = target;
+    card.status = target === 'backlog' ? 'todo' : target === 'done' ? 'done' : 'running';
+    card.action = target === 'backlog' ? '已停止 · 回到待办等待新方案'
+      : target === 'done' ? '已完成 · 由审批结果触发'
+      : '已收到你的决定 · 会话继续执行';
+  }
+
+  function resolveApproval(card, approved, selectedIds, note) {
+    if (!card.approval) return;
+    const a = card.approval;
+    const ids = selectedIds && selectedIds.length ? selectedIds : [];
+    const labels = ids.map(function (id) {
+      const opt = a.options.find(function (x) { return x.id === id; });
+      return opt ? opt.label : id;
+    });
+    const target = primarySession(card);
+    const full = (approved ? '[审批] 提交选择：' : '[审批] 驳回：') + (labels.length ? labels.join('、') : '（未选择选项）') + (note ? '；备注：' + note : '');
+    card.thread.push({ from: 'you', text: full, time: '刚刚', sessionId: target.id });
+    card.nodes.push({
+      ago: '刚刚',
+      text: (approved ? '你提交了确认选择：' : '你驳回了确认请求：') + (labels.length ? labels.join('、') : '无选项') + (note ? ' · ' + note : ''),
+      state: 'done'
+    });
+    card.updated = '刚刚';
+    if (approved) {
+      const chosen = a.options.find(function (x) { return x.id === ids[0]; }) || a.options[0];
+      applyApprovalOutcome(card, chosen && chosen.outcome);
+    } else {
+      applyApprovalOutcome(card, 'backlog');
+    }
+    card.approval = null;
+    delete state.approvalSel[card.id];
+    delete state.approvalNotes[card.id];
+    renderAll({ focus: card.id });
+    toast(approved ? '已提交选择 · 会话收到你的决定' : '已驳回 · 卡片回到待办', { icon: approved ? 'check' : 'redo' });
+    announce((approved ? '已提交选择：' : '已驳回：') + card.title);
   }
 
   function approveCard(id) {
     const card = findCard(id);
-    if (!card) return;
-    card.col = 'done'; card.status = 'done';
-    card.action = '已完成 · 你已批准执行'; card.elapsed = card.elapsed === '—' ? '0m 32s' : card.elapsed;
-    card.updated = '刚刚';
-    card.nodes.push({ ago: '刚刚', text: '你批准了授权请求，Agent 继续执行', state: 'done' });
-    card.thread.push({ from: 'you', text: '批准，继续执行。', time: '刚刚' });
-    card.thread.push({ from: 'agent', text: '收到批准，已经开始执行；完成后会在看板汇报结果。', time: '刚刚' });
-    renderAll({ focus: id });
-    toast('已批准 · 卡片已移到「已完成」并同步 DSH 会话', { icon: 'check' });
-    announce('已批准' + card.title + '，卡片移到已完成');
+    if (!card || !card.approval) return;
+    const sel = approvalSelection(card);
+    if (card.approval.multiSelect && !sel.length) {
+      toast('请至少选择 1 个选项', { icon: 'alert' });
+      const first = document.querySelector('[data-approval-option="' + id + '"]');
+      if (first) first.focus();
+      return;
+    }
+    resolveApproval(card, true, sel, (state.approvalNotes[id] || '').trim());
   }
+
   function rejectCard(id) {
     const card = findCard(id);
-    if (!card) return;
-    card.col = 'backlog'; card.status = 'todo';
-    card.action = '已驳回 · 等待新的方案'; card.approval = null; card.updated = '刚刚';
-    card.nodes.push({ ago: '刚刚', text: '你驳回了授权请求，卡片回到待办', state: 'done' });
-    card.thread.push({ from: 'you', text: '先不要执行，给我一个更小步的方案。', time: '刚刚' });
-    card.thread.push({ from: 'agent', text: '明白。我会拆成先只迁移 accounts 表，再单独评审。', time: '刚刚' });
-    renderAll({ focus: id });
-    toast('已驳回 · 卡片已回到「待办」', { icon: 'redo' });
-    announce('已驳回' + card.title + '，卡片回到待办');
+    if (!card || !card.approval) return;
+    const danger = card.approval.options.find(function (o) { return o.tone === 'danger'; }) || card.approval.options[card.approval.options.length - 1];
+    resolveApproval(card, false, danger ? [danger.id] : [], (state.approvalNotes[id] || '').trim());
   }
+
   function retryCard(id) {
     const card = findCard(id);
     if (!card) return;
     card.col = 'running'; card.status = 'running';
     card.action = '正在重试 · 已跳过限流批次'; card.updated = '刚刚';
-    card.nodes.push({ ago: '刚刚', text: '你点了重试，Agent 从第 215 条继续', state: 'current' });
+    card.nodes.push({ ago: '刚刚', text: '你点了重试，会话从第 215 条继续', state: 'current', source: 'session' });
     renderAll({ focus: id });
-    toast('已重试 · Agent 从断点继续（演示）', { icon: 'refresh' });
+    toast('已重试 · 会话从断点继续', { icon: 'refresh' });
     announce('已重试' + card.title);
   }
+
   function sendReply(id, text) {
     const card = findCard(id);
     const value = (text || '').trim();
     if (!card || !value) return;
-    card.thread.push({ from: 'you', text: value, time: '刚刚' });
-    card.nodes.push({ ago: '刚刚', text: '你在 DSH 会话中回复：' + value, state: 'done' });
+    const targetId = state.replyTarget[id] || primarySession(card).id;
+    const targetTitle = sessionTitle(card, targetId);
+    card.thread.push({ from: 'you', text: value, time: '刚刚', sessionId: targetId });
+    const summary = value.length > 42 ? value.slice(0, 42) + '…' : value;
+    card.nodes.push({ ago: '刚刚', text: '你回复了会话：' + summary, state: 'done' });
     card.updated = '刚刚';
     if (card.status === 'needs' && !card.approval) {
       card.col = 'running'; card.status = 'running';
-      card.action = '已收到你的讨论回复，Agent 继续执行';
-      card.nodes.push({ ago: '刚刚', text: 'Agent 继续执行（人工讨论已结束）', state: 'current' });
-      toast('回复已同步 DSH 会话 · 卡片自动移到「进行中」', { icon: 'link' });
-      announce('回复已同步，卡片自动移到进行中');
+      card.action = '已收到你的讨论回复，会话继续执行';
+      card.nodes.push({ ago: '刚刚', text: '讨论结束，会话继续执行', state: 'current', source: 'session' });
+      toast('已发送到「' + targetTitle + '」· 卡片移到进行中', { icon: 'send' });
+      announce('回复已发送，卡片自动移到进行中');
     } else {
-      card.action = '已收到你的回复，Agent 继续执行';
-      toast('回复已同步到 DSH 会话 ' + card.session, { icon: 'link' });
-      announce('回复已同步到 DSH 会话');
+      card.action = '已收到你的回复，会话继续执行';
+      toast('已发送到「' + targetTitle + '」', { icon: 'send' });
+      announce('回复已发送到会话');
     }
     renderAll({ focus: id });
     if (state.drawerId === id) {
@@ -2100,17 +2764,17 @@
       if (input) input.focus({ preventScroll: true });
     }
   }
-  function deleteCard(id) {
+
+  function archiveCard(id) {
     const idx = cards.findIndex((c) => c.id === id);
     if (idx < 0) return;
     const backup = cards[idx];
-    const wasDrawer = state.drawerId === id;
-    if (wasDrawer) closeDrawer(true);
+    if (state.drawerId === id) closeDrawer(true);
     cards.splice(idx, 1);
     state.expanded.delete(id);
     renderAll();
-    toast('卡片已删除', {
-      icon: 'trash',
+    toast('卡片已归档', {
+      icon: 'archive',
       actionLabel: '撤销',
       onAction: function () {
         cards.splice(idx, 0, backup);
@@ -2119,33 +2783,66 @@
         announce('已恢复卡片' + backup.title);
       }
     });
-    announce('已删除卡片' + backup.title);
+    announce('已归档卡片' + backup.title);
   }
-  function simulateAgent() {
-    const backlogCard = cards.find((c) => c.col === 'backlog');
-    const runningCard = cards.find((c) => c.col === 'running' && c.id !== 'c-203');
-    if (backlogCard) {
-      backlogCard.col = 'running'; backlogCard.status = 'running';
-      backlogCard.action = 'Agent 自主领取 · 正在读取上下文';
-      backlogCard.agent = backlogCard.agent === '待分配' ? 'Opus 5.5' : backlogCard.agent;
-      backlogCard.nodes.push({ ago: '刚刚', text: 'Agent 自主领取任务（无需人工）', state: 'current' });
-      backlogCard.updated = '刚刚';
-      renderAll({ focus: backlogCard.id });
-      toast('Agent 自主推进：' + backlogCard.title + ' → 进行中', { icon: 'sparkle' });
-      announce('Agent 自主领取任务，卡片移到进行中');
-      return;
+
+  function setPrimarySession(cardId, sessionId) {
+    const card = findCard(cardId);
+    if (!card) return;
+    if (!card.sessions || !card.sessions.length) return;
+    card.sessions = card.sessions.map(function (x) { return Object.assign({}, x, { primary: x.id === sessionId }); });
+    const first = card.sessions.find(function (x) { return x.primary; });
+    if (first) {
+      card.sessions = [first].concat(card.sessions.filter(function (x) { return x !== first; }));
+      card.session = first.id;
     }
-    if (runningCard) {
-      runningCard.col = 'done'; runningCard.status = 'done';
-      runningCard.action = '已完成 · 等待你查看结果';
-      runningCard.nodes.push({ ago: '刚刚', text: '任务完成，Agent 自动归档到已完成', state: 'done' });
-      runningCard.updated = '刚刚';
-      renderAll({ focus: runningCard.id });
-      toast('Agent 自主推进：' + runningCard.title + ' → 已完成', { icon: 'sparkle' });
-      announce('Agent 完成任务，卡片移到已完成');
-      return;
-    }
-    toast('没有可推进的卡片，先新建一张待办吧', { icon: 'alert' });
+    renderAll();
+    toast('已设为主会话', { icon: 'check' });
+    announce('已设为' + sessionTitle(card, sessionId) + '主会话');
+  }
+
+  function setReplyTarget(cardId, sessionId) {
+    state.replyTarget[cardId] = sessionId;
+    renderDrawer();
+  }
+
+  function toggleDoneAll() {
+    state.doneAll = !state.doneAll;
+    renderBoard();
+    announce(state.doneAll ? '已展开全部已完成卡片' : '已完成列只显示最近 5 张');
+  }
+
+  function toggleDoneList() {
+    state.doneListExpanded = !state.doneListExpanded;
+    if (!state.doneListExpanded) state.doneListAll = false;
+    renderList();
+    announce(state.doneListExpanded ? '已展开已完成分组' : '已折叠已完成分组');
+  }
+
+  function loadMoreDone() {
+    state.doneListAll = !state.doneListAll;
+    renderList();
+    announce(state.doneListAll ? '已加载全部已完成卡片' : '只显示最近 5 张已完成卡片');
+  }
+
+  function setGroupBy(value) {
+    if (!value) return;
+    state.groupBy = value;
+    renderList(); renderToolbar();
+    announce('列表已按' + (value === 'project' ? '项目' : value === 'priority' ? '优先级' : '状态') + '分组');
+  }
+
+  function retrySync() {
+    if (state.syncRetrying) return;
+    state.syncRetrying = true;
+    renderToolbar();
+    setTimeout(function () {
+      state.syncRetrying = false;
+      state.syncError = false;
+      renderToolbar();
+      toast('实时同步已恢复 · 看板已更新', { icon: 'check' });
+      announce('实时同步已恢复');
+    }, motionMs(900));
   }
 
   /* ---------------------------------------------------------------- toast */
@@ -2196,15 +2893,17 @@
     popoverLayer.innerHTML = '';
   }
   function cardMenuHTML(card) {
+    const pendingApproval = card.approval && card.status === 'needs';
     return '<div class="menu-label">卡片</div>' +
       '<button type="button" class="menu-item" data-menu="open:' + card.id + '">' + icon('link') + '打开详情<span class="menu-hint">O</span></button>' +
+      (pendingApproval ? '<button type="button" class="menu-item" data-menu="edit-approval:' + card.id + '">' + icon('edit') + '编辑确认请求</button>' : '') +
       '<div class="menu-sep"></div>' +
       '<div class="menu-label">移到</div>' +
       COLUMNS.filter((c) => c.id !== card.col).map((c) =>
         '<button type="button" class="menu-item" data-menu="move:' + card.id + ':' + c.id + '">' + icon('arrowRight') + '移到「' + c.name + '」</button>').join('') +
       '<div class="menu-sep"></div>' +
       '<button type="button" class="menu-item" data-menu="copy:' + card.id + '">' + icon('copy') + '复制会话链接</button>' +
-      '<button type="button" class="menu-item is-danger" data-menu="delete:' + card.id + '">' + icon('trash') + '删除卡片</button>';
+      '<button type="button" class="menu-item is-danger" data-menu="archive:' + card.id + '">' + icon('archive') + '归档卡片</button>';
   }
   function filterHTML() {
     return '<div class="menu-label">所属项目</div>' +
@@ -2224,7 +2923,7 @@
     return '<div class="menu-label">键盘快捷键</div>' +
       rows.map((r) => '<div class="help-row"><span>' + r[0] + '</span><span class="keys">' + r[1].map((k) => '<span class="kbd">' + k + '</span>').join('') + '</span></div>').join('') +
       '<div class="menu-sep"></div>' +
-      '<div class="help-note">拖拽卡片可换列；触屏用卡片菜单「移到…」。所有操作都会同步到 DSH 会话。</div>';
+      '<div class="help-note">拖拽卡片可换列；触屏用卡片菜单「移到…」。</div>';
   }
   function openFilter() {
     openPopover('filter', filterBtn, filterHTML(), '筛选卡片');
@@ -2238,17 +2937,19 @@
   /* ---------------------------------------------------------------- drawer */
   function attrHTML(card) {
     const s = statusOf(card.status);
+    const primary = primarySession(card);
+    const sessions = sessionList(card);
     return '<dl class="attr-grid">' +
       '<div class="attr"><dt>状态</dt><dd>' + dot(s.dot, true) + esc(s.label) + '</dd></div>' +
       '<div class="attr"><dt>优先级</dt><dd>' + priorityChip(card.priority) + esc(PRIORITY_LABEL[card.priority] || '') + '</dd></div>' +
       '<div class="attr"><dt>所属项目</dt><dd>' + projectChip(card.project) + '</dd></div>' +
-      '<div class="attr"><dt>标签</dt><dd>' + (card.tags.length ? tagsChips(card.tags) : '<span style="color:inherit">—</span>') + '</dd></div>' +
+      '<div class="attr"><dt>标签</dt><dd>' + (card.tags.length ? tagsChips(card.tags) : '<span class="muted">—</span>') + '</dd></div>' +
       '<div class="attr"><dt>工具调用</dt><dd>' + icon('tool') + card.tools + ' 次</dd></div>' +
       '<div class="attr"><dt>搜索</dt><dd>' + icon('search') + card.searches + ' 次</dd></div>' +
       '<div class="attr"><dt>耗时</dt><dd>' + icon('clock') + esc(card.elapsed) + '</dd></div>' +
       '<div class="attr"><dt>更新时间</dt><dd>' + esc(card.updated) + '</dd></div>' +
-      '<div class="attr"><dt>负责 Agent</dt><dd>' + esc(card.agent) + '</dd></div>' +
-      '<div class="attr"><dt>DSH 会话</dt><dd><span class="prop-project">' + icon('link') + esc(card.session) + '</span></dd></div>' +
+      '<div class="attr"><dt>执行会话</dt><dd>' + icon('session') + esc(primary.title) + (sessions.length > 1 ? ' <span class="session-id">+' + (sessions.length - 1) + '</span>' : '') + '</dd></div>' +
+      '<div class="attr"><dt>执行目录</dt><dd><span class="session-id">' + esc(card.cwd || '继承当前工作区') + '</span></dd></div>' +
     '</dl>';
   }
   function editFormHTML(card) {
@@ -2261,21 +2962,53 @@
       '</div>' +
       '<label class="field"><span>所属项目</span><select name="project">' + PROJECTS.map((p) => '<option' + (card.project === p ? ' selected' : '') + '>' + esc(p) + '</option>').join('') + '</select></label>' +
       '<label class="field"><span>标签（逗号分隔）</span><input name="tags" value="' + esc(card.tags.join('，')) + '" autocomplete="off"></label>' +
+      '<p class="form-inherit">' + icon('session') + '执行目录沿用会话绑定：' + esc(card.cwd || '当前工作区') + '</p>' +
       '<p class="form-error" data-edit-error hidden>标题不能为空。</p>' +
       '<div class="drawer-foot-row"><button type="button" class="btn btn-secondary" data-action="cancel-edit">取消</button><button type="submit" class="btn btn-primary">保存修改</button></div>' +
     '</form>';
   }
+  function sessionSectionHTML(card) {
+    const list = sessionList(card);
+    return '<ul class="session-list" aria-label="会话绑定">' + list.map(function (x) {
+      return '<li class="session-row' + (x.primary ? ' is-primary' : '') + '">' +
+        icon('session') +
+        '<span class="session-main">' +
+          '<span class="session-name"><span class="name">' + esc(x.title) + '</span>' + (x.primary ? '<span class="session-badge">主会话</span>' : '') + '</span>' +
+          '<span class="session-meta">' + (x.running ? '运行中' : '空闲') + ' · <span class="session-id">' + esc(x.id) + '</span></span>' +
+        '</span>' +
+        '<span class="session-actions">' +
+          (x.primary ? '' : '<button type="button" class="btn btn-ghost" data-action="primary-session" data-id="' + card.id + '" data-session="' + esc(x.id) + '">设为主会话</button>') +
+          '<button type="button" class="btn btn-ghost" data-action="open-session" data-id="' + card.id + '" data-session="' + esc(x.id) + '">打开</button>' +
+        '</span>' +
+      '</li>';
+    }).join('') + '</ul>';
+  }
   function threadHTML(card) {
-    return '<div class="sync-bar">' + icon('link') + '<span>已连接 DSH 会话</span><span class="sync-id">' + esc(card.session) + '</span><span class="sync-state"><span class="sync-dot" aria-hidden="true"></span>实时同步</span></div>' +
-      '<div class="thread">' + (card.thread.length ? card.thread.map((m) =>
-        '<div class="msg msg-' + (m.from === 'you' ? 'you' : 'agent') + '"><div class="msg-meta">' + (m.from === 'you' ? '你' : 'Agent · ' + esc(card.agent)) + ' · ' + esc(m.time) + '</div><div class="msg-bubble">' + esc(m.text) + '</div></div>').join('')
-        : '<div class="thread-empty">还没有会话消息。第一条回复会同时写入看板与 DSH 会话。</div>') + '</div>' +
+    const target = state.replyTarget[card.id] || primarySession(card).id;
+    const sessions = sessionList(card);
+    const select = '<label class="reply-target">回复目标' +
+      '<select data-reply-target="' + card.id + '" aria-label="回复目标会话">' +
+        sessions.map(function (x) {
+          return '<option value="' + esc(x.id) + '"' + (x.id === target ? ' selected' : '') + '>' + esc(x.title) + (x.primary ? '（主会话）' : '') + (x.running ? ' · 运行中' : '') + '</option>';
+        }).join('') +
+      '</select></label>';
+    const msgs = card.thread.length
+      ? card.thread.map(function (m) {
+          const sid = m.sessionId || primarySession(card).id;
+          const who = m.from === 'you' ? '你' : esc(card.agent) + '（Agent）';
+          return '<div class="msg msg-' + (m.from === 'you' ? 'you' : 'agent') + '">' +
+            '<div class="msg-meta">' + who + ' · ' + esc(sessionTitle(card, sid)) + ' · ' + esc(m.time) + '</div>' +
+            '<div class="msg-bubble">' + esc(m.text) + '</div></div>';
+        }).join('')
+      : '<div class="thread-empty">还没有会话消息。发送第一条回复开始。</div>';
+    return sessionSectionHTML(card) + select +
+      '<div class="thread">' + msgs + '</div>' +
       '<form class="reply" data-drawer-reply style="margin-top:8px">' +
-        '<label class="sr-only" for="drawer-reply-input">回复 Agent，同步到 DSH 会话</label>' +
-        '<input id="drawer-reply-input" name="reply" type="text" placeholder="回复 Agent，同步到 DSH 会话…" autocomplete="off">' +
-        '<button type="submit" class="icon-btn reply-send" aria-label="发送回复并同步">' + icon('send') + '</button>' +
+        '<label class="sr-only" for="drawer-reply-input">回复会话</label>' +
+        '<input id="drawer-reply-input" name="reply" type="text" placeholder="写一条回复…" autocomplete="off">' +
+        '<button type="submit" class="icon-btn reply-send" aria-label="发送回复到会话">' + icon('send') + '</button>' +
       '</form>' +
-      '<p class="reply-hint" style="margin-top:6px">' + icon('link') + '回复会写入 DSH 会话，并追加一条看板节点</p>';
+      '<p class="composer-hint">全文写入所选会话；Agent 工具写回看板的只是摘要节点。</p>';
   }
   function renderDrawer() {
     const card = state.drawerId ? findCard(state.drawerId) : null;
@@ -2286,6 +3019,7 @@
     const s = statusOf(card.status);
     const isApproval = card.approval && card.status === 'needs';
     const tab = state.drawerTab;
+    const primary = primarySession(card);
     drawer.innerHTML = '<div class="drawer-grabber" aria-hidden="true"></div>' +
       '<header class="drawer-head">' + dot(s.dot) +
         '<span class="drawer-kicker">看板 / ' + colById(card.col).name + ' / ' + esc(card.id.toUpperCase()) + '</span>' +
@@ -2295,10 +3029,11 @@
         (state.editing ? editFormHTML(card) : '<div class="drawer-title-row"><h2 class="drawer-title" id="drawerTitle" tabindex="-1">' + esc(card.title) + '</h2>' +
           '<button type="button" class="icon-btn" data-action="edit" aria-label="编辑卡片">' + icon('edit') + '</button></div>' +
           '<p class="drawer-summary">' + esc(card.summary) + '</p>' +
-          '<div class="drawer-sub">' + dot(s.dot, true) + '<span>' + esc(s.label) + '</span><span aria-hidden="true">·</span><span>' + esc(card.agent) + '</span><span aria-hidden="true">·</span><span>更新于 ' + esc(card.updated) + '</span></div>' +
+          '<div class="drawer-sub">' + dot(s.dot, true) + '<span>' + esc(s.label) + '</span><span aria-hidden="true">·</span><span>' + esc(primary.title) + '</span><span aria-hidden="true">·</span><span>更新于 ' + esc(card.updated) + '</span></div>' +
           '<div class="drawer-actions">' +
-            '<button type="button" class="btn btn-secondary" data-action="session-tab">' + icon('message') + 'DSH 会话</button>' +
+            '<button type="button" class="btn btn-secondary" data-action="session-tab">' + icon('message') + '会话' + (sessionList(card).length > 1 ? '（' + sessionList(card).length + '）' : '') + '</button>' +
             '<button type="button" class="btn btn-ghost" data-action="open-dsh">' + icon('link') + '在 DSH 中打开</button>' +
+            (isApproval ? '<button type="button" class="btn btn-ghost" data-action="edit-approval" data-id="' + card.id + '">编辑确认请求</button>' : '') +
           '</div>' +
           attrHTML(card) +
           '<div class="drawer-tabs" role="tablist" aria-label="详情分区">' +
@@ -2308,8 +3043,8 @@
           '<div class="drawer-body">' + (tab === 'nodes' ? timelineHTML(card) : threadHTML(card)) + '</div>') +
       '</div>' +
       '<footer class="drawer-foot">' +
-        (isApproval ? decisionHTML(card) + '<div class="decision-note">批准后 Agent 继续执行，卡片自动移到「已完成」；驳回则回到「待办」。</div>' : '') +
-        (state.editing ? '' : '<div class="drawer-foot-row"><span class="drawer-note">回复与操作会同步到 DSH 会话</span><button type="button" class="btn btn-ghost" data-action="close-drawer">关闭</button></div>') +
+        (isApproval ? decisionHTML(card) : '') +
+        (state.editing ? '' : '<div class="drawer-foot-row"><button type="button" class="btn btn-ghost" data-action="close-drawer">关闭</button></div>') +
       '</footer>';
     const thread = drawer.querySelector('.thread');
     if (thread) thread.scrollTop = thread.scrollHeight;
@@ -2321,6 +3056,7 @@
     state.drawerId = id;
     state.drawerTab = tab || 'nodes';
     state.editing = false;
+    state.editInitial = null;
     closePopover();
     scrim.hidden = false;
     drawer.hidden = false;
@@ -2341,6 +3077,7 @@
     const id = state.drawerId;
     state.drawerId = null;
     state.editing = false;
+    state.editInitial = null;
     scrim.classList.remove('is-open');
     drawer.classList.remove('is-open');
     const done = function () {
@@ -2353,20 +3090,63 @@
     if (instant) done(); else setTimeout(done, motionMs(260));
     announce('已关闭详情');
   }
+  function drawerIsDirty() {
+    if (!state.drawerId) return false;
+    if (state.editing) {
+      const form = $('#drawer [data-edit-form]');
+      if (form && state.editInitial && serializeForm(form) !== state.editInitial) return true;
+    }
+    const reply = $('#drawer [data-drawer-reply] input');
+    if (reply && reply.value.trim()) return true;
+    const note = state.approvalNotes[state.drawerId];
+    if (note && note.trim()) return true;
+    return false;
+  }
+  function requestCloseDrawer() {
+    if (!state.drawerId) return;
+    if (drawerIsDirty()) {
+      requestConfirm({
+        title: '放弃未保存的修改？',
+        message: '草稿（编辑内容、回复或审批备注）尚未提交，关闭后会丢失。',
+        onConfirm: function () { closeDrawer(); }
+      });
+      return;
+    }
+    closeDrawer();
+  }
 
   /* ----------------------------------------------------------------- modal */
+  function serializeForm(form) {
+    if (!form) return '';
+    const out = {};
+    new FormData(form).forEach(function (v, k) { out[k] = String(v); });
+    return JSON.stringify(out);
+  }
+  function currentWorkspace() {
+    return { session: 'dsh-7f3a', workspace: '看板', cwd: '/Users/roxor/Desktop/dsh/dsh kanban' };
+  }
   function newCardFormHTML(presetCol) {
+    const ws = currentWorkspace();
     return '<div class="modal-head"><h2 id="modalTitle">新建卡片</h2><button type="button" class="icon-btn" data-action="close-modal" aria-label="关闭">' + icon('x') + '</button></div>' +
-      '<p class="modal-desc">创建后会立即写入看板；Agent 领取后会自动移动列，只有授权、方案或讨论才需要你。</p>' +
+      '<p class="modal-desc">创建后写入看板；会话领取后自动移动列。只有授权、方案选择、讨论时才需要你。</p>' +
       '<form data-new-form>' +
-        '<label class="field"><span>标题</span><input name="title" required maxlength="60" placeholder="给 Agent 一个明确的任务" autocomplete="off"></label>' +
+        '<label class="field"><span>标题</span><input name="title" required maxlength="60" placeholder="给会话一个明确的任务" autocomplete="off"></label>' +
         '<label class="field"><span>一句话摘要</span><textarea name="summary" rows="2" maxlength="160" placeholder="目标、边界与验收方式…"></textarea></label>' +
+        '<div class="form-explain">' +
+          '<span><strong>项目</strong> 逻辑分组：看板按项目筛选与分组。</span>' +
+          '<span><strong>标签</strong> 自由筛选关键词，不影响执行。</span>' +
+          '<span><strong>执行目录</strong> workspaceId / cwd 决定会话在哪个工作区执行；默认继承当前会话与工作区。</span>' +
+        '</div>' +
         '<div class="field-row">' +
           '<label class="field"><span>放入列</span><select name="col">' + COLUMNS.map((c) => '<option value="' + c.id + '"' + (presetCol === c.id ? ' selected' : '') + '>' + c.name + '</option>').join('') + '</select></label>' +
           '<label class="field"><span>优先级</span><select name="priority"><option value="P2" selected>P2 · 常规</option><option value="P1">P1 · 高</option><option value="P0">P0 · 紧急</option></select></label>' +
         '</div>' +
-        '<label class="field"><span>所属项目</span><select name="project">' + PROJECTS.map((p) => '<option>' + esc(p) + '</option>').join('') + '</select></label>' +
-        '<label class="field"><span>标签（逗号分隔）</span><input name="tags" placeholder="如：前端，空态" autocomplete="off"></label>' +
+        '<div class="field-row">' +
+          '<label class="field"><span>所属项目</span><select name="project">' + PROJECTS.map((p) => '<option>' + esc(p) + '</option>').join('') + '</select></label>' +
+          '<label class="field"><span>标签（逗号分隔）</span><input name="tags" placeholder="如：前端，空态" autocomplete="off"></label>' +
+        '</div>' +
+        '<label class="field"><span>执行目录（继承当前工作区）</span><input name="cwd" value="' + esc(ws.cwd) + '" readonly></label>' +
+        '<p class="form-inherit">' + icon('session') + '当前会话 ' + esc(ws.session) + ' · 工作区 ' + esc(ws.workspace) + ' · 可在详情中更换</p>' +
         '<p class="form-error" data-new-error hidden>请填写标题。</p>' +
         '<div class="modal-foot"><span class="modal-hint">Enter 创建 · Esc 取消</span><button type="button" class="btn btn-secondary" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">创建卡片</button></div>' +
       '</form>';
@@ -2375,19 +3155,93 @@
     modalLayer.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">' + newCardFormHTML(presetCol || 'backlog') + '</div>';
     modalLayer.hidden = false;
     closePopover();
+    state.approvalEditorId = null;
+    const form = $('[data-new-form]', modalLayer);
+    state.formInitial = serializeForm(form);
     requestAnimationFrame(function () {
       modalLayer.classList.add('is-open');
       const input = modalLayer.querySelector('input[name="title"]');
       if (input) input.focus({ preventScroll: true });
     });
   }
+  function openApprovalEditor(cardId) {
+    const card = findCard(cardId);
+    if (!card || !card.approval) return;
+    const a = card.approval;
+    const optA = a.options[0] || { label: '继续' };
+    const optB = a.options[1] || { label: '停止', tone: 'danger' };
+    state.approvalEditorId = cardId;
+    modalLayer.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">' +
+      '<div class="modal-head"><h2 id="modalTitle">编辑确认请求</h2><button type="button" class="icon-btn" data-action="close-modal" aria-label="关闭">' + icon('x') + '</button></div>' +
+      '<p class="modal-desc">卡片已放进「待你确认」。默认生成的问题可以直接使用，也可以先改标题与选项；保存后展示在卡片里。</p>' +
+      '<form data-approval-form>' +
+        '<label class="field"><span>问题标题</span><input name="title" value="' + esc(a.title) + '" maxlength="80" autocomplete="off"></label>' +
+        '<label class="field"><span>影响说明</span><textarea name="detail" rows="3" maxlength="240">' + esc(a.detail || '') + '</textarea></label>' +
+        '<div class="field-row">' +
+          '<label class="field"><span>选项 A（继续）</span><input name="labelA" value="' + esc(optA.label) + '" autocomplete="off"></label>' +
+          '<label class="field"><span>选项 B（停止）</span><input name="labelB" value="' + esc(optB.label) + '" autocomplete="off"></label>' +
+        '</div>' +
+        '<label class="check"><input type="checkbox" name="multi"' + (a.multiSelect ? ' checked' : '') + '><span>允许多选（与 DSH user-questions 对齐）</span></label>' +
+        '<div class="modal-foot"><span class="modal-hint">选项说明沿用默认模板</span><button type="button" class="btn btn-secondary" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">保存确认请求</button></div>' +
+      '</form></div>';
+    modalLayer.hidden = false;
+    state.formInitial = serializeForm($('[data-approval-form]', modalLayer));
+    requestAnimationFrame(function () {
+      modalLayer.classList.add('is-open');
+      const input = modalLayer.querySelector('input[name="title"]');
+      if (input) input.focus({ preventScroll: true });
+    });
+  }
+  function modalIsDirty() {
+    const form = $('[data-new-form], [data-approval-form]', modalLayer);
+    if (!form || !state.formInitial) return false;
+    return serializeForm(form) !== state.formInitial;
+  }
+  function requestCloseModal() {
+    if (modalLayer.hidden) return;
+    if (modalIsDirty()) {
+      requestConfirm({
+        title: '放弃未保存的修改？',
+        message: '表单内容还没有提交，关闭后会丢失。',
+        onConfirm: function () { closeModal(true); }
+      });
+      return;
+    }
+    closeModal();
+  }
   function closeModal(instant) {
     modalLayer.classList.remove('is-open');
     const done = function () {
       modalLayer.hidden = true;
       modalLayer.innerHTML = '';
+      state.approvalEditorId = null;
+      state.formInitial = null;
     };
     if (instant) done(); else setTimeout(done, motionMs(200));
+  }
+  function requestConfirm(opts) {
+    state.confirm = opts;
+    confirmModal.innerHTML = '<h2 class="confirm-title" id="confirmTitle">' + esc(opts.title) + '</h2>' +
+      '<p class="confirm-desc" id="confirmDesc">' + esc(opts.message) + '</p>' +
+      '<div class="confirm-actions">' +
+        '<button type="button" class="btn btn-secondary" data-action="confirm-cancel">继续编辑</button>' +
+        '<button type="button" class="btn btn-danger" data-action="confirm-discard">' + esc(opts.confirmLabel || '放弃修改') + '</button>' +
+      '</div>';
+    confirmLayer.hidden = false;
+    requestAnimationFrame(function () {
+      const btn = confirmModal.querySelector('[data-action="confirm-discard"]');
+      if (btn) btn.focus({ preventScroll: true });
+    });
+  }
+  function closeConfirm() {
+    confirmLayer.hidden = true;
+    state.confirm = null;
+    confirmModal.innerHTML = '';
+  }
+  function acceptConfirm() {
+    const c = state.confirm;
+    closeConfirm();
+    if (c && c.onConfirm) c.onConfirm();
   }
   function createCard(form) {
     const data = new FormData(form);
@@ -2401,6 +3255,7 @@
     }
     const colId = String(data.get('col') || 'backlog');
     const col = colById(colId);
+    const ws = currentWorkspace();
     const card = {
       id: 'c-' + Math.floor(500 + Math.random() * 400),
       col: colId,
@@ -2410,12 +3265,13 @@
       project: String(data.get('project') || PROJECTS[0]),
       tags: String(data.get('tags') || '').split(/[,，、]/).map((s) => s.trim()).filter(Boolean).slice(0, 3),
       summary: String(data.get('summary') || '').trim() || '（未填写摘要）',
-      action: col.defaultStatus === 'todo' ? '等待 Agent 领取' : col.defaultStatus === 'needs' ? '等待你确认' : '已创建 · 等待开始',
-      tools: 0, searches: 0, elapsed: '—', updated: '刚刚', agent: '待分配', session: 'dsh-' + Math.random().toString(16).slice(2, 6),
-      nodes: [{ ago: '刚刚', text: '由你在看板创建卡片', state: 'done' }, { ago: '—', text: '等待 Agent 领取', state: 'pending' }],
+      action: col.defaultStatus === 'todo' ? '等待会话领取' : col.defaultStatus === 'needs' ? '等待你确认' : '已创建 · 等待开始',
+      tools: 0, searches: 0, elapsed: '—', updated: '刚刚', agent: '待分配',
+      session: ws.session, workspace: ws.workspace, cwd: String(data.get('cwd') || ws.cwd),
+      nodes: [{ ago: '刚刚', text: '由你在看板创建卡片', state: 'done' }, { ago: '—', text: '等待会话领取', state: 'pending' }],
       thread: []
     };
-    if (colId === 'needs') card.approval = { question: '确认是否开始：' + title + '？', risk: '由你创建，等待 Agent 确认范围' };
+    if (colId === 'needs') card.approval = defaultApproval(card);
     const firstOfCol = cards.find((c) => c.col === colId);
     const idx = firstOfCol ? cards.indexOf(firstOfCol) : cards.length;
     cards.splice(idx, 0, card);
@@ -2423,8 +3279,26 @@
     if (state.layout === 'narrow') state.activeCol = colId;
     closeModal(true);
     renderAll({ focus: card.id });
-    toast('卡片已创建 · 已同步到 DSH 会话', { icon: 'check' });
+    toast('卡片已创建', { icon: 'check' });
     announce('已创建卡片' + title);
+    if (colId === 'needs') setTimeout(function () { openApprovalEditor(card.id); }, motionMs(160));
+  }
+  function saveApprovalEditor(form) {
+    const card = findCard(state.approvalEditorId);
+    if (!card || !card.approval) return;
+    const data = new FormData(form);
+    const a = card.approval;
+    a.title = String(data.get('title') || a.title).trim();
+    a.detail = String(data.get('detail') || '').trim();
+    a.multiSelect = Boolean(data.get('multi'));
+    const labelA = String(data.get('labelA') || '').trim();
+    const labelB = String(data.get('labelB') || '').trim();
+    if (a.options[0] && labelA) a.options[0].label = labelA;
+    if (a.options[1] && labelB) a.options[1].label = labelB;
+    closeModal(true);
+    renderAll({ focus: card.id });
+    toast('确认请求已更新', { icon: 'check' });
+    announce('确认请求已更新');
   }
   function saveEdit(form) {
     const card = findCard(state.drawerId);
@@ -2447,15 +3321,16 @@
       const nextCol = map[nextStatus];
       card.status = nextStatus;
       card.col = nextCol;
-      if (nextStatus === 'needs' && !card.approval) card.approval = { question: '确认是否继续：' + title + '？', risk: '由看板编辑发起的人工确认' };
+      if (nextStatus === 'needs' && !card.approval) card.approval = defaultApproval(card);
       if (nextStatus !== 'needs') card.approval = null;
       card.nodes.push({ ago: '刚刚', text: '你在详情中把状态改为「' + STATUS[nextStatus].label + '」', state: 'done' });
     }
     card.updated = '刚刚';
     state.editing = false;
+    state.editInitial = null;
     renderAll();
     renderDrawer();
-    toast('修改已保存 · 已同步到 DSH 会话', { icon: 'check' });
+    toast('修改已保存', { icon: 'check' });
     announce('已保存卡片修改');
   }
 
@@ -2483,34 +3358,81 @@
     }
     if (action === 'remove-project') { state.filters.projects.delete(btn.dataset.value); renderAll(); return true; }
     if (action === 'remove-priority') { state.filters.priorities.delete(btn.dataset.value); renderAll(); return true; }
-    if (action === 'simulate') { simulateAgent(); return true; }
-    if (action === 'refresh') { refreshBoard(); return true; }
     if (action === 'expand') { toggleExpand(id); return true; }
     if (action === 'open') { openDrawer(id); return true; }
     if (action === 'menu') { openCardMenu(id, btn); return true; }
     if (action === 'session') { openDrawer(id, 'thread'); return true; }
+    if (action === 'media') { openDrawer(id, 'thread'); return true; }
     if (action === 'collapse-col') {
       const colId = btn.dataset.col;
-      if (state.collapsedCols.has(colId)) state.collapsedCols.delete(colId); else state.collapsedCols.add(colId);
+      if (state.collapsedCols.has('col:' + colId)) state.collapsedCols.delete('col:' + colId); else state.collapsedCols.add('col:' + colId);
       renderAll();
-      announce((state.collapsedCols.has(colId) ? '已折叠' : '已展开') + colById(colId).name + '列');
+      announce((state.collapsedCols.has('col:' + colId) ? '已折叠' : '已展开') + colById(colId).name + '列');
+      return true;
+    }
+    if (action === 'collapse-group') {
+      const key = btn.dataset.group;
+      if (!key) return true;
+      if (state.collapsedCols.has(key)) state.collapsedCols.delete(key); else state.collapsedCols.add(key);
+      renderList();
       return true;
     }
     if (action === 'tab') { setActiveCol(btn.dataset.col); return true; }
     if (action === 'approve') { approveCard(id); return true; }
     if (action === 'reject') { rejectCard(id); return true; }
     if (action === 'retry') { retryCard(id); return true; }
-    if (action === 'close-drawer') { closeDrawer(); return true; }
-    if (action === 'edit') { state.editing = true; renderDrawer(); const input = drawer.querySelector('input[name="title"]'); if (input) input.focus(); return true; }
-    if (action === 'cancel-edit') { state.editing = false; renderDrawer(); return true; }
+    if (action === 'timeline-earlier') {
+      state.timelineShown[id] = (state.timelineShown[id] || 3) + 5;
+      renderBoard(); renderList();
+      const card = findCard(id);
+      if (card) announce('已加载更早的重要节点');
+      return true;
+    }
+    if (action === 'done-all') { toggleDoneAll(); return true; }
+    if (action === 'done-list-toggle') { toggleDoneList(); return true; }
+    if (action === 'done-list-more') { loadMoreDone(); return true; }
+    if (action === 'retry-sync') { retrySync(); return true; }
+    if (action === 'dismiss-sync-error') { state.syncError = false; renderToolbar(); return true; }
+    if (action === 'primary-session') { setPrimarySession(id, btn.dataset.session); return true; }
+    if (action === 'open-session') {
+      const card = findCard(id);
+      toast('正在打开会话「' + (card ? sessionTitle(card, btn.dataset.session) : '') + '」（演示）', { icon: 'link' });
+      return true;
+    }
+    if (action === 'edit-approval') { openApprovalEditor(id); return true; }
+    if (action === 'close-drawer') { requestCloseDrawer(); return true; }
+    if (action === 'edit') {
+      state.editing = true;
+      renderDrawer();
+      const form = $('#drawer [data-edit-form]');
+      state.editInitial = serializeForm(form);
+      const input = drawer.querySelector('input[name="title"]');
+      if (input) input.focus();
+      return true;
+    }
+    if (action === 'cancel-edit') {
+      const form = $('#drawer [data-edit-form]');
+      if (form && state.editInitial && serializeForm(form) !== state.editInitial) {
+        requestConfirm({
+          title: '放弃未保存的修改？',
+          message: '编辑内容还没有保存，放弃后会恢复原值。',
+          onConfirm: function () { state.editing = false; state.editInitial = null; renderDrawer(); }
+        });
+      } else {
+        state.editing = false; state.editInitial = null; renderDrawer();
+      }
+      return true;
+    }
     if (action === 'drawer-tab') { state.drawerTab = btn.dataset.tab; renderDrawer(); return true; }
     if (action === 'session-tab') { state.drawerTab = 'thread'; renderDrawer(); const input = $('#drawer [data-drawer-reply] input'); if (input) input.focus(); return true; }
     if (action === 'open-dsh') {
       const card = findCard(state.drawerId);
-      toast('正在 DSH 会话中打开 ' + (card ? card.session : '') + '（演示）', { icon: 'link' });
+      toast('正在 DSH 中打开「' + (card ? primarySession(card).title : '') + '」（演示）', { icon: 'link' });
       return true;
     }
-    if (action === 'close-modal') { closeModal(); return true; }
+    if (action === 'close-modal') { requestCloseModal(); return true; }
+    if (action === 'confirm-cancel') { closeConfirm(); return true; }
+    if (action === 'confirm-discard') { acceptConfirm(); return true; }
     if (action === 'toast-undo') {
       if (state.toast && state.toast.onAction) state.toast.onAction();
       clearTimeout(state.toastTimer);
@@ -2536,16 +3458,17 @@
       const kind = parts[0]; const id = parts[1]; const value = parts[2];
       closePopover();
       if (kind === 'open') openDrawer(id);
-      else if (kind === 'move') moveCard(id, value, null);
+      else if (kind === 'edit-approval') openApprovalEditor(id);
+      else if (kind === 'move') moveCard(id, value, null, { human: true });
       else if (kind === 'copy') {
         const card = findCard(id);
-        const text = 'dsh://session/' + (card ? card.session : '') + '#' + id;
+        const text = 'dsh://session/' + (card ? primarySession(card).id : '') + '#' + id;
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).then(function () { toast('会话链接已复制', { icon: 'copy' }); }, function () { toast('会话链接：' + text, { icon: 'copy' }); });
         } else {
           toast('会话链接：' + text, { icon: 'copy' });
         }
-      } else if (kind === 'delete') deleteCard(id);
+      } else if (kind === 'archive') archiveCard(id);
       return;
     }
     if (e.target.closest('[data-filter-clear]')) {
@@ -2586,29 +3509,58 @@
     }
     const newForm = e.target.closest('[data-new-form]');
     if (newForm) { e.preventDefault(); createCard(newForm); return; }
+    const approvalForm = e.target.closest('[data-approval-form]');
+    if (approvalForm) { e.preventDefault(); saveApprovalEditor(approvalForm); return; }
     const editForm = e.target.closest('[data-edit-form]');
     if (editForm) { e.preventDefault(); saveEdit(editForm); return; }
   });
+
+  // 审批选项 / 备注 / 回复目标：只更新状态，不重渲染，避免输入焦点丢失
+  document.addEventListener('input', function (e) {
+    const note = e.target.closest('[data-approval-note]');
+    if (!note) return;
+    state.approvalNotes[note.dataset.approvalNote] = note.value;
+  });
+  document.addEventListener('change', function (e) {
+    const opt = e.target.closest('[data-approval-option]');
+    if (opt) {
+      const cardId = opt.dataset.approvalOption;
+      const card = findCard(cardId);
+      if (!card || !card.approval) return;
+      const current = approvalSelection(card).slice();
+      const value = opt.value;
+      let next;
+      if (card.approval.multiSelect) {
+        next = current.indexOf(value) >= 0 ? current.filter(function (x) { return x !== value; }) : current.concat([value]);
+      } else {
+        next = [value];
+      }
+      state.approvalSel[cardId] = next;
+      const group = opt.closest('.decision-options');
+      if (group) {
+        $$('.opt', group).forEach(function (label) {
+          const input = label.querySelector('input');
+          if (!input) return;
+          label.classList.toggle('is-selected', next.indexOf(input.value) >= 0);
+        });
+      }
+      return;
+    }
+    const target = e.target.closest('[data-reply-target]');
+    if (target) { setReplyTarget(target.dataset.replyTarget, target.value); return; }
+  });
+
+  // 列表分组 / SSE 错误条
+  groupSelect.addEventListener('change', function () { setGroupBy(groupSelect.value); });
+  if (syncErrorBar) {
+    syncErrorBar.addEventListener('click', function () { /* 按钮由统一 action 处理 */ });
+  }
 
   // 搜索
   searchInput.addEventListener('input', function () {
     state.search = searchInput.value;
     renderBoard(); renderList(); renderTabs(); renderToolbar();
   });
-
-  // 刷新（加载态演示）
-  function refreshBoard() {
-    if (state.refreshing) return;
-    state.refreshing = true;
-    renderBoard();
-    toast('正在同步 Agent 状态…', { icon: 'refresh' });
-    setTimeout(function () {
-      state.refreshing = false;
-      renderAll();
-      toast('已同步 · ' + cards.length + ' 张卡片', { icon: 'check' });
-      announce('看板已刷新');
-    }, motionMs(900));
-  }
 
   /* --------------------------------------------------------------- drawer UI */
   drawer.addEventListener('keydown', function (e) {
@@ -2629,7 +3581,9 @@
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
-  scrim.addEventListener('click', function () { closeDrawer(); });
+  scrim.addEventListener('click', function () { requestCloseDrawer(); });
+  modalLayer.addEventListener('click', function (e) { if (e.target === modalLayer) requestCloseModal(); });
+  confirmLayer.addEventListener('click', function (e) { if (e.target.classList.contains('confirm-backdrop')) closeConfirm(); });
 
   /* ------------------------------------------------------------------- drag */
   let dragId = null;
@@ -2686,15 +3640,16 @@
     const id = dragId;
     dragId = null;
     clearDropHints();
-    if (state.collapsedCols.has(colId)) state.collapsedCols.delete(colId);
-    moveCard(id, colId, index);
+    if (state.collapsedCols.has('col:' + colId)) state.collapsedCols.delete('col:' + colId);
+    moveCard(id, colId, index, { human: true });
   });
 
   /* -------------------------------------------------------------- keyboard */
   function closeTop() {
+    if (!confirmLayer.hidden) { closeConfirm(); return true; }
     if (state.popover) { closePopover(); return true; }
-    if (!modalLayer.hidden) { closeModal(); return true; }
-    if (state.drawerId) { closeDrawer(); return true; }
+    if (!modalLayer.hidden) { requestCloseModal(); return true; }
+    if (state.drawerId) { requestCloseDrawer(); return true; }
     return false;
   }
   document.addEventListener('keydown', function (e) {
@@ -2717,7 +3672,7 @@
         : (cardEl.closest('.list-group') || {}).dataset && cardEl.closest('.list-group').dataset.col;
       const idx = COLUMNS.findIndex(function (c) { return c.id === colId; });
       const next = COLUMNS[idx + (e.key === 'ArrowRight' ? 1 : -1)];
-      if (next) moveCard(cardEl.dataset.cardId, next.id, null);
+      if (next) moveCard(cardEl.dataset.cardId, next.id, null, { human: true });
       return;
     }
     if (cardEl && e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
@@ -2727,7 +3682,7 @@
       const colCards = cards.filter(function (c) { return c.col === card.col; });
       const cur = colCards.indexOf(card);
       const next = cur + (e.key === 'ArrowDown' ? 1 : -1);
-      if (next >= 0 && next < colCards.length) moveCard(card.id, card.col, next);
+      if (next >= 0 && next < colCards.length) moveCard(card.id, card.col, next, { human: false });
       return;
     }
     if (cardEl && (e.key === 'Enter' || e.key === ' ')) {
@@ -2765,15 +3720,30 @@
     state.theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
     state.layout = document.documentElement.dataset.layout || 'wide';
     if (params.get('view') === 'list') state.view = 'list';
+    if (params.get('group')) state.groupBy = params.get('group');
     if (params.get('collapsed') === '1') state.expanded.clear();
     if (params.get('expanded')) {
       state.expanded.clear();
       params.get('expanded').split(',').forEach(function (id) { if (findCard(id)) state.expanded.add(id); });
     }
+    if (params.get('done') === 'all') state.doneAll = true;
+    if (params.get('listDone') === 'expanded') state.doneListExpanded = true;
+    if (params.get('listDone') === 'all') { state.doneListExpanded = true; state.doneListAll = true; }
+    if (params.get('multi') === '1') { state.expanded.clear(); state.expanded.add('c-304'); }
+    if (params.get('syncError') === '1') state.syncError = true;
     if (params.get('col')) state.activeCol = params.get('col');
     renderAll();
     if (params.get('drawer')) {
       openDrawer(params.get('drawer'), params.get('tab') || 'nodes');
+    } else if (params.get('sessions') === '1') {
+      openDrawer('c-201', 'thread');
+    }
+    const firstExpanded = params.get('multi') === '1' || params.get('expanded') ? Array.from(state.expanded)[0] : null;
+    if (firstExpanded) {
+      setTimeout(function () {
+        const el = document.querySelector('.card[data-card-id="' + firstExpanded + '"]');
+        if (el) el.scrollIntoView({ block: 'center' });
+      }, motionMs(80));
     }
     window.addEventListener('resize', function () { if (state.popover) closePopover(); });
   }
@@ -2784,6 +3754,7 @@
 
   init();
 })();
+
 </script>
 </body>
 </html>

@@ -35,22 +35,22 @@ test('kanban_boards / kanban_cards：只读查询与过滤', async t => {
   const boards = parse(await byName.get('kanban_boards').execute({}, EXEC))
   assert.equal(boards.ok, true)
   assert.equal(boards.boards.length, 1)
-  assert.equal(boards.boards[0].counts.total, 6)
-  assert.equal(boards.boards[0].counts.needs_you, 3)
+  assert.equal(boards.boards[0].counts.total, 7)
+  assert.equal(boards.boards[0].counts.needs_you, 4)
 
   const cardsTool = byName.get('kanban_cards')
   const all = parse(await cardsTool.execute({}, EXEC))
   assert.equal(all.ok, true)
-  assert.equal(all.cards.length, 6)
-  assert.equal(all.total, 6)
+  assert.equal(all.cards.length, 7)
+  assert.equal(all.total, 7)
   assert.equal(all.cards[0].status !== undefined, true)
   assert.equal(all.cards[0].columnLabel.length > 0, true)
   assert.equal(Object.hasOwn(all.cards[0], 'approvals'), false) // 列表用摘要，不带全量审批
 
   assert.equal(parse(await cardsTool.execute({ status: 'blocked' }, EXEC)).total, 1)
-  assert.equal(parse(await cardsTool.execute({ status: 'needs_you' }, EXEC)).total, 1)
+  assert.equal(parse(await cardsTool.execute({ status: 'needs_you' }, EXEC)).total, 2)
   assert.equal(parse(await cardsTool.execute({ label: 'mvp' }, EXEC)).total, 2)
-  assert.equal(parse(await cardsTool.execute({ project: 'dsh-kanban' }, EXEC)).total, 6)
+  assert.equal(parse(await cardsTool.execute({ project: 'dsh-kanban' }, EXEC)).total, 7)
   assert.equal(parse(await cardsTool.execute({ project: 'other' }, EXEC)).total, 0)
   assert.ok(parse(await cardsTool.execute({ q: '看板' }, EXEC)).total >= 1)
   // 种子卡片不再伪造会话绑定；会话过滤在下面 link_session 流程里覆盖。
@@ -64,18 +64,27 @@ test('kanban_boards / kanban_cards：只读查询与过滤', async t => {
   assert.equal(badBoard.error.code, 'BOARD_NOT_FOUND')
 })
 
-test('kanban_card 返回完整卡片、时间线与 pending approval', async t => {
+test('kanban_card 返回完整卡片、时间线与 pending approval（单选/多选）', async t => {
   const { byName } = await setup(t)
   const list = parse(await byName.get('kanban_cards').execute({ status: 'needs_you' }, EXEC))
-  const cardId = list.cards[0].id
+  const single = list.cards.find(card => card.pendingApproval?.multiSelect === false)
+  assert.ok(single, '种子应包含单选审批卡')
+  const cardId = single.id
   const detail = parse(await byName.get('kanban_card').execute({ cardId, activityLimit: 2 }, EXEC))
   assert.equal(detail.ok, true)
   assert.equal(detail.card.id, cardId)
   assert.equal(detail.card.checklists.length, 0)
+  assert.equal(detail.pendingApproval.multiSelect, false)
   assert.equal(detail.pendingApproval.options.length, 2)
   assert.equal(detail.activities.length, 2)
   assert.ok(detail.activities[0].at >= detail.activities[1].at)
   assert.match(detail.hint, /等待用户确认/)
+
+  const multi = list.cards.find(card => card.pendingApproval?.multiSelect === true)
+  assert.ok(multi, '种子应包含多选审批卡')
+  const multiDetail = parse(await byName.get('kanban_card').execute({ cardId: multi.id }, EXEC))
+  assert.equal(multiDetail.pendingApproval.multiSelect, true)
+  assert.equal(multiDetail.pendingApproval.options.length, 4)
 
   const missing = parse(await byName.get('kanban_card').execute({ cardId: 'card-ffffffff' }, EXEC))
   assert.equal(missing.ok, false)
@@ -172,6 +181,20 @@ test('kanban_request_approval → needs_you + pending；kanban_link_session；ka
   const noOptions = parse(await byName.get('kanban_request_approval').execute({ cardId, title: 'x', options: [] }, EXEC))
   assert.equal(noOptions.ok, false)
   assert.equal(noOptions.error.code, 'BAD_REQUEST')
+
+  // 多选审批：multiSelect + 最多 8 个选项
+  const multi = parse(await byName.get('kanban_request_approval').execute({
+    cardId, title: '发布前要带哪些检查？', multiSelect: true,
+    options: [{ id: 'unit-test', label: '单元测试' }, { id: 'build', label: '构建' }, { id: 'docs', label: '文档' }],
+  }, EXEC))
+  assert.equal(multi.ok, true)
+  assert.equal(multi.approval.multiSelect, true)
+  assert.equal(multi.approval.options.length, 3)
+  const tooMany = parse(await byName.get('kanban_request_approval').execute({
+    cardId, title: '9 个选项', options: Array.from({ length: 9 }, (_, index) => `选项${index + 1}`),
+  }, EXEC))
+  assert.equal(tooMany.ok, false)
+  assert.equal(tooMany.error.code, 'BAD_REQUEST')
 
   const linked = parse(await byName.get('kanban_link_session').execute({ cardId, sessionId: 'session-tool-1', title: '工具会话' }, EXEC))
   assert.equal(linked.ok, true)
