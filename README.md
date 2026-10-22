@@ -163,13 +163,12 @@ docs/             # 分析、契约、设计、架构、验证
 - [架构与信息架构](docs/04-architecture.md)
 - [契约：数据模型](docs/contracts/01-data-model.md) / [HTTP API](docs/contracts/02-http-api.md) / [客户端桥](docs/contracts/03-client-bridge.md)
 - [验证记录（含 0.2.1 宿主）](docs/06-verification.md)
-- [Deep link 提案](docs/08-deeplink-proposal.md)
+- [Deep link 提案（已搁置，应用内打开会话已实现）](docs/08-deeplink-proposal.md)
 
 ## 已知限制
 
 - 每个 workspace 一个看板的模式尚未实现（M2）。
 - 卡片内回复只进主会话；多会话回复目标选择器在 v1.1（设计稿已含状态）。
-- deep link（`dsh://session/<id>#<card>`）需要宿主支持，当前用面板内「打开会话」替代。
 - 会话事件（工具调用数、耗时）目前由 agent 工具写入；自动回填在 M3。
 - 审批与 DSH 原生工具审批（bash 等）是两套收件箱，是否合并待评估。
 - 无团队协作/云端同步，数据仅本机。

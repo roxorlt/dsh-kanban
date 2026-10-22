@@ -229,7 +229,7 @@ sequenceDiagram
 | 3 | 批量选择 | v1.1 | 拖拽与批量选择手势需分离，v1 不做 |
 | 4 | 人工拖卡进「待你确认」 | 允许 | 拖入时弹窗生成通用确认（标题预填「需要你确认：{卡片标题}」，选项 继续/停止，可编辑后提交） |
 | 5 | 会话同步粒度 | 双向非对称 | 看板→会话发全文；会话→看板只由 agent 工具写摘要节点，不镜像全文。长回复在时间线内可折叠/展开 |
-| 6 | deep link | v1.1，暂用面板内跳转 | 提案 `dsh://session/<sessionId>#<cardId>`。已确认 DSH 应用注册了 `dsh` scheme，但宿主目前只处理 `dsh://open`（聚焦窗口），其余 URL 被忽略；需要宿主侧支持后再启用。当前用卡片详情「打开会话」走 `ctx.sessions.open` + `layout.selectPanel(null)` |
+| 6 | deep link | **不做（2026-10-22 确认）** | 用户确认不需要应用外部 `dsh://` 链接；应用内「打开会话」已实现（0.2.x `uiWorkspace.openSession` / 0.1.x `sessions.open`），无宿主依赖 |
 | 7 | 竖屏软键盘 | 样式先做，真机验收 | Composer 用 `dvh` + `env(safe-area-inset-bottom)`；列入真机验收清单 |
 | 8 | 列表分组 | 已确认 | 列表视图支持按状态（默认）/项目/优先级分组 |
 
@@ -244,7 +244,7 @@ sequenceDiagram
 
 ## 11. 待办与开放讨论
 
-1. **deep link 宿主支持**：需要 DSH 桌面端把 `dsh://session/<id>#<card>` 转发给 Web 客户端；落地前保持面板内跳转。
+1. **deep link**：已确认不做应用外链接；应用内跳转完成。提案文档保留为历史记录（docs/08）。
 2. **审批与原生审批合并**：需要宿主 `user-questions` / approval 接口的对齐方案（M2 评估）。
 3. **多选审批语义**：v1.1 已支持 options 多选（`multiSelect`）；是否支持「一次审批包含多个问题」仍待讨论（可对齐 DSH `ask_user_question` 的多问题结构）。
 4. **已完成膨胀**：v1 用「最近 5 张 + 查看全部 + 列表折叠」；自动归档（如 30 天）放 v1.1。
