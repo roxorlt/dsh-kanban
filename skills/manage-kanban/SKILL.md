@@ -98,3 +98,9 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 - 审批决议在 `approval.resolution`：单题 `{ optionIds, labels, comment? }`；多题额外有 `answers: [{questionId, optionIds, labels}]`（`optionIds/labels` 仍是拍平后的兼容字段）。不要假设旧的单值 `optionId`。
 - 多题审批用户会逐题作答；你只能在用户完成后读取 `answers`，不要自行补答或推断用户选择。
 - 工具返回 `{ok:false,error:{code,message}}` 时不要重试同样的错误参数；根据 `message` 修正。
+
+## 收到卡片回复 / 开始推进时的第一步
+
+- 当用户从看板卡片内回复，或点击「开始推进」时，**先 `kanban_move_card` 把卡片移到 `running`，并用 `kanban_update_card` 写一句 `currentAction`**，再开始实际工作；不要等做完才改状态。
+- 如果卡片已经是 `running`，只更新 `currentAction`；如果用户在待办卡片里只是提问、没有启动意图，可以保持 `backlog` 并直接回答。
+- 完成时用 `kanban_complete_card` 写 `result`；需要用户决策时用 `kanban_request_approval`，不要替用户做选择。

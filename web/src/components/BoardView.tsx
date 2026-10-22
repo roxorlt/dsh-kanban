@@ -249,6 +249,7 @@ export function BoardView({
                     onArchive={actions.onArchive}
                     onReopen={actions.onReopen}
                     onMove={actions.onMove}
+                    onStartCard={actions.onStartCard}
                     onResolveApproval={actions.onResolveApproval}
                     onNotify={actions.onNotify}
                     onReply={actions.onReply}

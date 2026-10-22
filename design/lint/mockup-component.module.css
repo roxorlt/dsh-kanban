@@ -1563,6 +1563,34 @@
   [data-layout="narrow"] .batch-bar .btn { height: 36px; }
   [data-layout="narrow"] .batch-count { flex: 1; }
 
+
+  /* 开始推进：折叠卡次级（footer）、展开卡主按钮、菜单三级 */
+  .card-start {
+    margin-left: 4px;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 6px;
+    font: var(--dsw-font-xxxs-strong-11);
+  }
+  .card-start .ic { width: 10px; height: 10px; }
+  .card-start .start-label-short { display: none; }
+  .card.is-expanded .card-start { display: none; }
+  .start-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 1px 0 2px; }
+  .start-row .btn { height: 30px; }
+  .start-hint { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+  .is-selection-mode .card-start { display: none !important; }
+  [data-layout="compact"] .card-start .start-label { display: none; }
+  [data-layout="compact"] .card-start .start-label-short { display: inline; }
+  [data-layout="scroll"] .card-start .start-label { display: none; }
+  [data-layout="scroll"] .card-start .start-label-short { display: inline; }
+  [data-layout="narrow"] .card-start { height: 28px; padding: 0 8px; }
+  [data-layout="narrow"] .card-start .start-label-short { display: inline; }
+  [data-layout="narrow"] .card-start .start-label { display: none; }
+
   /* ===== v2 响应式增补 ===== */
   [data-layout="narrow"] .board-title { flex: 1; min-width: 0; }
   [data-layout="narrow"] .board-metas { gap: 6px; }

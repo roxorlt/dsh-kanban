@@ -17,6 +17,7 @@ import {
 import type { SelectionState } from './lib/selection';
 import { SelectionBar } from './components/SelectionBar';
 import { formatApprovalSessionText } from './lib/approvalQuestions';
+import { shouldPromptStartAfterReply, startCardFlow } from './lib/startCard';
 import type { HostInfo } from './types';
 import { I18nContext, readStoredLang, resolveLang, storeLang, translate } from './i18n';
 import type { I18nKey, Lang, TranslateVars } from './i18n';
@@ -459,6 +460,56 @@ export function App() {
     [announce, notifyToast, refresh, t],
   );
 
+  /** v1.1 待办卡「开始推进」：乐观移列 → 启动提示发送 / 独立预览仅移动；失败回滚。 */
+  const handleStartCard = useCallback(
+    async (card: Card) => {
+      if (card.status !== 'backlog') return;
+      const previous = snapshotRef.current;
+      setSnapshot(applyOptimisticMove(previous, card.id, 'running'));
+      const result = await startCardFlow(card, {
+        embedded,
+        moveToRunning: async () => {
+          await api.moveCard(card.id, 'running', { version: card.version });
+        },
+        rollbackToBacklog: async () => {
+          await api.moveCard(card.id, 'backlog');
+        },
+        ensureSession: async (text) => {
+          const ensured = await bridge.request('session.ensure', {
+            text,
+            ...(card.sessionIds[0] ? { sessionId: card.sessionIds[0] } : {}),
+            ...(card.cwd ? { cwd: card.cwd } : {}),
+          });
+          return { sessionId: ensured.sessionId, created: ensured.created };
+        },
+        bindSession: async (sessionId) => {
+          await api.bindSession(card.id, sessionId);
+        },
+      });
+      if (result.status === 'skipped') {
+        setSnapshot(previous);
+        await refresh({ silent: true });
+        return;
+      }
+      if (result.status === 'started') {
+        const message = t('toast.started');
+        notifyToast(message, 'success');
+        announce(message);
+        await refresh({ silent: true });
+        return;
+      }
+      if (result.status === 'moved-standalone') {
+        notifyToast(t('toast.startedStandalone'), 'info');
+        await refresh({ silent: true });
+        return;
+      }
+      setSnapshot(previous);
+      notifyToast(t('toast.startFailed'), 'error');
+      await refresh({ silent: true });
+    },
+    [announce, embedded, notifyToast, refresh, t],
+  );
+
   const handleApprovalDraftSubmit = useCallback(
     async (values: ApprovalDraftValues) => {
       const draft = approvalDraft;
@@ -620,6 +671,11 @@ export function App() {
       }
       if (!embedded) notifyToast(t('composer.standaloneHint'), 'info');
       else notifyToast(t('toast.saved'), 'success');
+      // 待办卡回复后只提示、不自动改状态
+      const latest = snapshotRef.current.cards.find((item) => item.id === card.id) ?? card;
+      if (shouldPromptStartAfterReply(latest.status)) {
+        notifyToast(t('toast.replyBacklogHint'), 'info');
+      }
       return { ok: true };
     },
     [embedded, notifyToast, refresh, sendToSession, t],
@@ -817,6 +873,7 @@ export function App() {
       onArchive: handleArchiveRequest,
       onReopen: (card) => void handleReopen(card),
       onMove: (cardId, column, placement) => void handleMove(cardId, column, placement),
+      onStartCard: (card) => void handleStartCard(card),
       onResolveApproval: (card, approval, submission, comment, decision) =>
         void handleResolveApproval(card, approval, submission, comment, decision),
       onNotify: (message, tone) => notifyToast(message, tone),
@@ -834,6 +891,7 @@ export function App() {
       handleResolveApproval,
       handleRestart,
       handleSessionClick,
+      handleStartCard,
       handleToggleExpanded,
       notifyToast,
     ],

@@ -1715,6 +1715,34 @@
   [data-layout="narrow"] .batch-bar .btn { height: 36px; }
   [data-layout="narrow"] .batch-count { flex: 1; }
 
+
+  /* 开始推进：折叠卡次级（footer）、展开卡主按钮、菜单三级 */
+  .card-start {
+    margin-left: 4px;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 6px;
+    font: var(--dsw-font-xxxs-strong-11);
+  }
+  .card-start .ic { width: 10px; height: 10px; }
+  .card-start .start-label-short { display: none; }
+  .card.is-expanded .card-start { display: none; }
+  .start-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 1px 0 2px; }
+  .start-row .btn { height: 30px; }
+  .start-hint { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+  .is-selection-mode .card-start { display: none !important; }
+  [data-layout="compact"] .card-start .start-label { display: none; }
+  [data-layout="compact"] .card-start .start-label-short { display: inline; }
+  [data-layout="scroll"] .card-start .start-label { display: none; }
+  [data-layout="scroll"] .card-start .start-label-short { display: inline; }
+  [data-layout="narrow"] .card-start { height: 28px; padding: 0 8px; }
+  [data-layout="narrow"] .card-start .start-label-short { display: inline; }
+  [data-layout="narrow"] .card-start .start-label { display: none; }
+
   /* ===== v2 响应式增补 ===== */
   [data-layout="narrow"] .board-title { flex: 1; min-width: 0; }
   [data-layout="narrow"] .board-metas { gap: 6px; }
@@ -2523,10 +2551,13 @@
       '<p class="card-summary">' + esc(card.summary) + '</p>' +
       '<div class="card-action' + actionTone + '">' + icon(actionIcon) + '<span>' + esc(card.action) + '</span></div>' +
       '<div class="card-props">' + priorityChip(card.priority) + projectChip(card.project) + tagsChips(card.tags) + '</div>' +
-      '<div class="card-foot">' + statusFoot(card) + metrics(card) + '</div>' +
+      '<div class="card-foot">' + statusFoot(card) + metrics(card) +
+        (card.status === 'todo' && !state.selectionMode ? '<button type="button" class="btn btn-secondary card-start" data-action="start" data-id="' + card.id + '" aria-label="开始推进：' + esc(card.title) + '">' + icon('play') + '<span class="start-label">开始推进</span><span class="start-label-short">开始</span></button>' : '') +
+      '</div>' +
       decisionHTML(card) +
       (expanded ? '<div class="card-expanded" id="exp-' + card.id + '">' +
         '<div class="exp-head"><span>重要节点</span><button type="button" class="link-btn" data-action="open" data-id="' + card.id + '">详情 &gt;</button></div>' +
+        (card.status === 'todo' ? '<div class="start-row"><button type="button" class="btn btn-primary" data-action="start" data-id="' + card.id + '">' + icon('play') + '开始推进</button><span class="start-hint">启动或续接「' + esc(primarySession(card).title) + '」</span></div>' : '') +
         timelineHTML(card, { limit: 3 }) +
         mediaRowHTML(card) +
         (card.status === 'failed' ? '<button type="button" class="btn btn-secondary btn-sm" data-action="retry" data-id="' + card.id + '">' + icon('redo') + '重试任务</button>' : '') +
@@ -3097,6 +3128,25 @@
     resolveApproval(card, false, questions.map(function () { return []; }), (state.approvalNotes[id] || '').trim());
   }
 
+  function startCard(id) {
+    const card = findCard(id);
+    if (!card || card.status !== 'todo' || card.col !== 'backlog') return;
+    const session = primarySession(card);
+    const embedded = window.parent !== window;
+    card.col = 'running';
+    card.status = 'running';
+    card.action = '已开始推进 · 会话正在读取上下文';
+    card.elapsed = '0m 00s';
+    card.updated = '刚刚';
+    card.nodes.push({ ago: '刚刚', text: '你点了「开始推进」，' + (embedded ? '会话已启动' : '已模拟启动会话'), state: 'current', source: 'session' });
+    if (card.sessions && card.sessions.length) {
+      card.sessions = card.sessions.map(function (x, i) { return Object.assign({}, x, { running: i === 0 }); });
+    }
+    renderAll({ focus: id });
+    toast(embedded ? '已开始推进 · 会话「' + session.title + '」已启动' : '已开始推进 · 预览模式已模拟启动会话', { icon: 'play' });
+    announce('已开始推进：' + card.title);
+  }
+
   function retryCard(id) {
     const card = findCard(id);
     if (!card) return;
@@ -3124,6 +3174,11 @@
       card.nodes.push({ ago: '刚刚', text: '讨论结束，会话继续执行', state: 'current', source: 'session' });
       toast('已发送到「' + targetTitle + '」· 卡片移到进行中', { icon: 'send' });
       announce('回复已发送，卡片自动移到进行中');
+    } else if (card.status === 'todo') {
+      card.action = '已回复 · 卡片仍在待办，点「开始推进」后执行';
+      card.nodes.push({ ago: '刚刚', text: '你回复了会话（待办状态不自动改变）', state: 'done' });
+      toast('已发送到「' + targetTitle + '」· 待办状态不变', { icon: 'send' });
+      announce('回复已发送到会话；待办状态未改变');
     } else {
       card.action = '已收到你的回复，会话继续执行';
       toast('已发送到「' + targetTitle + '」', { icon: 'send' });
@@ -3269,6 +3324,7 @@
     const pendingApproval = card.approval && card.status === 'needs' && !isMultiQuestionCard(card);
     return '<div class="menu-label">卡片</div>' +
       '<button type="button" class="menu-item" data-menu="open:' + card.id + '">' + icon('link') + '详情 &gt;<span class="menu-hint">O</span></button>' +
+      (card.status === 'todo' ? '<button type="button" class="menu-item" data-menu="start:' + card.id + '">' + icon('play') + '开始推进</button>' : '') +
       (pendingApproval ? '<button type="button" class="menu-item" data-menu="edit-approval:' + card.id + '">' + icon('edit') + '编辑确认请求</button>' : '') +
       '<div class="menu-sep"></div>' +
       '<div class="menu-label">移到</div>' +
@@ -3382,7 +3438,9 @@
         '<input id="drawer-reply-input" name="reply" type="text" placeholder="写一条回复…" autocomplete="off">' +
         '<button type="submit" class="icon-btn reply-send" aria-label="发送回复到会话">' + icon('send') + '</button>' +
       '</form>' +
-      '<p class="composer-hint">全文写入所选会话；Agent 工具写回看板的只是摘要节点。</p>';
+      '<p class="composer-hint">' + (card.status === 'todo'
+        ? '回复全文写入所选会话；待办卡片不会因回复自动改变状态，需要时点「开始推进」。'
+        : '全文写入所选会话；Agent 工具写回看板的只是摘要节点。') + '</p>';
   }
   function renderDrawer() {
     const card = state.drawerId ? findCard(state.drawerId) : null;
@@ -3730,6 +3788,7 @@
     if (action === 'select-clear') { clearSelection(); return true; }
     if (action === 'batch-move') { openBatchMoveMenu(btn); return true; }
     if (action === 'batch-archive') { bulkArchiveSelected(); return true; }
+    if (action === 'start') { startCard(id); return true; }
     if (action === 'help') { openPopover('help', helpBtn, helpHTML(), '键盘快捷键'); return true; }
     if (action === 'filter') { openFilter(); return true; }
     if (action === 'new-card') { openNewModal('backlog'); return true; }
@@ -3851,6 +3910,7 @@
       const kind = parts[0]; const id = parts[1]; const value = parts[2];
       closePopover();
       if (kind === 'batch-move') { bulkMoveSelected(id); return; }
+      if (kind === 'start') { startCard(id); return; }
       if (kind === 'open') openDrawer(id);
       else if (kind === 'edit-approval') openApprovalEditor(id);
       else if (kind === 'move') moveCard(id, value, null, { human: true });
@@ -4142,6 +4202,7 @@
     if (params.get('listDone') === 'expanded') state.doneListExpanded = true;
     if (params.get('listDone') === 'all') { state.doneListExpanded = true; state.doneListAll = true; }
     if (params.get('multi') === '1' || params.get('approval') === 'multi-question') { state.expanded.clear(); state.expanded.add('c-304'); }
+    if (params.get('start') === '1') { state.expanded.clear(); state.expanded.add('c-101'); }
     state.listActions = params.get('listActions') === 'right' ? 'right' : 'left';
     if (params.get('syncError') === '1') state.syncError = true;
     if (params.get('col')) state.activeCol = params.get('col');
@@ -4155,7 +4216,7 @@
     } else if (params.get('sessions') === '1') {
       openDrawer('c-201', 'thread');
     }
-    const firstExpanded = params.get('multi') === '1' || params.get('approval') || params.get('expanded') ? Array.from(state.expanded)[0] : null;
+    const firstExpanded = params.get('multi') === '1' || params.get('approval') || params.get('start') === '1' || params.get('expanded') ? Array.from(state.expanded)[0] : null;
     if (firstExpanded) {
       setTimeout(function () {
         const el = document.querySelector('.card[data-card-id="' + firstExpanded + '"]');

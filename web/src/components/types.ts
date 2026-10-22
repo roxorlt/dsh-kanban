@@ -28,6 +28,7 @@ export interface CardActionHandlers {
   onArchive: (card: Card) => void;
   onReopen: (card: Card) => void;
   onMove: (cardId: string, column: ColumnId, placement?: Placement) => void;
+  onStartCard: (card: Card) => void;
   onResolveApproval: (
     card: Card,
     approval: Approval,

@@ -8,6 +8,7 @@ import { elapsedMs, formatDuration } from '../lib/time';
 import { CARD_TIMELINE_PREVIEW, CARD_TIMELINE_STEP, visibleActivities } from '../lib/activities';
 import type { ActivityFeed } from '../lib/activities';
 import { ApprovalPanel } from './ApprovalPanel';
+import { canStartCard } from '../lib/startCard';
 import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 import { MenuButton } from './MenuButton';
 import type { MenuEntry } from './MenuButton';
@@ -50,6 +51,7 @@ interface KanbanCardProps {
   onArchive: (card: Card) => void;
   onReopen: (card: Card) => void;
   onMove: (cardId: string, column: ColumnId) => void;
+  onStartCard: (card: Card) => void;
   onResolveApproval: (
     card: Card,
     approval: Approval,
@@ -92,6 +94,7 @@ export function KanbanCard({
   onArchive,
   onReopen,
   onMove,
+  onStartCard,
   onResolveApproval,
   onNotify,
   onReply,
@@ -137,7 +140,11 @@ export function KanbanCard({
     separatorBefore: index === 0,
   }));
 
+  const canStart = canStartCard(card);
   const menuItems: MenuEntry[] = [
+    ...(canStart
+      ? [{ id: 'start', label: t('card.start'), icon: <IconSparkle />, separatorBefore: false }]
+      : []),
     { id: 'open', label: t('card.openDetail'), icon: <IconOpen /> },
     { id: 'edit', label: t('card.edit'), icon: <IconEdit /> },
     ...moveItems,
@@ -148,7 +155,8 @@ export function KanbanCard({
   ];
 
   const handleMenuSelect = (id: string) => {
-    if (id === 'open') onOpenDetail(card.id);
+    if (id === 'start') onStartCard(card);
+    else if (id === 'open') onOpenDetail(card.id);
     else if (id === 'edit') onEdit(card);
     else if (id === 'archive') onArchive(card);
     else if (id === 'reopen') onReopen(card);
@@ -362,6 +370,18 @@ export function KanbanCard({
           {t(statusKey)}
           {elapsed > 0 ? <span className="kb-foot-elapsed"> · {formatDuration(elapsed, lang)}</span> : null}
         </span>
+        {canStart && !selectionMode ? (
+          <button
+            type="button"
+            className="kb-btn kb-btn--sm kb-btn--ghost kb-foot-start"
+            onClick={() => onStartCard(card)}
+          >
+            <span className="kb-icon" aria-hidden="true">
+              <IconSparkle />
+            </span>
+            {t('card.start')}
+          </button>
+        ) : null}
         <span className="kb-card-foot__metrics">
           <span className="kb-metric" title={t('card.tools')}>
             <span className="kb-icon" aria-hidden="true">
@@ -462,6 +482,14 @@ export function KanbanCard({
           ) : null}
 
           <div className="kb-card-actions">
+            {canStart ? (
+              <button type="button" className="kb-btn kb-btn--sm kb-btn--primary kb-card-start" onClick={() => onStartCard(card)}>
+                <span className="kb-icon" aria-hidden="true">
+                  <IconSparkle />
+                </span>
+                {t('card.start')}
+              </button>
+            ) : null}
             <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => onOpenDetail(card.id)}>
               {t('card.openDetail')}
               <span className="kb-icon" aria-hidden="true">
