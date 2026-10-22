@@ -3,7 +3,7 @@
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里的原生看板插件。
 **卡片是控制面，DSH 会话是执行面**：你在看板里管理"要做什么、到哪了、需要你决定什么"，agent 在会话里执行，并通过原生工具把进展写回卡片。卡片内回复会直接进入绑定的 DSH 会话，会话里的决定也会回到卡片。
 
-> 状态：v0.3.0，已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写）。数据存本机 `~/.dsh-kanban/data.json`。
+> 状态：v0.4.0，已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写）。数据存本机 `~/.dsh-kanban/data.json`。
 > 仓库：[github.com/roxorlt/dsh-kanban](https://github.com/roxorlt/dsh-kanban)
 
 ![看板视图（真实 DSH 内）](docs/assets/screens/embedded-board-light.png)
@@ -18,6 +18,8 @@
 - **卡片内回复**：回复写时间线，并通过桥进入 DSH 会话；没有会话时可从卡片新建。
 - **会话绑定**：选择已有会话作为主会话、打开会话跳转 DSH 对话、显示运行状态。
 - **实时刷新**：SSE 推送 revision，断线指数退避，页面隐藏暂停；手动重试只在断连错误条出现。
+- **批量操作**：工具栏「选择」进入选择模式（与拖拽手势分离），批量移动到列 / 批量归档；列表视图同样支持。
+- **自动归档**：已完成/已取消卡片超过 30 天自动归档（`autoArchiveDays` 可配，0 关闭），不删除数据。
 - **密度与规模**：已完成列只显示最近 5 张（查看全部进入列表）；列表支持按状态/项目/优先级分组；时间线分页加载；卡片内素材用紧凑媒体行。
 - **横竖屏响应式**：宽屏四列，窄屏列分段 + 单列 + 底部弹层；跟随 DSH 明暗主题。
 - **Agent 原生工具**：10 个 `kanban_*` 工具，agent 不需要学 HTTP 就能建卡、推进、请求审批、写结果。
@@ -25,13 +27,14 @@
 
 ## 已验证
 
-- 服务端 `node --test`：**60/60 通过**；Web `tsc` + Vite 构建通过，vitest 49/49，令牌 lint 0 error / 0 warning。
+- 服务端 `node --test`：**67/67 通过**；Web `tsc` + Vite 构建通过，vitest 57/57，令牌 lint 0 error / 0 warning。
 - 在**独立 DSH profile** 中真实安装并加载：侧栏入口、`main` 全屏面板、iframe 桥就绪、49 个主题令牌同步、明暗主题、console 0 error。
 - 会话桥：`session.create → refresh → open → binding → prompt` 实测 `accepted: true`。
 - agent 工具：真实 agent 调用 `kanban_create_card` 创建卡片，SSE 实时出现在看板。
 - 审批闭环：看板内「批准」→ 决定写入绑定会话 → agent 通过工具把卡片移到已完成并写结果。
 - v0.2 回归：多选审批提交 `optionIds:["unit-test","build"]`、时间线 `before` 分页、脏草稿二次确认、列表按项目分组、done 折叠、竖屏动作区，Playwright 全部通过。
-- v0.2.1 修复：DSH 0.2.x 会话 API 兼容（`uiWorkspace.openSession` / `sessions.using`）、三态主题、宿主安全区、快捷键、筛选空文案、审批未绑定兜底；55 测试 + 39 Web 单测 + 0.2.1 宿主实测。
+- v0.2.1 修复：DSH 0.2.x 会话 API 兼容（`uiWorkspace.openSession` / `sessions.using`）、三态主题、宿主安全区、快捷键、筛选空文案、审批未绑定兜底。
+- v0.3.0 多问题审批；v0.3.1 列表审批动作左对齐；v0.4.0 批量选择 + 自动归档（67 服务端 / 57 Web 测试）。
 - 截图与复跑命令见 [验证记录](docs/06-verification.md)。
 
 | 真实 DSH 内（亮） | 真实 DSH 内（暗） |

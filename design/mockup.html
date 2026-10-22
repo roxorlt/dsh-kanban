@@ -1666,6 +1666,55 @@
   .drawer-foot { max-height: 58dvh; overflow-y: auto; }
   .drawer-approval { margin: 12px 0 4px; }
 
+
+  /* 批量选择模式（v1.1） */
+  .select-entry { color: var(--dsw-alias-label-secondary); }
+  .select-entry .ic { width: 14px; height: 14px; }
+  .batch-bar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 8px var(--kb-pad-x);
+    border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 4%, var(--dsw-alias-bg-base));
+  }
+  .batch-count { display: inline-flex; align-items: baseline; gap: 4px; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); white-space: nowrap; }
+  .batch-count strong { color: var(--dsw-alias-label-primary); font: var(--dsw-font-s-strong-14); font-variant-numeric: tabular-nums; }
+  .batch-hint { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); white-space: nowrap; }
+  .batch-spacer { flex: 1; }
+  .batch-bar .btn { height: 30px; }
+  .batch-bar .btn:disabled { color: var(--dsw-alias-label-dimmed); background: transparent; border-color: var(--dsw-alias-border-l1); cursor: not-allowed; }
+  .select-box { display: inline-flex; align-items: center; flex: none; margin-top: 1px; }
+  .select-box input { width: 15px; height: 15px; margin: 0; accent-color: var(--dsw-alias-state-business-primary); cursor: pointer; }
+  .card .select-box { margin-top: 3px; }
+  .list-title-row .select-box { margin-top: 1px; margin-right: 2px; }
+  .is-selection-mode .card { cursor: pointer; }
+  .is-selection-mode .card-menu,
+  .is-selection-mode .card-toggle,
+  .is-selection-mode .card .decision,
+  .is-selection-mode .reply,
+  .is-selection-mode .link-btn,
+  .is-selection-mode .media-link,
+  .is-selection-mode .metric-link,
+  .is-selection-mode .column-add,
+  .is-selection-mode .col-head-actions,
+  .is-selection-mode .list-meta .row-actions,
+  .is-selection-mode .list-meta .icon-btn,
+  .is-selection-mode .list-expanded { display: none !important; }
+  .card.is-checked {
+    border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, var(--dsw-alias-border-l2));
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 4%, var(--dsw-alias-bg-layer-1));
+  }
+  .list-row.is-checked { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 6%, var(--dsw-alias-bg-layer-1)); }
+  .auto-archive-hint { display: flex; align-items: center; gap: 4px; flex: none; padding: 2px 12px 8px; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+  .auto-archive-hint .ic { width: 11px; height: 11px; }
+  [data-layout="narrow"] .batch-bar { flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+  [data-layout="narrow"] .batch-hint, [data-layout="narrow"] .batch-spacer { display: none; }
+  [data-layout="narrow"] .batch-bar .btn { height: 36px; }
+  [data-layout="narrow"] .batch-count { flex: 1; }
+
   /* ===== v2 响应式增补 ===== */
   [data-layout="narrow"] .board-title { flex: 1; min-width: 0; }
   [data-layout="narrow"] .board-metas { gap: 6px; }
@@ -1746,6 +1795,10 @@
         <span class="filter-count" id="filterCount" hidden>0</span>
       </button>
       <div class="filter-chips" id="filterChips" aria-label="当前筛选条件"></div>
+      <button type="button" class="btn btn-ghost select-entry" id="selectEntry" data-action="selection-enter">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>
+        选择
+      </button>
       <div class="toolbar-spacer"></div>
       <span class="session-live" id="sessionLive"></span>
       <label class="group-control" id="groupControl" hidden>
@@ -1760,6 +1813,17 @@
         <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         <span class="btn-text">新建卡片</span>
       </button>
+    </div>
+
+    <div class="batch-bar" id="batchBar" role="region" aria-label="批量选择" hidden>
+      <span class="batch-count">已选 <strong id="batchCount">0</strong></span>
+      <button type="button" class="btn btn-secondary btn-sm" id="batchSelectAll" data-action="select-all">全选当前视图</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="select-clear">清空</button>
+      <span class="batch-hint">拖拽已停用 · Esc 退出</span>
+      <span class="batch-spacer"></span>
+      <button type="button" class="btn btn-secondary btn-sm" id="batchMoveBtn" data-action="batch-move" aria-haspopup="menu" disabled>移动到 …</button>
+      <button type="button" class="btn btn-danger btn-sm" id="batchArchiveBtn" data-action="batch-archive" disabled>归档</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="selection-exit">取消</button>
     </div>
 
     <div class="sync-error" id="syncError" role="alert" hidden>
@@ -1850,7 +1914,8 @@
     report: '<path d="M6 3.5h8l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z"/><path d="M9 12h6M9 16h6M9 8h2"/>',
     archive: '<path d="M4 7h16v3H4z"/><path d="M5.5 10v9a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-9"/><path d="M10 14h4"/>',
     session: '<rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M7.5 9h6M7.5 13h9"/>',
-    monitor: '<rect x="3.5" y="4.5" width="17" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>'
+    monitor: '<rect x="3.5" y="4.5" width="17" height="12" rx="2"/><path d="M9 20h6M12 16.5V20"/>',
+    checkSquare: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8.5 12 2.5 2.5 4.5-5"/>'
   };
   function icon(name, cls) {
     return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[name] || '') + '</svg>';
@@ -2192,6 +2257,8 @@
     doneListAll: false,
     groupBy: 'status',
     listActions: 'left',
+    selectionMode: false,
+    selected: new Set(),
     syncError: false,
     syncRetrying: false,
     approvalSel: {},
@@ -2224,6 +2291,12 @@
   const groupSelect = $('#groupSelect');
   const groupControl = $('#groupControl');
   const listNewBtn = $('#listNewBtn');
+  const toolbarEl = document.querySelector('.toolbar');
+  const batchBar = $('#batchBar');
+  const batchCount = $('#batchCount');
+  const batchSelectAll = $('#batchSelectAll');
+  const batchMoveBtn = $('#batchMoveBtn');
+  const batchArchiveBtn = $('#batchArchiveBtn');
   const syncErrorBar = $('#syncError');
   const confirmLayer = $('#confirmLayer');
   const confirmModal = $('#confirmModal');
@@ -2436,10 +2509,12 @@
     const s = statusOf(card.status);
     const expanded = state.expanded.has(card.id);
     const selected = state.drawerId === card.id;
+    const checked = state.selected.has(card.id);
     const actionTone = card.status === 'needs' ? ' is-warn' : (card.status === 'failed' || card.status === 'blocked') ? ' is-error' : card.status === 'todo' ? ' is-idle' : '';
     const actionIcon = card.status === 'needs' ? 'hand' : card.status === 'blocked' ? 'alert' : card.status === 'failed' ? 'alert' : card.status === 'done' ? 'check' : 'sparkle';
-    return '<article class="card' + (expanded ? ' is-expanded' : '') + (selected ? ' is-selected' : '') + '" data-card-id="' + card.id + '" data-status="' + card.status + '" tabindex="0" role="group" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '，优先级 ' + card.priority + '，项目 ' + esc(card.project) + '">' +
+    return '<article class="card' + (expanded ? ' is-expanded' : '') + (selected ? ' is-selected' : '') + (checked ? ' is-checked' : '') + '" data-card-id="' + card.id + '" data-status="' + card.status + '" tabindex="0" role="group" draggable="' + (state.selectionMode ? 'false' : 'true') + '" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '，优先级 ' + card.priority + '，项目 ' + esc(card.project) + '">' +
       '<div class="card-head">' +
+        (state.selectionMode ? '<label class="select-box"><input type="checkbox" data-select-card="' + card.id + '"' + (checked ? ' checked' : '') + ' aria-label="选择卡片：' + esc(card.title) + '"><span class="sr-only">选择卡片</span></label>' : '') +
         dot(s.dot) +
         '<h3 class="card-title">' + esc(card.title) + '</h3>' +
         '<button type="button" class="icon-btn card-toggle" data-action="expand" data-id="' + card.id + '" aria-expanded="' + expanded + '" aria-controls="exp-' + card.id + '" aria-label="' + (expanded ? '收起重要节点' : '展开重要节点') + '">' + icon(expanded ? 'chevronDown' : 'chevronRight') + '</button>' +
@@ -2504,6 +2579,7 @@
         : '<div class="column-body">' + (visible.length ? shown.map(cardHTML).join('') : emptyHTML(col)) + '</div>' +
           more +
           '<button type="button" class="column-add" data-action="add-col" data-col="' + col.id + '">' + icon('plus') + '新建卡片</button>') +
+      (isDone ? '<div class="auto-archive-hint" title="自动归档仅针对已完成/已取消卡片；卡片绑定、会话与数据保留，可找回">' + icon('archive') + '已完成卡片 30 天后自动归档</div>' : '') +
     '</section>';
   }
 
@@ -2513,6 +2589,7 @@
     const selected = state.drawerId === card.id;
     const pendingApproval = card.approval && card.status === 'needs';
     const multiQuestion = isMultiQuestionCard(card);
+    const checked = state.selected.has(card.id);
     let rowActions = '';
     if (pendingApproval) {
       rowActions = multiQuestion
@@ -2524,11 +2601,13 @@
     } else if (card.status === 'failed') {
       rowActions = '<span class="row-actions"><button type="button" class="btn btn-secondary btn--retry" data-action="retry" data-id="' + card.id + '">重试</button></span>';
     }
-    return '<div class="list-row' + (selected ? ' is-selected' : '') + (expanded ? ' is-expanded' : '') + '" data-card-id="' + card.id + '" tabindex="0" role="group" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '">' +
+    return '<div class="list-row' + (selected ? ' is-selected' : '') + (expanded ? ' is-expanded' : '') + (checked ? ' is-checked' : '') + '" data-card-id="' + card.id + '" tabindex="0" role="group" aria-label="' + esc(card.title) + '，状态：' + esc(s.label) + '">' +
       '<div class="list-row-main" data-action="expand" data-id="' + card.id + '">' +
         dot(s.dot) +
         '<div class="list-main">' +
-          '<div class="list-title-row"><span class="list-title">' + esc(card.title) + '</span>' +
+          '<div class="list-title-row">' +
+            (state.selectionMode ? '<label class="select-box"><input type="checkbox" data-select-card="' + card.id + '"' + (checked ? ' checked' : '') + ' aria-label="选择卡片：' + esc(card.title) + '"><span class="sr-only">选择卡片</span></label>' : '') +
+            '<span class="list-title">' + esc(card.title) + '</span>' +
             (pendingApproval ? '<span class="tag">待确认</span>' : '') + '</div>' +
           '<p class="list-summary">' + esc(card.summary) + '</p>' +
         '</div>' +
@@ -2669,6 +2748,132 @@
     $('#syncErrorText').textContent = state.syncRetrying
       ? '正在重新连接实时同步…'
       : '实时同步中断，看板可能不是最新；会话中的修改会在恢复后补上。';
+    toolbarEl.hidden = state.selectionMode;
+    renderBatchBar();
+  }
+
+  /* ------------------------------------------------------- 批量选择（v1.1） */
+  function selectionScopeCards() {
+    const visible = visibleCards();
+    if (state.layout === 'narrow' && state.view === 'board') {
+      return visible.filter(function (c) { return c.col === state.activeCol; });
+    }
+    return visible;
+  }
+  function allVisibleSelected() {
+    const visible = selectionScopeCards();
+    return visible.length > 0 && visible.every(function (c) { return state.selected.has(c.id); });
+  }
+  function renderBatchBar() {
+    const appEl = document.querySelector('.app');
+    appEl.classList.toggle('is-selection-mode', state.selectionMode);
+    if (!state.selectionMode) {
+      batchBar.hidden = true;
+      return;
+    }
+    batchBar.hidden = false;
+    batchCount.textContent = String(state.selected.size);
+    const all = allVisibleSelected();
+    batchSelectAll.textContent = all ? '取消全选' : '全选当前视图';
+    batchSelectAll.setAttribute('aria-pressed', String(all));
+    batchMoveBtn.disabled = state.selected.size === 0;
+    batchArchiveBtn.disabled = state.selected.size === 0;
+  }
+  function enterSelection() {
+    if (state.selectionMode) return;
+    state.selectionMode = true;
+    state.selected.clear();
+    state.expanded.clear();
+    closePopover();
+    renderAll();
+    announce('已进入选择模式：卡片和列表行可勾选，拖拽已停用，Esc 退出');
+  }
+  function exitSelection() {
+    if (!state.selectionMode) return;
+    state.selectionMode = false;
+    state.selected.clear();
+    renderAll();
+    const entry = $('#selectEntry');
+    if (entry) entry.focus({ preventScroll: true });
+    announce('已退出选择模式');
+  }
+  function toggleSelect(id) {
+    if (!state.selectionMode) return;
+    if (!findCard(id)) return;
+    if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+    renderAll();
+    const box = document.querySelector('[data-select-card="' + id + '"]');
+    if (box) box.focus({ preventScroll: true });
+    announce(state.selected.has(id) ? '已选择 ' + findCard(id).title : '已取消选择 ' + findCard(id).title);
+  }
+  function selectAllVisible() {
+    const visible = selectionScopeCards();
+    if (!visible.length) return;
+    const all = allVisibleSelected();
+    visible.forEach(function (c) {
+      if (all) state.selected.delete(c.id); else state.selected.add(c.id);
+    });
+    renderAll();
+    announce(all ? '已取消全选当前视图' : '已选择当前视图 ' + visible.length + ' 张卡片');
+  }
+  function clearSelection() {
+    state.selected.clear();
+    renderAll();
+    announce('已清空选择');
+  }
+  function bulkMoveSelected(colId) {
+    const target = colById(colId);
+    if (!target) return;
+    const ids = Array.from(state.selected).filter(function (id) { return Boolean(findCard(id)); });
+    if (!ids.length) return;
+    let moved = 0;
+    ids.forEach(function (id) {
+      const card = findCard(id);
+      if (!card || card.col === colId) return;
+      card.col = colId;
+      card.status = target.defaultStatus;
+      if (colId === 'needs' && !card.approval) card.approval = defaultApproval(card);
+      if (colId !== 'needs') card.approval = null;
+      card.updated = '刚刚';
+      card.nodes.push({ ago: '刚刚', text: '批量移到「' + target.name + '」', state: 'done' });
+      moved += 1;
+    });
+    state.selected.clear();
+    renderAll();
+    toast('已移动 ' + moved + ' 张卡片到「' + target.name + '」', { icon: 'check' });
+    announce('已批量移动 ' + moved + ' 张卡片到' + target.name);
+  }
+  function bulkArchiveSelected() {
+    const items = Array.from(state.selected).map(function (id) {
+      const index = cards.findIndex(function (c) { return c.id === id; });
+      return index >= 0 ? { card: cards[index], index: index } : null;
+    }).filter(Boolean).sort(function (a, b) { return a.index - b.index; });
+    if (!items.length) return;
+    items.slice().sort(function (a, b) { return b.index - a.index; }).forEach(function (item) {
+      cards.splice(item.index, 1);
+    });
+    state.selected.clear();
+    renderAll();
+    toast('已归档 ' + items.length + ' 张卡片', {
+      icon: 'archive',
+      actionLabel: '撤销',
+      onAction: function () {
+        items.sort(function (a, b) { return a.index - b.index; }).forEach(function (item) {
+          cards.splice(item.index, 0, item.card);
+        });
+        renderAll();
+        toast('已恢复 ' + items.length + ' 张卡片', { icon: 'redo' });
+        announce('已恢复批量归档的卡片');
+      }
+    });
+    announce('已批量归档 ' + items.length + ' 张卡片');
+  }
+  function openBatchMoveMenu(anchor) {
+    const html = '<div class="menu-label">批量移动到</div>' +
+      COLUMNS.map(function (c) {
+        return '<button type="button" class="menu-item" data-menu="batch-move:' + c.id + '">' + icon('arrowRight') + '移到「' + c.name + '」</button>';
+      }).join('');
+    openPopover('menu', anchor, html, '批量移动');
   }
 
   function captureScroll() {
@@ -3091,7 +3296,8 @@
     return '<div class="menu-label">键盘快捷键</div>' +
       rows.map((r) => '<div class="help-row"><span>' + r[0] + '</span><span class="keys">' + r[1].map((k) => '<span class="kbd">' + k + '</span>').join('') + '</span></div>').join('') +
       '<div class="menu-sep"></div>' +
-      '<div class="help-note">拖拽卡片可换列；触屏用卡片菜单「移到…」。</div>';
+      '<div class="help-note">拖拽卡片可换列；触屏用卡片菜单「移到…」。</div>' +
+      '<div class="help-note">已完成卡片 30 天后自动归档（仅 done/canceled）；不影响卡片绑定与会话，数据可找回。</div>';
   }
   function openFilter() {
     openPopover('filter', filterBtn, filterHTML(), '筛选卡片');
@@ -3518,6 +3724,12 @@
     const action = btn.dataset.action;
     const id = btn.dataset.id;
     if (action === 'theme' || action === 'theme-mode') { cycleThemeMode(); return true; }
+    if (action === 'selection-enter') { enterSelection(); return true; }
+    if (action === 'selection-exit') { exitSelection(); return true; }
+    if (action === 'select-all') { selectAllVisible(); return true; }
+    if (action === 'select-clear') { clearSelection(); return true; }
+    if (action === 'batch-move') { openBatchMoveMenu(btn); return true; }
+    if (action === 'batch-archive') { bulkArchiveSelected(); return true; }
     if (action === 'help') { openPopover('help', helpBtn, helpHTML(), '键盘快捷键'); return true; }
     if (action === 'filter') { openFilter(); return true; }
     if (action === 'new-card') { openNewModal('backlog'); return true; }
@@ -3614,6 +3826,16 @@
   }
 
   document.addEventListener('click', function (e) {
+    if (!state.selectionMode) return;
+    const cardEl = e.target.closest('.card, .list-row');
+    if (!cardEl || !cardEl.dataset.cardId) return;
+    if (e.target.closest('input, label, button, a, select, textarea')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    toggleSelect(cardEl.dataset.cardId);
+  }, true);
+
+  document.addEventListener('click', function (e) {
     if (handleAction(e)) return;
     // 点击卡片 / 列表行：展开 / 收起（不含内部按钮、输入、链接）
     if (e.target.closest('button, a, input, textarea, select, label')) return;
@@ -3628,6 +3850,7 @@
       const parts = menu.dataset.menu.split(':');
       const kind = parts[0]; const id = parts[1]; const value = parts[2];
       closePopover();
+      if (kind === 'batch-move') { bulkMoveSelected(id); return; }
       if (kind === 'open') openDrawer(id);
       else if (kind === 'edit-approval') openApprovalEditor(id);
       else if (kind === 'move') moveCard(id, value, null, { human: true });
@@ -3657,7 +3880,7 @@
   document.addEventListener('click', function (e) {
     if (!state.popover) return;
     if (e.target.closest('.popover')) return;
-    if (e.target.closest('[data-action="filter"], [data-action="help"], [data-action="menu"]')) return;
+    if (e.target.closest('[data-action="filter"], [data-action="help"], [data-action="menu"], [data-action="batch-move"]')) return;
     closePopover();
   });
 
@@ -3693,6 +3916,8 @@
     state.approvalNotes[note.dataset.approvalNote] = note.value;
   });
   document.addEventListener('change', function (e) {
+    const select = e.target.closest('[data-select-card]');
+    if (select) { toggleSelect(select.dataset.selectCard); return; }
     const opt = e.target.closest('[data-approval-option]');
     if (opt) {
       const cardId = opt.dataset.approvalOption;
@@ -3768,6 +3993,7 @@
   /* ------------------------------------------------------------------- drag */
   let dragId = null;
   board.addEventListener('dragstart', function (e) {
+    if (state.selectionMode) { e.preventDefault(); return; }
     const cardEl = e.target.closest('.card');
     if (!cardEl) return;
     dragId = cardEl.dataset.cardId;
@@ -3830,6 +4056,7 @@
     if (state.popover) { closePopover(); return true; }
     if (!modalLayer.hidden) { requestCloseModal(); return true; }
     if (state.drawerId) { requestCloseDrawer(); return true; }
+    if (state.selectionMode) { exitSelection(); return true; }
     return false;
   }
   document.addEventListener('keydown', function (e) {
@@ -3864,6 +4091,10 @@
       const next = cur + (e.key === 'ArrowDown' ? 1 : -1);
       if (next >= 0 && next < colCards.length) moveCard(card.id, card.col, next, { human: false });
       return;
+    }
+    if (state.selectionMode && cardEl && (e.key === 'Enter' || e.key === ' ')) {
+      if (e.target.closest('button, a, input, textarea, select, label')) return;
+      e.preventDefault(); toggleSelect(cardEl.dataset.cardId); return;
     }
     if (cardEl && (e.key === 'Enter' || e.key === ' ')) {
       if (e.target.closest('button, a, input, textarea, select')) return;
@@ -3914,6 +4145,10 @@
     state.listActions = params.get('listActions') === 'right' ? 'right' : 'left';
     if (params.get('syncError') === '1') state.syncError = true;
     if (params.get('col')) state.activeCol = params.get('col');
+    if (params.get('selection') === '1') { state.selectionMode = true; state.expanded.clear(); }
+    if (params.get('picked')) {
+      params.get('picked').split(',').forEach(function (id) { if (findCard(id)) state.selected.add(id); });
+    }
     renderAll();
     if (params.get('drawer')) {
       openDrawer(params.get('drawer'), params.get('tab') || 'nodes');

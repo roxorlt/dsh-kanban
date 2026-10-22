@@ -33,6 +33,7 @@
 | POST | `/api/kanban/cards/:id/session` | `{sessionId, title?}` 绑定主会话（去重、置顶）→ `{ok, card, revision}` |
 | DELETE | `/api/kanban/cards/:id/session/:sessionId` | 解绑 → `{ok, card, revision}` |
 | POST | `/api/kanban/cards/:id/ack` | 用户已读/已看审批 → `{ok, revision}`，清未读红点 |
+| POST | `/api/kanban/cards/batch` | `{action:'archive'|'move', cardIds: string[]（1..200）, column?}` → `{ok, cards, revision}`；`archive` 批量归档（写 `archived` 活动）；`move` 批量移到目标列（代表 status + cardOrder 头部）；跳过已归档/不存在卡片；单次上限 200 |
 | POST | `/api/kanban/seed` | `{mode:'demo'|'empty'|'reset'}`：`demo` 覆盖演示数据；`empty` 清空卡片保留看板；`reset` 重建默认看板。危险操作，UI 设置里二次确认；revision 保持单调不重置 → `{ok, revision}` |
 | GET | `/api/kanban/events` | SSE：`event: change\ndata: {"revision":N,"at":ms}\n\n`，每 15s 心跳 `event: ping` |
 | GET | `/api/kanban/asset/*` | **不实现**；静态资源由插件独立路由 `/dsh-kanban/*` 提供（见架构文档） |

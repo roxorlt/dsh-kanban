@@ -41,6 +41,9 @@ interface KanbanCardProps {
   onLoadEarlier: () => void;
   sessions: SessionRow[];
   resolvingApprovalId: string | null;
+  selectionMode: boolean;
+  selectionSelected: boolean;
+  onToggleSelection: (cardId: string) => void;
   onToggleExpanded: (cardId: string) => void;
   onOpenDetail: (cardId: string) => void;
   onEdit: (card: Card) => void;
@@ -80,6 +83,9 @@ export function KanbanCard({
   onLoadEarlier,
   sessions,
   resolvingApprovalId,
+  selectionMode,
+  selectionSelected,
+  onToggleSelection,
   onToggleExpanded,
   onOpenDetail,
   onEdit,
@@ -153,6 +159,10 @@ export function KanbanCard({
   };
 
   const handleDragStart = (event: DragEvent<HTMLElement>) => {
+    if (selectionMode) {
+      event.preventDefault();
+      return;
+    }
     event.dataTransfer.setData('text/plain', card.id);
     event.dataTransfer.effectAllowed = 'move';
     onDragStart(card.id);
@@ -178,6 +188,13 @@ export function KanbanCard({
   const onKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     const target = event.target as HTMLElement;
     if (target.closest('button, input, textarea, select, a')) return;
+    if (selectionMode) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onToggleSelection(card.id);
+      }
+      return;
+    }
     if (event.key === 'Enter' || event.key.toLowerCase() === 'o') {
       event.preventDefault();
       onOpenDetail(card.id);
@@ -207,23 +224,51 @@ export function KanbanCard({
     <article
       className={`kb-card${expanded ? ' kb-card--expanded' : ''}${selected ? ' kb-card--selected' : ''}${
         warning ? ' kb-card--warning' : ''
-      }${dragging ? ' kb-card--dragging' : ''}`}
+      }${dragging ? ' kb-card--dragging' : ''}${selectionMode ? ' kb-card--selectable' : ''}${
+        selectionSelected ? ' kb-card--picked' : ''
+      }`}
       data-status={card.status}
       data-card-id={card.id}
       tabIndex={0}
       role="group"
       aria-label={t('a11y.cardLabel', { title: card.title, status: t(statusKey) })}
-      draggable
+      draggable={!selectionMode}
       onDragStart={handleDragStart}
       onDragEnd={onDragEnd}
       onKeyDown={onKeyDown}
-      onDoubleClick={() => onOpenDetail(card.id)}
+      onClick={(event) => {
+        if (!selectionMode) return;
+        const target = event.target as HTMLElement;
+        // 标题/复选框有自己的 toggle，避免冒泡到 article 造成双切换
+        if (target.closest('button, a, input, textarea, select, label, .kb-card-title')) return;
+        onToggleSelection(card.id);
+      }}
+      onDoubleClick={() => {
+        if (!selectionMode) onOpenDetail(card.id);
+      }}
     >
       <div className="kb-card-head">
         <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
-        <h3 className="kb-card-title" onClick={() => onOpenDetail(card.id)}>
+        {selectionMode ? (
+          <span className="kb-card-select" onClick={(event) => event.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={selectionSelected}
+              aria-label={t(selectionSelected ? 'selection.deselectCard' : 'selection.selectCard', {
+                title: card.title,
+              })}
+              onChange={() => onToggleSelection(card.id)}
+            />
+          </span>
+        ) : null}
+        <h3
+          className="kb-card-title"
+          onClick={() => (selectionMode ? onToggleSelection(card.id) : onOpenDetail(card.id))}
+        >
           {card.title}
         </h3>
+        {!selectionMode ? (
+        <>
         <button
           type="button"
           className="kb-icon-btn kb-card-toggle"
@@ -243,6 +288,8 @@ export function KanbanCard({
           items={menuItems}
           onSelect={handleMenuSelect}
         />
+        </>
+        ) : null}
       </div>
 
       {card.summary ? <p className="kb-card-summary">{card.summary}</p> : null}
@@ -343,7 +390,7 @@ export function KanbanCard({
         </span>
       </div>
 
-      {pendingApproval ? (
+      {!selectionMode && pendingApproval ? (
         <ApprovalPanel
           approval={pendingApproval}
           busy={resolvingApprovalId === pendingApproval.id}
@@ -357,7 +404,7 @@ export function KanbanCard({
         <ApprovalPanel approval={resolvedApproval} busy={false} now={now} onResolve={() => undefined} />
       ) : null}
 
-      {expanded ? (
+      {expanded && !selectionMode ? (
         <div className="kb-card-expanded" id={`kb-exp-${card.id}`}>
           <div className="kb-exp-head">
             <span>{t('card.importantNodes')}</span>

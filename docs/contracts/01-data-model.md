@@ -78,6 +78,7 @@ interface Card {
   order: number;                 // 兜底排序，越小越靠前
   version: number;               // 乐观锁，每次服务端写 +1
   archived?: boolean;
+  archivedAt?: number;           // 归档时间；自动/手动归档都会写
   createdAt: number;
   updatedAt: number;
   startedAt?: number;
@@ -140,7 +141,7 @@ interface Activity {
   type:
     | 'created' | 'status' | 'progress' | 'comment' | 'approval_requested'
     | 'approval_resolved' | 'session_linked' | 'checklist' | 'artifact'
-    | 'result' | 'error' | 'ack';
+    | 'result' | 'error' | 'ack' | 'archived';
   actor: Actor;
   text: string;                  // 展示文本，≤ 400 字
   at: number;
@@ -173,6 +174,22 @@ interface StoreFile {
   meta: { createdAt: number; updatedAt: number; revision: number; seededAt?: number; lastActor?: Actor };
 }
 ```
+
+## 3.x 自动归档配置（v1.1）
+
+插件 config：
+
+```yaml
+- id: kanban
+  config:
+    autoArchiveDays: 30     # 默认 30；0 或非法值 = 关闭
+```
+
+规则：
+- 仅归档 `status === 'done' | 'canceled'` 且 `completedAt <= now - days*86400000` 的卡片；
+- 写入 `archived: true`、`archivedAt`、`updatedAt`，追加 `type: 'archived'` 活动（actor=`system`，文本「自动归档：已完成超过 N 天」）；
+- 不删除数据，可通过归档查询恢复；启动时立即执行一次，之后每小时执行一次；
+- 手动归档（单卡/批量）同样写 `archivedAt` 与 `archived` 活动。
 
 约束：
 - `cards[].version` 单调递增；PATCH/DELETE/move 必须带 `version`（UI）或强制 `force:true`（工具可省略）。

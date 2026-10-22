@@ -9,6 +9,7 @@ import type { ThemePreference } from '../bridge';
 import {
   IconAuto,
   IconBoard,
+  IconCheck,
   IconClose,
   IconGlobe,
   IconHelp,
@@ -44,6 +45,8 @@ interface ToolbarProps {
   themeMode: 'light' | 'dark';
   onCycleTheme: () => void;
   onShowHelp: () => void;
+  selectionMode: boolean;
+  onToggleSelection: () => void;
 }
 
 function Chip({ label, onRemove, removeLabel }: { label: string; onRemove: () => void; removeLabel: string }) {
@@ -81,6 +84,8 @@ export function Toolbar({
   themeMode,
   onCycleTheme,
   onShowHelp,
+  selectionMode,
+  onToggleSelection,
 }: ToolbarProps) {
   const { t } = useI18n();
   const activeFilters = hasActiveFilters(filters);
@@ -209,6 +214,7 @@ export function Toolbar({
         </div>
       </header>
 
+      {selectionMode ? null : (
       <div className="kb-toolbar">
         <label className="kb-search">
           <span className="kb-icon kb-search__icon" aria-hidden="true">
@@ -272,6 +278,18 @@ export function Toolbar({
           ) : null}
         </div>
 
+        <button
+          type="button"
+          className={`kb-btn kb-btn--sm ${selectionMode ? 'kb-btn--primary' : 'kb-btn--outline'} kb-select-btn`}
+          aria-pressed={selectionMode}
+          onClick={onToggleSelection}
+        >
+          <span className="kb-icon" aria-hidden="true">
+            <IconCheck />
+          </span>
+          {selectionMode ? t('selection.exit') : t('selection.enter')}
+        </button>
+
         <div className="kb-toolbar-spacer" />
 
         <span className="kb-agent-live" title={syncLabel}>
@@ -279,6 +297,7 @@ export function Toolbar({
           {syncLabel}
         </span>
       </div>
+      )}
 
       {syncError ? (
         <div className="kb-errorbar" role="alert">

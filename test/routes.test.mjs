@@ -617,3 +617,64 @@ test('并发的写请求串行落盘，最终 state 与 revision 一致', async 
   assert.equal(state.json.cards.length, 18)
   assert.equal(state.json.revision, store.peek().meta.revision)
 })
+
+test('POST /cards/batch：批量归档/移动、跳过不存在/已归档、上限与参数校验', async t => {
+  const { server, store } = await setup(t)
+  const first = await createCard(server, { title: '批量归档 A' })
+  const second = await createCard(server, { title: '批量移动 B' })
+  const third = await createCard(server, { title: '已归档 C' })
+  const archived = await api(server, `/api/kanban/cards/${third.id}?version=1`, { method: 'DELETE' })
+  assert.equal(archived.status, 200)
+
+  // 批量归档：有效 1 张，跳过不存在 + 已归档
+  const batchArchive = await api(server, '/api/kanban/cards/batch', {
+    method: 'POST',
+    body: { action: 'archive', cardIds: [first.id, 'card-ffffffff', third.id], reason: '批量清理' },
+  })
+  assert.equal(batchArchive.status, 200)
+  assert.equal(batchArchive.json.ok, true)
+  assert.deepEqual(batchArchive.json.cards.map(card => card.id), [first.id])
+  assert.equal(batchArchive.json.cards[0].archived, true)
+  assert.ok(batchArchive.json.cards[0].archivedAt > 0)
+  assert.equal(batchArchive.json.skipped.length, 2)
+  assert.deepEqual(batchArchive.json.skipped.map(item => item.reason).sort(), ['archived', 'not_found'])
+  const archivedTimeline = await api(server, `/api/kanban/cards/${first.id}/activities`)
+  assert.equal(archivedTimeline.status, 404) // 归档卡片不再提供时间线
+  const firstActivity = (await store.read()).activities.find(item => item.cardId === first.id && item.type === 'archived')
+  assert.match(firstActivity.text, /批量清理/)
+  const stateAfterArchive = await api(server, '/api/kanban/state')
+  assert.equal(stateAfterArchive.json.cards.some(card => card.id === first.id), false)
+
+  // 批量移动：有效 1 张，跳过不存在 + 已归档；cardOrder 头部
+  const batchMove = await api(server, '/api/kanban/cards/batch', {
+    method: 'POST',
+    body: { action: 'move', cardIds: [second.id, 'card-ffffffff', first.id], column: 'running' },
+  })
+  assert.equal(batchMove.status, 200)
+  assert.deepEqual(batchMove.json.cards.map(card => card.id), [second.id])
+  assert.equal(batchMove.json.cards[0].status, 'running')
+  assert.equal(batchMove.json.skipped.length, 2)
+  const stateAfterMove = await api(server, '/api/kanban/state')
+  assert.equal(stateAfterMove.json.board.cardOrder.running[0], second.id)
+  const secondTimeline = await api(server, `/api/kanban/cards/${second.id}/activities`)
+  assert.match(secondTimeline.json.activities[0].text, /移到「进行中」/)
+
+  // 校验：空数组 / 非数组 / 超过 200 / 非法 action / move 缺 column / 非法 column / 方法
+  assert.equal((await api(server, '/api/kanban/cards/batch', { method: 'POST', body: { action: 'archive', cardIds: [] } })).status, 400)
+  assert.equal((await api(server, '/api/kanban/cards/batch', { method: 'POST', body: { action: 'archive', cardIds: 'nope' } })).status, 400)
+  assert.equal((await api(server, '/api/kanban/cards/batch', {
+    method: 'POST', body: { action: 'archive', cardIds: Array.from({ length: 201 }, (_, index) => 'card-' + String(index).padStart(8, '0')) },
+  })).status, 400)
+  assert.equal((await api(server, '/api/kanban/cards/batch', { method: 'POST', body: { action: 'nope', cardIds: [second.id] } })).status, 400)
+  assert.equal((await api(server, '/api/kanban/cards/batch', { method: 'POST', body: { action: 'move', cardIds: [second.id] } })).status, 400)
+  assert.equal((await api(server, '/api/kanban/cards/batch', { method: 'POST', body: { action: 'move', cardIds: [second.id], column: 'nope' } })).status, 400)
+  assert.equal((await api(server, '/api/kanban/cards/batch')).status, 405)
+
+  // 200 个不存在的 ID 合法（全部跳过）
+  const missingOnly = await api(server, '/api/kanban/cards/batch', {
+    method: 'POST', body: { action: 'archive', cardIds: Array.from({ length: 200 }, (_, index) => 'card-' + String(index).padStart(8, '0')) },
+  })
+  assert.equal(missingOnly.status, 200)
+  assert.equal(missingOnly.json.cards.length, 0)
+  assert.equal(missingOnly.json.skipped.length, 200)
+})

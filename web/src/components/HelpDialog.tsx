@@ -38,6 +38,7 @@ export function HelpDialog({ onClose }: HelpDialogProps) {
           </li>
         ))}
       </ul>
+      <p className="kb-help__hint kb-help__archive">{t('help.autoArchive')}</p>
     </Modal>
   );
 }

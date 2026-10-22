@@ -41,6 +41,9 @@ interface ListViewProps {
   actions: CardActionHandlers;
   filtering: boolean;
   onClearFilters: () => void;
+  selectionMode: boolean;
+  selectedIds: ReadonlySet<string>;
+  onToggleSelection: (cardId: string) => void;
 }
 
 const COLUMN_TONE: Record<ColumnId, string> = {
@@ -62,6 +65,9 @@ export function ListView({
   actions,
   filtering,
   onClearFilters,
+  selectionMode,
+  selectedIds,
+  onToggleSelection,
 }: ListViewProps) {
   const { t } = useI18n();
   const [doneVisible, setDoneVisible] = useState(DONE_LIST_LIMIT);
@@ -145,7 +151,15 @@ export function ListView({
               <>
                 <ul className="kb-list__items">
                   {visible.map((card) => (
-                    <ListRow key={card.id} card={card} shared={shared} actions={actions} />
+                    <ListRow
+                      key={card.id}
+                      card={card}
+                      shared={shared}
+                      actions={actions}
+                      selectionMode={selectionMode}
+                      selectionSelected={selectedIds.has(card.id)}
+                      onToggleSelection={onToggleSelection}
+                    />
                   ))}
                 </ul>
                 {isDoneStatus && hidden > 0 ? (
@@ -172,10 +186,16 @@ function ListRow({
   card,
   shared,
   actions,
+  selectionMode,
+  selectionSelected,
+  onToggleSelection,
 }: {
   card: Card;
   shared: CardViewShared;
   actions: CardActionHandlers;
+  selectionMode: boolean;
+  selectionSelected: boolean;
+  onToggleSelection: (cardId: string) => void;
 }) {
   const { t, lang } = useI18n();
   const expanded = shared.expandedIds.has(card.id);
@@ -216,12 +236,36 @@ function ListRow({
   ];
 
   return (
-    <li className={`kb-list__item${expanded ? ' kb-list__item--expanded' : ''}`}>
-      <div className="kb-list__row">
+    <li
+      className={`kb-list__item${expanded ? ' kb-list__item--expanded' : ''}${
+        selectionMode ? ' kb-list__item--selectable' : ''
+      }${selectionSelected ? ' kb-list__item--selected' : ''}`}
+    >
+      <div
+        className="kb-list__row"
+        onClick={(event) => {
+          if (!selectionMode) return;
+          const target = event.target as HTMLElement;
+          if (target.closest('button, a, input, textarea, select, label')) return;
+          onToggleSelection(card.id);
+        }}
+      >
+        {selectionMode ? (
+          <label className="kb-list__check" onClick={(event) => event.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={selectionSelected}
+              aria-label={t(selectionSelected ? 'selection.deselectCard' : 'selection.selectCard', {
+                title: card.title,
+              })}
+              onChange={() => onToggleSelection(card.id)}
+            />
+          </label>
+        ) : null}
         <button
           type="button"
           className="kb-list__title"
-          onClick={() => actions.onOpenDetail(card.id)}
+          onClick={() => (selectionMode ? onToggleSelection(card.id) : actions.onOpenDetail(card.id))}
           aria-label={`${t('card.openDetail')}：${card.title}`}
         >
           <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
@@ -249,33 +293,37 @@ function ListRow({
             {card.metadata.toolCalls}
           </span>
           {pendingApproval ? <span className="kb-pill kb-pill--warn">{t('card.pendingApproval')}</span> : null}
-          <button
-            type="button"
-            className="kb-btn kb-btn--icon kb-btn--sm kb-btn--ghost"
-            aria-expanded={expanded}
-            aria-label={expanded ? t('list.collapseRow') : t('list.expandRow')}
-            onClick={() => actions.onToggleExpanded(card.id)}
-          >
-            <span className={`kb-icon kb-list__chevron${expanded ? ' kb-list__chevron--open' : ''}`} aria-hidden="true">
-              <IconChevronDown />
-            </span>
-          </button>
-          <MenuButton
-            label={t('a11y.cardActions')}
-            trigger={<IconMore />}
-            triggerClassName="kb-btn kb-btn--icon kb-btn--sm kb-btn--ghost"
-            items={items}
-            onSelect={(id) => {
-              if (id === 'open') actions.onOpenDetail(card.id);
-              else if (id === 'edit') actions.onEdit(card);
-              else if (id === 'archive') actions.onArchive(card);
-              else if (id === 'reopen') actions.onReopen(card);
-              else if (id.startsWith('move:')) {
-                const target = id.slice('move:'.length) as ColumnId;
-                if (COLUMNS.includes(target)) actions.onMove(card.id, target);
-              }
-            }}
-          />
+          {!selectionMode ? (
+            <>
+              <button
+                type="button"
+                className="kb-btn kb-btn--icon kb-btn--sm kb-btn--ghost"
+                aria-expanded={expanded}
+                aria-label={expanded ? t('list.collapseRow') : t('list.expandRow')}
+                onClick={() => actions.onToggleExpanded(card.id)}
+              >
+                <span className={`kb-icon kb-list__chevron${expanded ? ' kb-list__chevron--open' : ''}`} aria-hidden="true">
+                  <IconChevronDown />
+                </span>
+              </button>
+              <MenuButton
+                label={t('a11y.cardActions')}
+                trigger={<IconMore />}
+                triggerClassName="kb-btn kb-btn--icon kb-btn--sm kb-btn--ghost"
+                items={items}
+                onSelect={(id) => {
+                  if (id === 'open') actions.onOpenDetail(card.id);
+                  else if (id === 'edit') actions.onEdit(card);
+                  else if (id === 'archive') actions.onArchive(card);
+                  else if (id === 'reopen') actions.onReopen(card);
+                  else if (id.startsWith('move:')) {
+                    const target = id.slice('move:'.length) as ColumnId;
+                    if (COLUMNS.includes(target)) actions.onMove(card.id, target);
+                  }
+                }}
+              />
+            </>
+          ) : null}
         </span>
       </div>
 
@@ -297,7 +345,7 @@ function ListRow({
         </span>
       </div>
 
-      {expanded ? (
+      {expanded && !selectionMode ? (
         <div className="kb-list__expanded">
           {card.currentAction ? <p className="kb-list__action">{card.currentAction}</p> : null}
           {pendingApproval ? (

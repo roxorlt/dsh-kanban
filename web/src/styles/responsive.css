@@ -481,6 +481,24 @@
     display: none;
   }
 
+  .kb-select-btn {
+    padding: 0 8px;
+  }
+
+  .kb-batchbar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 12px;
+  }
+
+  .kb-batchbar__spacer {
+    display: none;
+  }
+
+  .kb-batchbar .kb-btn {
+    height: 28px;
+  }
+
   .kb-crumbs {
     flex: 1 1 auto;
     gap: 6px;

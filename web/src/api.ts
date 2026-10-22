@@ -209,6 +209,8 @@ export type ApprovalResolveInput =
   | { optionIds: string[]; comment?: string }
   | { answers: Pick<ApprovalAnswer, 'questionId' | 'optionIds'>[]; comment?: string };
 
+export type BatchAction = 'archive' | 'move';
+
 export interface HealthPayload {
   version: string;
   schemaVersion: number;
@@ -284,6 +286,21 @@ export const api = {
       body: JSON.stringify({ column, ...options }),
     }).then((result) => ({ ...result, card: normalizeCard(result.card) })),
 
+  /** v1.1 批量归档/移动：POST /cards/batch（cardIds 1..200；move 必带 column）。 */
+  batchCards: (
+    action: BatchAction,
+    cardIds: readonly string[],
+    column?: ColumnId,
+  ): Promise<{ cards: Card[]; revision: number }> =>
+    request<{ cards: Card[]; revision: number }>('/cards/batch', {
+      method: 'POST',
+      body: JSON.stringify({
+        action,
+        cardIds: [...cardIds],
+        ...(action === 'move' ? { column } : {}),
+      }),
+    }).then((result) => ({ ...result, cards: (result.cards ?? []).map((card) => normalizeCard(card)) })),
+
   addComment: (cardId: string, text: string): Promise<{ activity: Activity; card: Card; revision: number }> =>
     request<{ activity: Activity; card: Card; revision: number }>(
       `/cards/${encodeURIComponent(cardId)}/comments`,
@@ -349,6 +366,15 @@ export const api = {
 };
 
 export type { ActivityPage, SessionRow };
+
+/** 批量归档/移动的具名封装（App 与单测共用；参数与 POST /cards/batch 契约一致）。 */
+export function batchCards(
+  action: BatchAction,
+  cardIds: readonly string[],
+  column?: ColumnId,
+): Promise<{ cards: Card[]; revision: number }> {
+  return api.batchCards(action, cardIds, column);
+}
 
 /** 供调试与测试使用：把筛选条件映射成查询串（当前筛选在客户端做）。 */
 export function filtersToQuery(filters: CardFilters): string {

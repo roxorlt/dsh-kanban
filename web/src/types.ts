@@ -20,7 +20,8 @@ export type ActivityType =
   | 'artifact'
   | 'result'
   | 'error'
-  | 'ack';
+  | 'ack'
+  | 'archived';
 export type ArtifactKind = 'file' | 'link' | 'report' | 'commit' | 'image';
 
 export interface Actor {
@@ -135,6 +136,8 @@ export interface Card {
   order: number;
   version: number;
   archived?: boolean;
+  /** 归档时间（v1.1 batch archive 写入） */
+  archivedAt?: number;
   createdAt: number;
   updatedAt: number;
   startedAt?: number;

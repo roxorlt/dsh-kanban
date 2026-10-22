@@ -714,6 +714,45 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, activity: item, card, revision: nextRevision });
     }
 
+    if (req.method === 'POST' && route === '/cards/batch') {
+      const body = await readBody(req);
+      const action = body.action;
+      const cardIds = Array.isArray(body.cardIds)
+        ? [...new Set(body.cardIds.map((value) => String(value)))]
+        : [];
+      if (action !== 'archive' && action !== 'move') {
+        return fail(res, 400, 'BAD_REQUEST', 'action 只支持 archive / move');
+      }
+      if (!cardIds.length || cardIds.length > 200) {
+        return fail(res, 400, 'BAD_REQUEST', 'cardIds 数量必须为 1..200');
+      }
+      const column = body.column;
+      if (action === 'move' && !Object.prototype.hasOwnProperty.call(STATUS_OF_COLUMN, column)) {
+        return fail(res, 400, 'BAD_REQUEST', 'move 必须带合法 column');
+      }
+      const updated = [];
+      for (const cardId of cardIds) {
+        const card = ensureCard(cardId);
+        if (!card || card.archived) continue;
+        if (action === 'archive') {
+          card.archived = true;
+          card.archivedAt = NOW();
+          touchCard(card);
+          cardOrderRemove(card.id);
+          activity(card.id, 'archived', '归档卡片', NOW());
+        } else {
+          card.status = STATUS_OF_COLUMN[column];
+          if (column === 'done' && !card.completedAt) card.completedAt = NOW();
+          touchCard(card);
+          cardOrderRemove(card.id);
+          board.cardOrder[column].unshift(card.id);
+          activity(card.id, 'status', `移动到「${column}」`, NOW(), { status: card.status });
+        }
+        updated.push(card);
+      }
+      return json(res, 200, { ok: true, cards: updated, revision: broadcast() });
+    }
+
     const createApprovalMatch = route.match(/^\/cards\/([^/]+)\/approvals$/);
     if (req.method === 'POST' && createApprovalMatch) {
       const card = ensureCard(decodeURIComponent(createApprovalMatch[1]));
@@ -900,8 +939,10 @@ const server = http.createServer(async (req, res) => {
       }
       if (req.method === 'DELETE') {
         card.archived = true;
+        card.archivedAt = NOW();
         touchCard(card);
         cardOrderRemove(card.id);
+        activity(card.id, 'archived', '归档卡片', NOW());
         return json(res, 200, { ok: true, revision: broadcast() });
       }
     }

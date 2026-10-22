@@ -279,6 +279,51 @@
   box-shadow: inset 2px 0 0 0 var(--kb-status-running);
 }
 
+/* ---- v1.1 批量选择模式 ---- */
+.kb-card--selectable {
+  cursor: pointer;
+}
+
+.kb-card--selectable:hover {
+  border-color: var(--dsw-alias-border-l3);
+}
+
+.kb-card--picked,
+.kb-card--picked:hover {
+  border-color: var(--dsw-alias-state-business-primary);
+  box-shadow: inset 0 0 0 2px var(--dsw-alias-state-business-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 4%, var(--dsw-alias-bg-layer-1));
+}
+
+.kb-card-select {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-right: 2px;
+}
+
+.kb-card-select input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+}
+
+/* 选择模式下禁用拖拽落点提示 */
+.kb-board--selection .kb-column--over {
+  background: var(--kb-surface-column);
+}
+
+.kb-board--selection .kb-card-slot--drop-before::before,
+.kb-board--selection .kb-card-slot--drop-after::after {
+  display: none;
+}
+
+.kb-board--selection .kb-card--dragging {
+  opacity: 1;
+}
+
 .kb-card:focus-visible {
   outline: 2px solid var(--dsw-alias-state-business-primary);
   outline-offset: 1px;
@@ -1146,4 +1191,12 @@
 .kb-decision-validation {
   color: var(--dsw-alias-state-error-primary);
   font: var(--dsw-font-xxxs-11);
+}
+
+.kb-column__hint {
+  margin: 2px 2px 0;
+  padding: 6px 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  text-align: center;
 }

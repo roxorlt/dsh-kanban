@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.4.0 — 2026-10-22
+
+### 新增：批量选择与批量操作（v1.1 批次）
+
+- 工具栏「选择」入口进入选择模式：卡片/列表行显示复选框，点击切换选中，不展开、不进详情；进入时清空展开与抽屉。
+- 拖拽完全禁用（`draggable=false` + dragstart 守卫 + drop 拦截），与批量选择手势分离；Esc 或「取消」退出。
+- 批量条：已选 N / 全选当前视图（全选后变取消全选）/ 清空 / 移动到 ▾ / 归档 / 取消；0 选时移动与归档禁用；竖屏换行。
+- 选择集是纯 reducer，切视图/刷新保持选择并按现存非归档卡片清理；批量成功 toast + 清空 + 退出 + refresh。
+- 新增 `POST /api/kanban/cards/batch`（archive/move，cardIds 1–200，跳过不存在/已归档），返回 `{ok,cards,skipped,revision}`。
+- 时间线新增 `archived` 活动类型；归档写 `archived`、`archivedAt`。
+
+### 新增：已完成自动归档
+
+- 插件配置 `autoArchiveDays`（默认 30，0 关闭）：仅归档 `done/canceled` 且 `completedAt` 超过 N 天的卡片；启动即跑一次 + 每小时一次。
+- 自动归档写 `archived` 活动（system），不删除数据；已完成列底部与帮助浮层新增说明。
+
+### 验证
+
+- 服务端 `node --test` 67/67；Web vitest 10 文件 / 57 测试；tsc 0 error；令牌 lint 0/0；build 成功。
+- Playwright：选择模式、全选/清空、批量移动（status 变更）、批量归档（toast、卡片消失、archivedAt/archived 活动）、拖拽 no-op、Esc 退出；console 0 error。
+- 设计：mockup `?selection=1`、自动归档说明、lint 0/0；截图 `design/screens/17-selection-batch-1440.png`。
+
+
 ## v0.3.2 — 2026-10-22
 
 ### 示例数据清理

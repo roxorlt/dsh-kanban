@@ -20,6 +20,9 @@ interface BoardViewProps {
   shared: CardViewShared;
   actions: CardActionHandlers;
   mobile: boolean;
+  selectionMode: boolean;
+  selectedIds: ReadonlySet<string>;
+  onToggleSelection: (cardId: string) => void;
   activeColumn: ColumnId;
   onActiveColumnChange: (column: ColumnId) => void;
   onCreateInColumn: (column: ColumnId) => void;
@@ -59,6 +62,9 @@ export function BoardView({
   shared,
   actions,
   mobile,
+  selectionMode,
+  selectedIds,
+  onToggleSelection,
   activeColumn,
   onActiveColumnChange,
   onCreateInColumn,
@@ -92,6 +98,7 @@ export function BoardView({
   };
 
   const handleDrop = (column: ColumnId, event: DragEvent<HTMLElement>) => {
+    if (selectionMode) return;
     event.preventDefault();
     dropHandled.current = true;
     const cardId = draggedId ?? event.dataTransfer.getData('text/plain');
@@ -105,7 +112,7 @@ export function BoardView({
   };
 
   const handleDragOverColumn = (column: ColumnId) => (event: DragEvent<HTMLElement>) => {
-    if (!draggedId) return;
+    if (selectionMode || !draggedId) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     if (overColumn !== column) {
@@ -216,6 +223,7 @@ export function BoardView({
                   key={card.id}
                   className={`kb-card-slot${isOver && overCardId === card.id ? ' kb-card-slot--drop-before' : ''}`}
                   onDragOver={(event) => {
+                    if (selectionMode) return;
                     event.preventDefault();
                     event.stopPropagation();
                     if (overCardId !== card.id) setOverCardId(card.id);
@@ -232,6 +240,9 @@ export function BoardView({
                     onLoadEarlier={() => shared.loadEarlier(card.id)}
                     sessions={shared.sessions}
                     resolvingApprovalId={shared.resolvingApprovalId}
+                    selectionMode={selectionMode}
+                    selectionSelected={selectedIds.has(card.id)}
+                    onToggleSelection={onToggleSelection}
                     onToggleExpanded={actions.onToggleExpanded}
                     onOpenDetail={actions.onOpenDetail}
                     onEdit={actions.onEdit}
@@ -244,6 +255,7 @@ export function BoardView({
                     onRetry={actions.onRetry}
                     onSessionClick={actions.onSessionClick}
                     onDragStart={(cardId) => {
+                      if (selectionMode) return;
                       setDraggedId(cardId);
                       setOverColumn(column);
                     }}
@@ -266,6 +278,9 @@ export function BoardView({
                 </span>
               </button>
             ) : null}
+            {column === 'done' && !selectionMode ? (
+              <p className="kb-column__hint">{t('board.autoArchiveHint')}</p>
+            ) : null}
             {isOver && !overCardId ? <div className="kb-drop-line" aria-hidden="true" /> : null}
           </div>
         )}
@@ -276,7 +291,9 @@ export function BoardView({
   if (mobile) {
     const current = COLUMNS.includes(activeColumn) ? activeColumn : 'running';
     return (
-      <div className="kb-board kb-board--mobile" role="region" aria-label={t('a11y.boardRegion', { name: board.name })}>
+      <div
+        className={`kb-board kb-board--mobile${selectionMode ? ' kb-board--selection' : ''}`}
+        role="region" aria-label={t('a11y.boardRegion', { name: board.name })}>
         <div className="kb-column-switch" role="tablist" aria-label={t('app.viewBoard')}>
           {COLUMNS.map((column) => (
             <button
@@ -299,7 +316,9 @@ export function BoardView({
   }
 
   return (
-    <div className="kb-board" role="region" aria-label={t('a11y.boardRegion', { name: board.name })}>
+    <div
+      className={`kb-board${selectionMode ? ' kb-board--selection' : ''}`}
+      role="region" aria-label={t('a11y.boardRegion', { name: board.name })}>
       {COLUMNS.map(renderColumn)}
     </div>
   );

@@ -3,6 +3,19 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import type { Approval, Board, BoardSummary, Card, ColumnId, SessionRow } from './types';
 import { KanbanApiError, api } from './api';
 import { bridge, nextThemePreference, useBridgeState } from './bridge';
+import { batchCards } from './api';
+import {
+  EMPTY_SELECTION,
+  allSelected as allCardsSelected,
+  clearSelection,
+  deselectAll as deselectVisible,
+  pruneSelection,
+  selectAll as selectAllCards,
+  selectedIds as selectedIdList,
+  toggleSelection,
+} from './lib/selection';
+import type { SelectionState } from './lib/selection';
+import { SelectionBar } from './components/SelectionBar';
 import { formatApprovalSessionText } from './lib/approvalQuestions';
 import type { HostInfo } from './types';
 import { I18nContext, readStoredLang, resolveLang, storeLang, translate } from './i18n';
@@ -162,6 +175,9 @@ export function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   const appRef = useRef<HTMLDivElement | null>(null);
   const [unsentDecision, setUnsentDecision] = useState<UnsentDecision | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<SelectionState>(EMPTY_SELECTION);
+  const [batchBusy, setBatchBusy] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const announce = useCallback((text: string) => {
     setAnnouncement('');
@@ -863,6 +879,80 @@ export function App() {
     }
   }, [bridgeState.themePreference, embedded]);
 
+  // ---- v1.1 批量选择模式 ----
+  const visibleCardIds = useMemo(() => filteredCards.map((card) => card.id), [filteredCards]);
+  const allVisibleSelected = allCardsSelected(selectedIds, visibleCardIds);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIds(clearSelection());
+  }, []);
+
+  const enterSelectionMode = useCallback(() => {
+    setSelectionMode(true);
+    setSelectedIds(clearSelection());
+    setActiveCardId(null);
+    setExpandedIds(new Set());
+  }, []);
+
+  const handleToggleSelectionMode = useCallback(() => {
+    if (selectionMode) exitSelectionMode();
+    else enterSelectionMode();
+  }, [enterSelectionMode, exitSelectionMode, selectionMode]);
+
+  const handleToggleSelect = useCallback((cardId: string) => {
+    setSelectedIds((current) => toggleSelection(current, cardId));
+  }, []);
+
+  const handleSelectAllVisible = useCallback(() => {
+    if (!visibleCardIds.length) {
+      notifyToast(t('selection.empty'), 'info');
+      return;
+    }
+    setSelectedIds((current) =>
+      allCardsSelected(current, visibleCardIds)
+        ? deselectVisible(current, visibleCardIds)
+        : selectAllCards(current, visibleCardIds),
+    );
+  }, [notifyToast, t, visibleCardIds]);
+
+  const handleClearSelection = useCallback(() => setSelectedIds(clearSelection()), []);
+
+  const handleBatchAction = useCallback(
+    async (action: 'archive' | 'move', column?: ColumnId) => {
+      const ids = selectedIdList(selectedIds);
+      if (!ids.length) {
+        notifyToast(t('selection.none'), 'info');
+        return;
+      }
+      setBatchBusy(true);
+      try {
+        await batchCards(action, ids, column);
+        if (action === 'archive') {
+          notifyToast(t('selection.archivedToast', { count: ids.length }), 'success');
+        } else if (column) {
+          notifyToast(
+            t('selection.movedToast', { count: ids.length, column: t(`column.${column}` as I18nKey) }),
+            'success',
+          );
+        }
+        exitSelectionMode();
+        await refresh({ silent: true });
+      } catch (error) {
+        notifyToast(error instanceof Error ? error.message : t('toast.approvalFailed'), 'error');
+      } finally {
+        setBatchBusy(false);
+      }
+    },
+    [exitSelectionMode, notifyToast, refresh, selectedIds, t],
+  );
+
+  // 刷新/归档后过滤已不存在的 id；切视图时保留选择
+  useEffect(() => {
+    const existing = snapshot.cards.filter((card) => !card.archived).map((card) => card.id);
+    setSelectedIds((current) => pruneSelection(current, existing));
+  }, [snapshot.cards]);
+
   // 键盘快捷键：document capture 监听（iframe 内也能生效），点击画布后聚焦 app 容器
   const focusApp = useCallback(() => {
     appRef.current?.focus({ preventScroll: true });
@@ -902,6 +992,11 @@ export function App() {
         if (helpOpen) {
           event.preventDefault();
           setHelpOpen(false);
+          return;
+        }
+        if (selectionMode) {
+          event.preventDefault();
+          exitSelectionMode();
         }
         return;
       }
@@ -929,7 +1024,7 @@ export function App() {
     };
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [cycleTheme, focusSearch, handleCreateCard, handleViewChange, helpOpen]);
+  }, [cycleTheme, exitSelectionMode, focusSearch, handleCreateCard, handleViewChange, helpOpen, selectionMode]);
 
   const handleRootPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -969,6 +1064,9 @@ export function App() {
           actions={actions}
           filtering={hasActiveFilters(filters)}
           onClearFilters={() => setFilters({ query: '', project: null, label: null })}
+          selectionMode={selectionMode}
+          selectedIds={selectedIds}
+          onToggleSelection={handleToggleSelect}
         />
       );
     }
@@ -991,6 +1089,9 @@ export function App() {
         onViewAllDone={handleViewAllDone}
         filtering={hasActiveFilters(filters)}
         onClearFilters={() => setFilters({ query: '', project: null, label: null })}
+        selectionMode={selectionMode}
+        selectedIds={selectedIds}
+        onToggleSelection={handleToggleSelect}
       />
     );
   })();
@@ -1025,7 +1126,22 @@ export function App() {
           themeMode={bridgeState.themeMode}
           onCycleTheme={() => void cycleTheme()}
           onShowHelp={() => setHelpOpen(true)}
+          selectionMode={selectionMode}
+          onToggleSelection={handleToggleSelectionMode}
         />
+        {selectionMode ? (
+          <SelectionBar
+            count={selectedIds.size}
+            visibleCount={visibleCardIds.length}
+            busy={batchBusy}
+            allSelected={allVisibleSelected}
+            onSelectAll={handleSelectAllVisible}
+            onClear={handleClearSelection}
+            onMove={(column) => void handleBatchAction('move', column)}
+            onArchive={() => void handleBatchAction('archive')}
+            onCancel={exitSelectionMode}
+          />
+        ) : null}
         <main className={`kb-main${loading ? ' kb-main--loading' : ''}`}>{main}</main>
         {unsentDecision ? (
           <div className="kb-unsent-banner" role="status" aria-live="polite">

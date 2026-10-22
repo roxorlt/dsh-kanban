@@ -2,8 +2,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  COLUMNS, COLUMN_OF_STATUS, DEFAULT_BOARD_ID, LIMITS, STATUSES, STATUS_OF_COLUMN, DomainError,
-  ackCard, applySeedMode, archiveCard, cardsOfBoard, cleanText, completeCard, countsFor, createCard,
+  ACTIVITY_TYPES, COLUMNS, COLUMN_OF_STATUS, DEFAULT_BOARD_ID, LIMITS, STATUSES, STATUS_OF_COLUMN, DomainError,
+  ackCard, applySeedMode, archiveCard, autoArchiveCandidates, autoArchiveCompleted, batchArchive, batchMove,
+  cardsOfBoard, cleanText, completeCard, countsFor, createCard,
   createSeed, isValidId, linkSession, moveCard, newActivityId, newApprovalId, newArtifactId, newBoardId, newQuestionId,
   newCardId, newChecklistId, normalizeStore, patchCard, requestApproval, requireCard, resolveApproval,
   sortColumnCards, unlinkSession,
@@ -543,4 +544,114 @@ test('多问题审批兼容：单题旧字段 resolve 不受影响，旧数据�
   assert.equal(approval.questions, undefined)
   assert.equal(approval.multiSelect, false)
   assert.equal(approval.options.length, 2)
+})
+
+const DAY = 86_400_000
+
+test('归档：archiveCard 写 archivedAt 与 archived 活动；activity 类型契约包含 archived', () => {
+  assert.ok(ACTIVITY_TYPES.includes('archived'))
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'running')
+  const { card: archived, activity } = archiveCard(draft, card.id, { now: FIXED_NOW + 5 })
+  assert.equal(archived.archived, true)
+  assert.equal(archived.archivedAt, FIXED_NOW + 5)
+  assert.equal(activity.type, 'archived')
+  assert.equal(activity.actor.kind, 'user')
+  assert.equal(activity.data.archivedAt, FIXED_NOW + 5)
+  assert.equal(draft.boards[0].cardOrder.running.includes(card.id), false)
+  assert.throws(() => requireCard(draft, card.id), error => error.code === 'CARD_NOT_FOUND')
+})
+
+test('batchArchive：归档有效卡片，跳过不存在/已归档；上限 200、空数组/非数组报错', () => {
+  const draft = seedDraft()
+  const running = findCardByStatus(draft, 'running')
+  const backlog = findCardByStatus(draft, 'backlog')
+  archiveCard(draft, backlog.id, { now: FIXED_NOW })
+  const result = batchArchive(draft, [running.id, backlog.id, 'card-ffffffff'], { now: FIXED_NOW + 1, reason: '批量清理' })
+  assert.deepEqual(result.cards.map(card => card.id), [running.id])
+  assert.equal(result.cards[0].archived, true)
+  assert.equal(result.cards[0].archivedAt, FIXED_NOW + 1)
+  assert.deepEqual(result.skipped.map(item => item.reason).sort(), ['archived', 'not_found'])
+  const activity = draft.activities.find(item => item.cardId === running.id && item.type === 'archived')
+  assert.match(activity.text, /批量清理/)
+  assert.throws(() => batchArchive(draft, []), error => error.code === 'BAD_REQUEST')
+  assert.throws(() => batchArchive(draft, null), error => error.code === 'BAD_REQUEST')
+  assert.throws(() => batchArchive(draft, Array.from({ length: 201 }, (_, index) => 'card-' + String(index).padStart(8, '0'))),
+    error => error.code === 'BAD_REQUEST')
+  // 200 个不存在的 ID 是合法上限，全部跳过
+  const max = batchArchive(draft, Array.from({ length: 200 }, (_, index) => 'card-' + String(index).padStart(8, '0')), { now: FIXED_NOW + 2 })
+  assert.equal(max.cards.length, 0)
+  assert.equal(max.skipped.length, 200)
+})
+
+test('batchMove：代表 status、cardOrder 头部（保持入参顺序）、status 活动；跳过不存在/已归档；非法列/空数组报错', () => {
+  const draft = seedDraft()
+  const first = createCard(draft, { title: '批量移动 A' }, { now: FIXED_NOW }).card
+  const second = createCard(draft, { title: '批量移动 B' }, { now: FIXED_NOW }).card
+  const archived = createCard(draft, { title: '批量移动 C' }, { now: FIXED_NOW }).card
+  archiveCard(draft, archived.id, { now: FIXED_NOW })
+  const result = batchMove(draft, [first.id, second.id, archived.id, 'card-ffffffff'], 'running', { now: FIXED_NOW + 1 })
+  assert.deepEqual(result.cards.map(card => card.id), [first.id, second.id])
+  assert.equal(result.skipped.length, 2)
+  const movedFirst = draft.cards.find(card => card.id === first.id)
+  const movedSecond = draft.cards.find(card => card.id === second.id)
+  assert.equal(movedFirst.status, 'running')
+  assert.equal(movedSecond.status, 'running')
+  assert.equal(movedFirst.startedAt, FIXED_NOW + 1)
+  assert.deepEqual(draft.boards[0].cardOrder.running.slice(0, 2), [first.id, second.id])
+  for (const card of [movedFirst, movedSecond]) {
+    const activity = draft.activities.find(item => item.cardId === card.id && item.type === 'status')
+    assert.match(activity.text, /移到「进行中」/)
+    assert.equal(activity.data.batch, true)
+  }
+  // 移到 done 时写 completedAt
+  batchMove(draft, [first.id], 'done', { now: FIXED_NOW + 2 })
+  assert.equal(draft.cards.find(card => card.id === first.id).completedAt, FIXED_NOW + 2)
+  assert.throws(() => batchMove(draft, [first.id], 'nope'), error => error.code === 'BAD_REQUEST')
+  assert.throws(() => batchMove(draft, [], 'done'), error => error.code === 'BAD_REQUEST')
+})
+
+test('autoArchiveCompleted：仅 done/canceled 且超过 days；29/30/31 天边界、running 不归档、days=0 关闭', () => {
+  const draft = seedDraft()
+  const make = (completedAt, status = 'done') => {
+    const { card } = createCard(draft, { title: `归档边界 ${status} ${completedAt}` }, { now: FIXED_NOW })
+    card.status = status
+    card.completedAt = completedAt
+    return card
+  }
+  const day = DAY
+  const at29 = make(FIXED_NOW - 29 * day)
+  const at30 = make(FIXED_NOW - 30 * day)
+  const at31 = make(FIXED_NOW - 31 * day)
+  const canceled31 = make(FIXED_NOW - 31 * day, 'canceled')
+  const runningOld = make(FIXED_NOW - 31 * day, 'running')
+  const doneNoCompletedAt = createCard(draft, { title: 'done 无完成时间', status: 'done' }, { now: FIXED_NOW }).card
+  delete doneNoCompletedAt.completedAt
+
+  const candidates = autoArchiveCandidates(draft.cards, { days: 30, now: FIXED_NOW })
+  assert.deepEqual(candidates.map(card => card.id).sort(), [at30.id, at31.id, canceled31.id].sort())
+  const count = autoArchiveCompleted(draft, { days: 30, now: FIXED_NOW })
+  assert.equal(count, 3)
+  for (const card of [at30, at31, canceled31]) {
+    assert.equal(card.archived, true)
+    assert.equal(card.archivedAt, FIXED_NOW)
+    const activity = draft.activities.find(item => item.cardId === card.id && item.type === 'archived')
+    assert.equal(activity.actor.kind, 'system')
+    assert.match(activity.text, /自动归档：已完成超过 30 天/)
+  }
+  assert.equal(at29.archived, undefined)
+  assert.equal(runningOld.archived, undefined)
+  assert.equal(doneNoCompletedAt.archived, undefined)
+  // 自定义天数
+  const short = seedDraft()
+  const eightDays = createCard(short, { title: '8 天前完成' }, { now: FIXED_NOW }).card
+  eightDays.status = 'done'
+  eightDays.completedAt = FIXED_NOW - 8 * DAY
+  assert.equal(autoArchiveCompleted(short, { days: 7, now: FIXED_NOW }), 1)
+  // 0 = 关闭
+  const draft2 = seedDraft()
+  const oldCard = findCardByStatus(draft2, 'done')
+  oldCard.completedAt = FIXED_NOW - 500 * DAY
+  assert.equal(autoArchiveCompleted(draft2, { days: 0, now: FIXED_NOW }), 0)
+  assert.equal(oldCard.archived, undefined)
 })

@@ -190,6 +190,31 @@
   transform: rotate(180deg);
 }
 
+/* ---- v1.1 列表选择模式 ---- */
+.kb-list__item--selectable .kb-list__row {
+  cursor: pointer;
+}
+
+.kb-list__item--selected .kb-list__row {
+  box-shadow: inset 2px 0 0 0 var(--dsw-alias-state-business-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 5%, transparent);
+}
+
+.kb-list__check {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 0 2px;
+}
+
+.kb-list__check input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+}
+
 .kb-list__summary-line {
   display: flex;
   align-items: baseline;

@@ -67,6 +67,16 @@
 - 展开行隐藏行首快捷动作簇；移动端按钮不被 `flex:1` 拉通栏。
 - mockup 默认 left、`?listActions=right` 对照；lint 0/0。
 
+## 1.5 v0.4.0（v1.1 批次：批量选择 + 自动归档）
+
+| 项 | 结果 |
+| --- | --- |
+| 服务端 | `node --test` 67/67：batch archive/move（混合/上限/参数校验）、自动归档 29/30/31 天边界、done/canceled vs running、days=0、活动类型/archivedAt、index 启动接线 |
+| Web | vitest 10 文件 / 57 测试；tsc 0 error；令牌 lint 0/0；build 成功 |
+| 真实 dev-server | 选择模式：8 卡 → 选 2 张批量移动（status/顺序正确）→ 选 1 张批量归档（toast、状态隐藏、archivedAt + archived 活动）→ Esc 退出；拖拽 `draggable=false` |
+| 自动归档 | 仅 done/canceled 超过 N 天；启动即跑 + 每小时；帮助/已完成列提示 30 天策略 |
+| 截图 | `docs/assets/screens/selection-batch.png`、`selection-batch-design.png`、`selection-board.png`、`selection-list.png`、`help-autoarchive.png` |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
