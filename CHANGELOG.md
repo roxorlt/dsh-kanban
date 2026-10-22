@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.5.1 — 2026-10-22
+
+### 调整：会话页返回看板入口改为条件气泡
+
+- 移除会话标题区常驻「看板」按钮（默认不展示）。
+- 改为输入框上方（`conversation.input.dock`）的「返回看板」胶囊气泡；仅同时满足以下条件时出现：
+  1. 会话由看板「打开会话」跳转进入；
+  2. 当前会话就是被打开的那个；
+  3. 左侧栏处于收起状态。
+- 点击回看板并清理状态；回到看板/切走会话后不再显示；侧栏展开时不重复入口。
+- 真实 DSH 0.2.1-rc.2 宿主实测：展开侧栏无气泡 → 收起侧栏气泡出现（输入框上方右侧）→ 点击返回看板、气泡消失；console 0 error。
+
+### 调研：OpenDesign 设计/动效 skill
+
+- 新增 [docs/09-design-motion-skills.md](docs/09-design-motion-skills.md)：筛选并安装 `animate`、`redesign-existing-projects`、`impeccable-design-polish`、`design-md`、`review-animations`、`motion-lab`；明确哪些营销型/Awwwards 型 skill 不适用。
+
+
 ## v0.5.0 — 2026-10-22
 
 ### 新增：待办卡「开始推进」

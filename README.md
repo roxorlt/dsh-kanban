@@ -169,6 +169,7 @@ docs/             # 分析、契约、设计、架构、验证
 - [契约：数据模型](docs/contracts/01-data-model.md) / [HTTP API](docs/contracts/02-http-api.md) / [客户端桥](docs/contracts/03-client-bridge.md)
 - [验证记录（含 0.2.1 宿主）](docs/06-verification.md)
 - [Deep link 提案（已搁置，应用内打开会话已实现）](docs/08-deeplink-proposal.md)
+- [OpenDesign 设计/动效 skill 调研](docs/09-design-motion-skills.md)
 
 ## 已知限制
 

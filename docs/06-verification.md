@@ -86,6 +86,15 @@
 | DSH 0.2.1-rc.2 宿主 | 待办卡「开始推进」→ 卡片 status=running、新 sessionId 绑定、会话收到启动提示（逐字）；会话标题右侧「看板」按钮存在，点击返回看板（iframe 重新挂载）；console 0 error |
 | 设计 | mockup `?start=1`、docs §2.8/§7.12–7.14；截图 `start-card.png`、`start-card-design.png`、`conversation-back-board.png` |
 
+## 1.7 v0.5.1（返回看板条件气泡）
+
+| 项 | 结果 |
+| --- | --- |
+| DSH 0.2.1-rc.2 宿主 | 从看板打开卡片会话 → 侧栏展开时无气泡；收起侧栏后输入框上方出现「返回看板」气泡；点击回到看板、气泡清理；console 0 error |
+| 条件 | 仅 `sessionId===被打开会话` 且 `[data-sidebar-collapsed]` 存在；`conversation.input.dock` 渲染；不新增头部按钮 |
+| 截图 | `docs/assets/screens/return-bubble.png`、`return-bubble-expanded.png` |
+| 设计 | docs/03 §7.13 与 D-35 已更新为条件气泡规范 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
