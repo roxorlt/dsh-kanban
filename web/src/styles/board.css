@@ -506,8 +506,11 @@
 
 .kb-card-foot {
   display: flex;
+  /* 空间不足时换行：状态/警告文案不得压住右侧指标按钮 */
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  row-gap: 4px;
   padding-top: 6px;
   border-top: 0.5px solid var(--dsw-alias-border-l1);
   color: var(--dsw-alias-label-tertiary);
@@ -520,7 +523,16 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  flex: 0 1 auto;
   min-width: 0;
+  white-space: nowrap;
+}
+
+/* 状态 + 耗时可收缩省略；警告文案（如「未绑定会话」）不参与压缩，保持完整可读 */
+.kb-foot-status__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -550,6 +562,7 @@
 }
 
 .kb-foot-warn {
+  flex: none;
   color: var(--kb-status-needs-text);
 }
 

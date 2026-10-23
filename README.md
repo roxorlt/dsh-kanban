@@ -3,7 +3,7 @@
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里的原生看板插件。
 **卡片是控制面，DSH 会话是执行面**：你在看板里管理"要做什么、到哪了、需要你决定什么"，agent 在会话里执行，并通过原生工具把进展写回卡片。卡片内回复会直接进入绑定的 DSH 会话，会话里的决定也会回到卡片。
 
-> 状态：v0.7.0，已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写）。数据存本机 `~/.dsh-kanban/data.json`。
+> 状态：v0.7.1，已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写）。数据存本机 `~/.dsh-kanban/data.json`。
 > 仓库：[github.com/roxorlt/dsh-kanban](https://github.com/roxorlt/dsh-kanban)
 
 ![看板视图（真实 DSH 内）](docs/assets/screens/embedded-board-light.png)

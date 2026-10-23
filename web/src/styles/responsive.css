@@ -269,11 +269,7 @@
     -webkit-line-clamp: 3;
   }
 
-  .kb-card-foot {
-    flex-wrap: wrap;
-    row-gap: 4px;
-  }
-
+  /* 页脚换行已由 board.css 全局处理，这里只需放大右侧指标点击区 */
   .kb-card-foot__metrics {
     gap: 8px;
   }

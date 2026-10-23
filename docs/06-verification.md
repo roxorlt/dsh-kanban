@@ -128,6 +128,17 @@
 | 自测 | 服务端 67/67；Web 14 文件 / 86 测试；tsc/build/令牌 lint 全绿 |
 | 截图 | `newcard-suggest.png`、`newcard-suggest-design.png`、`newcard-created-running.png`、`newcard-session-agent.png`、`drawer-create-session.png`、`drawer-create-session-design.png` |
 
+## 1.10 v0.7.1（折叠卡页脚「未绑定会话」与右侧按钮干涉）
+
+| 项 | 结果 |
+| --- | --- |
+| 复现 | 隔离 dev-server 种子（`running` 且 `sessionIds: []` 的卡片）：1024/900/720px 中文下「未绑定会话」压住右侧工具图标 11px；英文 720–1440px 全部压盖 6.9–45.9px；1440px 中文在耗时 >1 小时时也会触发（根因：`.kb-card-foot` 单行不换行，`.kb-foot-status` 可收缩但内部 nowrap 文案溢出可见） |
+| 修复 | 页脚允许整行换行（`flex-wrap`，行距 4px）；「状态 · 耗时」包进 `.kb-foot-status__text` 可省略；「未绑定会话」独立为 `flex: none` 的警告项，不参与压缩 |
+| 自动化实测 | Playwright + 真实 Chrome：1440/1280/1024/900/720/390 × 中英双语 × 亮/暗主题 × 耗时 >1 小时压力文本，折叠页脚相邻子元素 bounding box 交叠数 0、页脚横向/纵向溢出 0；console 0 error |
+| 视觉 | 宽屏单行不变；紧凑宽度改为两行（第一行状态 + 警示，第二行指标右对齐）；`design/screens/web-foot-warn-before-1024.png` / `web-foot-warn-before-foot-1024.png` / `web-foot-warn-after-1024.png` / `web-foot-warn-after-1024-dark.png` / `web-foot-warn-after-en-1440.png` / `web-foot-warn-after-390.png` |
+| 自测 | Web vitest 14 文件 / 86 测试；tsc 0 error；build 成功；令牌 lint 0/0；服务端 67/67 |
+| 宿主 | `~/.dsh/profiles/desktop` 以 link 指向本仓库，重建 `web/dist` 后宿主 `/dsh-kanban/` 首页引用新产物（`index-D6pSvrZj.css` / `index-CvJIeErd.js`），刷新页面即生效 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
