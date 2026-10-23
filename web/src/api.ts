@@ -3,6 +3,7 @@ import type {
   ActivityPage,
   Approval,
   ApprovalAnswer,
+  ApprovalOutcome,
   ApprovalQuestion,
   Board,
   Card,
@@ -206,7 +207,7 @@ export type ApprovalCreateInput =
   | {
       title: string;
       detail: string;
-      options: { id: string; label: string; description?: string; tone?: 'primary' | 'danger' | 'ghost' }[];
+      options: { id: string; label: string; description?: string; tone?: 'primary' | 'danger' | 'ghost'; outcome?: ApprovalOutcome }[];
       multiSelect?: boolean;
       sessionId?: string;
     }

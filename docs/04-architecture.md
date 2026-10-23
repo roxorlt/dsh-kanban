@@ -113,7 +113,7 @@ flowchart LR
 规则：
 
 1. **agent 自主移动**：`backlog → running → done`、`running → blocked/failed` 均由 agent 通过工具完成，不需要人点。
-2. **人只处理 `needs_you`**：进入该列必须带一个 pending `Approval`（或明确的待讨论问题）；解决后 agent 继续。
+2. **人只处理 `needs_you`**：进入该列必须带一个 pending `Approval`（或明确的待讨论问题）；提交即按选项 `outcome` 落列（未声明时批准→进行中、驳回→待办），agent 继续。
 3. **用户拖拽**只用于"人工纠偏"：拖到某列 = 写该列代表状态，会记录一条 `status` 节点。
 4. `done` 之后仍可被 agent 写结果、补产物；归档由用户或 agent 显式操作。
 

@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Approval, ApprovalAnswer } from '../types';
 import { useI18n } from '../i18n';
+import type { I18nKey } from '../i18n';
 import { formatRelative } from '../lib/time';
 import {
   allAnswersAreReject,
@@ -223,6 +224,11 @@ export function ApprovalPanel({
                 {option.description ? (
                   <span className="kb-decision-option__desc">{option.description}</span>
                 ) : null}
+                {option.outcome ? (
+                  <span className="kb-decision-option__desc">
+                    {t('approval.goesTo', { column: t(`column.${option.outcome}` as I18nKey) })}
+                  </span>
+                ) : null}
               </label>
             );
           })}
@@ -376,6 +382,11 @@ export function ApprovalPanel({
                       <span className="kb-decision-option__label">{option.label}</span>
                       {option.description ? (
                         <span className="kb-decision-option__desc">{option.description}</span>
+                      ) : null}
+                      {option.outcome ? (
+                        <span className="kb-decision-option__desc">
+                          {t('approval.goesTo', { column: t(`column.${option.outcome}` as I18nKey) })}
+                        </span>
                       ) : null}
                     </label>
                   );

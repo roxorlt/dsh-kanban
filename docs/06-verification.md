@@ -200,16 +200,28 @@
 | 清除 | `handoff:null` 清除并追加「清除了交接摘要」活动，卡片状态不变 |
 | 截图 | `handoff-badge.png`、`handoff-detail.png`、`handoff-drawer.png`、`handoff-prompt.png` |
 
+## 1.11 v0.9.1（审批提交即改列）
+
+| 项 | 结果 |
+|---|---|
+| 复现（修复前） | 建卡 running → 请求审批后 `status=needs_you` → `POST .../resolve` 返回 `approval.status=approved`，但 `card.status` 仍是 `needs_you`、仍在「待你确认」列 |
+| 根因 | `lib/domain.js#resolveApproval` 只写审批结果与时间线，不改 `status`/`cardOrder`；契约旧文案「解决后卡片仍留在 needs_you」 |
+| 服务端行为 | 最后一条 pending 审批提交后同事务迁移：声明 `outcome` 进对应列；未声明时批准→`running`、驳回→`backlog`；追加 `status` 节点；仍有 pending / `blocked`/`failed` / 已归档 / 不在 `needs_you` 保持原状态 |
+| 单测 | 服务端 76/76；覆盖默认回进行中、outcome done/backlog、驳回回待办、多题/多选声明、仍有 pending 留在原列、blocked 保持、非法 outcome 400、旧数据宽松读取丢弃坏 outcome |
+| Web | 提交瞬间乐观移列（`approvalOutcome.ts` 纯逻辑，7 例单测）；失败回滚并 toast；声明 outcome 的选项显示「提交后进入「已完成」」提示；vitest 17 文件 / 117 测试，tsc 0 error，build 通过，令牌 lint 0/0 |
+| 真实浏览器（Playwright + Chromium，1440×900，源码 dev-server + 构建后 dist） | ① 选项 hint「提交后进入「已完成」」可见；② 点「批准」（`outcome:"done"`）后 250ms 内卡片在「已完成」列、服务端 status=done、时间线 `审批已提交，卡片进入「已完成」`；③ 未声明 outcome 的审批提交后回「进行中」；④ 点「拒绝」后回「待办」；⑤ 刷新后三张卡片仍在目标列；⑥ console 0 error |
+| 截图 | `design/screens/approval-outcome-hint.png`（选项去向提示）、`design/screens/approval-outcome-move.png`（提交后立即出现在已完成列 + 未绑定会话兜底） |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
 
 ```
 $ npm test
-# tests 49
-# pass 49
+# tests 76
+# pass 76
 # fail 0
-# duration_ms ~0.65s
+# duration_ms ~1.0s
 ```
 
 覆盖：`store`（原子写 / 串行队列 / revision / 损坏备份重建 / schema 迁移）、`domain`（状态列映射 / 规范化 / 种子 / 写原语）、`routes`（CRUD / move / 乐观锁 409 / 审批 resolve / comments / session link / 同源 403 / SSE 首帧 / 静态资源防穿越与 SPA fallback）、`tools`（10 个工具 schema 与 execute）、`index`（插件注册）。
@@ -220,7 +232,7 @@ $ npm test
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
 > vite build     # dist: JS gzip ~74KB / CSS gzip ~9KB
-$ npm --prefix web run test    # vitest 24/24
+$ npm --prefix web run test    # vitest 17 文件 / 117 测试
 $ npm --prefix web run lint:tokens
 # 8 个 CSS 文件：0 error / 0 warning
 ```

@@ -303,3 +303,35 @@ test('kanban_update_card / kanban_card / kanban_cards 支持 handoff（含 null 
   assert.equal(invalid.ok, false)
   assert.equal(invalid.error.code, 'BAD_REQUEST')
 })
+
+test('kanban_request_approval：选项 outcome 声明提交后卡片进入的列', async t => {
+  const { store, byName } = await setup(t)
+  const created = parse(await byName.get('kanban_create_card').execute({ title: '收尾确认', status: 'running' }, EXEC))
+  const cardId = created.card.id
+  const result = parse(await byName.get('kanban_request_approval').execute({
+    cardId,
+    title: '这次任务可以收尾了吗？',
+    options: [
+      { id: 'finish', label: '确认完成', tone: 'primary', outcome: 'done' },
+      { id: 'keep', label: '继续处理' },
+    ],
+  }, EXEC))
+  assert.equal(result.ok, true)
+  assert.equal(result.card.status, 'needs_you')
+  assert.equal(result.approval.options[0].outcome, 'done')
+  assert.equal(result.approval.options[1].outcome, undefined)
+  assert.match(result.hint, /自动进入对应列/)
+  const stored = (await store.read()).cards.find(card => card.id === cardId)
+  assert.equal(stored.approvals[0].options[0].outcome, 'done')
+
+  // 非法 outcome 被 domain 严格校验拒绝
+  const invalid = parse(await byName.get('kanban_request_approval').execute({
+    cardId, title: '坏去向', options: [{ label: '收尾', outcome: 'canceled' }],
+  }, EXEC))
+  assert.equal(invalid.ok, false)
+  assert.equal(invalid.error.code, 'BAD_REQUEST')
+
+  // schema 里暴露枚举，agent 能按契约声明去向
+  const schema = byName.get('kanban_request_approval').parameters.properties.options.items.oneOf[1].properties.outcome
+  assert.deepEqual(schema.enum, ['running', 'backlog', 'done'])
+})

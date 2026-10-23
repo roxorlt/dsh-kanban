@@ -76,10 +76,12 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 ## 审批红线（必须遵守）
 
 - **不要替用户做审批决定**，也不要自行把 `needs_you` 的卡片改回 `running`；只有用户在看板里选择后（时间线出现 `approval_resolved`）才继续。
+- **提交即改列（v0.9.1）**：用户提交审批后卡片会自动离开「待你确认」——选项声明了 `outcome` 就进该列，否则批准回 `running`、驳回回 `backlog`。所以看到 `approval_resolved` 后**不要再用 `kanban_move_card` 补移列**；`blocked`/`failed` 卡不会自动变，仍由你按结论改回 `running` 或 `done`。
+- 请求审批时用 `outcome` 声明去向：确认收尾/完成用 `{ "label": "确认完成", "outcome": "done" }`；回待办等重新排期用 `outcome: "backlog"`；要停止并交还用户用 `tone: "danger"`（提交后回待办）。
 - 需要用户勾选多个项时用 `multiSelect: true`（选项 1–8 个）；单选审批用户只会选一个。
 - 一次要问用户多个问题（最多 6 题，每题可独立单选/多选）时传 `questions[]`，不要串多次审批；多题时 `title` 由服务端从第一题生成。
 - 请求审批后在同一轮里不要假设结果；明确告诉用户「已在看板等你确认」。
-- `blocked`/`failed` 卡片在「待你确认」列展示，解决后由你改回 `running` 或 `done`，并在时间线说明原因。
+- `blocked`/`failed` 卡片在「待你确认」列展示，审批提交不改变其状态；解决后由你改回 `running` 或 `done`，并在时间线说明原因。
 - 用户拒绝时尊重结论：停下、记录原因，必要时新建卡片而不是反复重试。
 
 ## 反模式

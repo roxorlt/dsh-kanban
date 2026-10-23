@@ -7,6 +7,7 @@ import {
   cardsOfBoard, cleanText, completeCard, countsFor, createCard,
   createSeed, isValidId, linkSession, moveCard, newActivityId, newApprovalId, newArtifactId, newBoardId, newQuestionId,
   newCardId, newChecklistId, normalizeHandoff, normalizeStore, patchCard, requestApproval, requireCard, resolveApproval,
+  approvalOutcomeColumn,
   sortColumnCards, unlinkSession,
 } from '../lib/domain.js'
 
@@ -742,4 +743,151 @@ test('handoff：normalizeStore 读取保留合法 handoff，坏数据丢弃不�
   assert.equal(kept.by.name, 'DSH Agent')
   assert.equal(data.cards.find(card => card.id === seed.cards[1].id).handoff, undefined)
   assert.equal(data.cards.find(card => card.id === seed.cards[2].id).handoff, undefined)
+})
+
+test('审批提交后卡片立即离开「待你确认」：默认回进行中，选项 column 决定目标列', () => {
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'backlog')
+  const user = { kind: 'user', name: '你' }
+
+  // 1) 未声明 column：按继续处理回到进行中（修复「提交了但状态不变」）
+  const first = requestApproval(draft, card.id, {
+    title: '还要继续修吗？',
+    options: [{ id: 'go', label: '继续' }, { id: 'no', label: '停下', tone: 'danger' }],
+  }, { now: FIXED_NOW })
+  assert.equal(card.status, 'needs_you')
+  const resumed = resolveApproval(draft, card.id, first.approval.id, { optionIds: ['go'], actor: user, now: FIXED_NOW + 1 })
+  assert.equal(resumed.card.status, 'running')
+  assert.equal(resumed.card.startedAt, FIXED_NOW + 1)
+  assert.equal(resumed.statusActivity.type, 'status')
+  assert.equal(resumed.statusActivity.text, '审批已提交，卡片回到「进行中」')
+  assert.deepEqual(resumed.statusActivity.data, { from: 'needs_you', to: 'running', approvalId: first.approval.id, column: 'running', reason: 'approval_resolved' })
+  assert.equal(draft.boards[0].cardOrder.running[0], card.id)
+  assert.ok(!draft.boards[0].cardOrder.needs_you.includes(card.id))
+
+  // 2) 驳回（danger 且未声明 outcome）：固定回「待办」
+  const rejectAsk = requestApproval(draft, card.id, {
+    title: '要不要现在发布？',
+    options: [{ id: 'yes', label: '发布' }, { id: 'no', label: '先不发', tone: 'danger' }],
+  }, { now: FIXED_NOW + 2 })
+  const rejected = resolveApproval(draft, card.id, rejectAsk.approval.id, { optionIds: ['no'], actor: user, now: FIXED_NOW + 3 })
+  assert.equal(rejected.approval.status, 'rejected')
+  assert.equal(rejected.card.status, 'backlog')
+  assert.equal(rejected.statusActivity.text, '审批已提交，卡片进入「待办」')
+  // 回到进行中再测下一段
+  moveCard(draft, card.id, { column: 'running', now: FIXED_NOW + 4 })
+
+  // 3) 声明 outcome:'done'：提交即完成，写入 completedAt 与已完成列
+  const finishAsk = requestApproval(draft, card.id, {
+    title: '可以收尾了吗？',
+    options: [{ id: 'finish', label: '确认完成', outcome: 'done' }, { id: 'keep', label: '继续改' }],
+  }, { now: FIXED_NOW + 4 })
+  assert.equal(finishAsk.approval.options[0].outcome, 'done')
+  assert.equal(card.status, 'needs_you')
+  const finished = resolveApproval(draft, card.id, finishAsk.approval.id, { optionIds: ['finish'], actor: user, now: FIXED_NOW + 5 })
+  assert.equal(finished.card.status, 'done')
+  assert.equal(finished.card.completedAt, FIXED_NOW + 5)
+  assert.equal(finished.statusActivity.text, '审批已提交，卡片进入「已完成」')
+  assert.equal(draft.boards[0].cardOrder.done[0], card.id)
+
+  // 4) 声明 outcome:'backlog'：回到待办并清掉 completedAt
+  const parkAsk = requestApproval(draft, card.id, {
+    title: '还接着做吗？',
+    options: [{ id: 'later', label: '先放着', outcome: 'backlog' }],
+  }, { now: FIXED_NOW + 6 })
+  const parked = resolveApproval(draft, card.id, parkAsk.approval.id, { optionIds: ['later'], actor: user, now: FIXED_NOW + 7 })
+  assert.equal(parked.card.status, 'backlog')
+  assert.equal(parked.card.completedAt, undefined)
+  assert.equal(parked.statusActivity.text, '审批已提交，卡片进入「待办」')
+  assert.equal(draft.boards[0].cardOrder.backlog[0], card.id)
+})
+
+test('审批提交后的迁移边界：仍有 pending 审批/不在待你确认列/多题与多选声明', () => {
+  const draft = seedDraft()
+  const running = findCardByStatus(draft, 'running')
+  const user = { kind: 'user', name: '你' }
+
+  // 仍有其它 pending 审批：解决一条后留在待你确认，最后一条提交才迁移
+  const a = requestApproval(draft, running.id, { title: '问题 A', options: ['好'] }, { now: FIXED_NOW })
+  const b = requestApproval(draft, running.id, { title: '问题 B', options: ['好'] }, { now: FIXED_NOW + 1 })
+  const partial = resolveApproval(draft, running.id, a.approval.id, { optionIds: ['option-1'], actor: user, now: FIXED_NOW + 2 })
+  assert.equal(partial.card.status, 'needs_you')
+  assert.equal(partial.statusActivity, undefined)
+  assert.ok(draft.boards[0].cardOrder.needs_you.includes(running.id))
+  const last = resolveApproval(draft, running.id, b.approval.id, { optionIds: ['option-1'], actor: user, now: FIXED_NOW + 3 })
+  assert.equal(last.card.status, 'running')
+
+  // 卡片被拖去其它列（不在待你确认列）：提交审批不改状态
+  const moved = findCardByStatus(draft, 'backlog')
+  const ask = requestApproval(draft, moved.id, { title: '继续吗？', options: ['继续'] }, { now: FIXED_NOW + 4 })
+  moveCard(draft, moved.id, { column: 'done', now: FIXED_NOW + 5 })
+  const stayed = resolveApproval(draft, moved.id, ask.approval.id, { optionIds: ['option-1'], actor: user, now: FIXED_NOW + 6 })
+  assert.equal(stayed.card.status, 'done')
+  assert.equal(stayed.statusActivity, undefined)
+
+  // 受阻/失败卡（列在待你确认但不是 needs_you）：提交审批保持原状态，等人处理
+  const blocked = moved
+  const blockedAsk = requestApproval(draft, blocked.id, { title: '受阻后继续？', options: ['继续'] }, { now: FIXED_NOW + 7 })
+  patchCard(draft, blocked.id, { status: 'blocked' }, { now: FIXED_NOW + 8 })
+  const kept = resolveApproval(draft, blocked.id, blockedAsk.approval.id, { optionIds: ['option-1'], actor: user, now: FIXED_NOW + 9 })
+  assert.equal(kept.card.status, 'blocked')
+  assert.equal(kept.statusActivity, undefined)
+
+  // 多题审批：任一题声明 outcome 即生效（题序靠前的优先）
+  const multi = requestApproval(draft, blocked.id, {
+    questions: [
+      { question: 'Q1', options: ['好的'] },
+      { question: 'Q2', options: [{ id: 'close', label: '收尾', outcome: 'done' }] },
+    ],
+  }, { now: FIXED_NOW + 10 })
+  const answered = resolveApproval(draft, blocked.id, multi.approval.id, {
+    answers: multi.approval.questions.map(question => ({ questionId: question.id, optionIds: [question.options[0].id] })),
+    actor: user, now: FIXED_NOW + 11,
+  })
+  assert.equal(answered.card.status, 'done')
+
+  // 多选审批：所有选中项声明同一列时按该列
+  const draft2 = seedDraft()
+  const card2 = findCardByStatus(draft2, 'backlog')
+  const multiAsk = requestApproval(draft2, card2.id, {
+    title: '带哪些检查？',
+    multiSelect: true,
+    options: [{ id: 'unit', label: '单测', outcome: 'backlog' }, { id: 'build', label: '构建', outcome: 'backlog' }],
+  }, { now: FIXED_NOW })
+  const picked = resolveApproval(draft2, card2.id, multiAsk.approval.id, { optionIds: ['unit', 'build'], actor: user, now: FIXED_NOW + 1 })
+  assert.equal(picked.card.status, 'backlog')
+  assert.equal(picked.statusActivity.text, '审批已提交，卡片进入「待办」')
+
+  // 去向解析：取第一个声明值；未声明时批准回进行中、驳回回待办
+  assert.equal(approvalOutcomeColumn([{ outcome: undefined }, { outcome: 'done' }]), 'done')
+  assert.equal(approvalOutcomeColumn([]), 'running')
+  assert.equal(approvalOutcomeColumn(undefined), 'running')
+  assert.equal(approvalOutcomeColumn(undefined, { rejected: true }), 'backlog')
+  assert.equal(approvalOutcomeColumn([{ outcome: 'running' }], { rejected: true }), 'running')
+})
+
+test('审批选项 outcome：严格创建校验非法值、宽松读取丢弃坏值', () => {
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'backlog')
+  assert.throws(
+    () => requestApproval(draft, card.id, { title: '坏去向', options: [{ label: '收尾', outcome: 'canceled' }] }, { now: FIXED_NOW }),
+    error => error.code === 'BAD_REQUEST' && /outcome 不合法/.test(error.message),
+  )
+
+  const seed = JSON.parse(JSON.stringify(createSeed('demo', FIXED_NOW)))
+  const target = seed.cards[0]
+  target.approvals = [{
+    id: 'ap-abcdef12', title: '旧数据', status: 'pending',
+    requestedBy: { kind: 'agent', name: 'DSH Agent' }, requestedAt: FIXED_NOW,
+    options: [
+      { id: 'go', label: '继续', outcome: 'done' },
+      { id: 'bad', label: '坏去向', outcome: 'canceled' },
+      { id: 'plain', label: '普通' },
+    ],
+  }]
+  const data = normalizeStore(seed, FIXED_NOW)
+  const loaded = data.cards[0].approvals[0]
+  assert.equal(loaded.options[0].outcome, 'done')
+  assert.equal(loaded.options[1].outcome, undefined)
+  assert.equal(loaded.options[2].outcome, undefined)
 })

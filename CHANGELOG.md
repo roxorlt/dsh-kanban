@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.9.1 — 2026-10-23
+
+### 修复：「待你确认」提交选项后卡片状态不立即变更
+
+- 现象：在「待你确认」列提交审批选项（单题/多题、批准/驳回）后，审批结果和时间线都写了，但卡片仍停在 `needs_you`；只有等 agent 或被人工再拖一次才离开该列——「提交了但状态没变」。
+- 根因：`lib/domain.js` 的 `resolveApproval` 只写 `approval.resolution` 与 `approval_resolved` 节点，从不改卡片 `status` / `cardOrder`；旧契约还把「解决后仍留在 needs_you」写成预期，Web 端也只把决定文本发回会话、不做移列。
+- 服务端：最后一条 pending 审批提交后，在同一次 resolve 事务内迁移卡片——所选选项声明了 `outcome` 就进该列（`running` / `backlog` / `done`），未声明时批准回 `running`、驳回（所选全为 danger/no/reject/deny/cancel）回 `backlog`，并追加 `status` 活动「审批已提交，卡片回到/进入「…」」。仍有其它 pending 审批、卡片 `blocked`/`failed`、已归档或不在 `needs_you` 时保持原状态（受阻/失败等人处理，对齐设计规范）。
+- 契约：`ApprovalOption` 新增 `outcome?: 'running'|'backlog'|'done'`（创建审批与 `kanban_request_approval` 都可声明，非法值 400）；resolve 语义由「解决后留在 needs_you」改为「提交即改列」。
+- Web：`ApprovalPanel` 对声明 outcome 的选项显示「提交后进入「已完成」」提示；提交瞬间乐观移列（新纯逻辑 `approvalOutcome.ts`，`needs_you` 列 + 无其它待处理审批才动），接口失败回滚到「待你确认」并 toast；未绑定会话时仍移列，并沿用「未绑定会话」警示与「新建会话并发给 agent」兜底（按确认的范围）。
+- 人工拖卡进「待你确认」生成的默认确认请求：继续→进行中，先停下来→待办（驳回语义）。
+- 文档/技能：contracts 01/02、设计规范 §2.5/§7.2、`manage-kanban` skill 审批红线同步（提交后不需要 agent 再补移列；确认收尾用 `outcome:"done"`）。
+
+### 验证
+
+- 服务端 `node --test` 76/76（新增 5 类：默认回进行中、outcome done/backlog、驳回回待办、多题/多选声明、仍有 pending / blocked 保持、非法 outcome 400）。
+- Web vitest 17 文件 / 117 测试（新增 `approvalOutcome` 7 例）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 8 个 CSS 文件 0 error / 0 warning。
+- 真实浏览器（源码 dev-server + 构建后 dist，Chromium 1440×900，Playwright）：声明 `outcome:"done"` 的选项显示「提交后进入「已完成」」提示；点「批准」后 250ms 内卡片出现在「已完成」列（乐观移列）、服务端 status=done、时间线有「审批已提交，卡片进入「已完成」」；未声明 outcome 的审批提交后回「进行中」；点「拒绝」后回「待办」；刷新后三张卡片仍在目标列；console 0 error。证据截图 `design/screens/approval-outcome-hint.png`、`approval-outcome-move.png`，记录见 docs/06 §1.11。
+
 ## v0.8.0 — 2026-10-23
 
 ### 新增：handoff 交接摘要字段（M2）
