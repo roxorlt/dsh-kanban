@@ -7,6 +7,7 @@ import type { ColumnGroups } from '../lib/grouping';
 import { COLUMNS } from '../lib/status';
 import { countByColumn, dropTarget } from '../lib/grouping';
 import { DONE_PREVIEW_LIMIT } from '../lib/listGroups';
+import { useBoardWheelScroll } from '../lib/useBoardWheelScroll';
 import { KanbanCard } from './KanbanCard';
 import type { CardActionHandlers, CardViewShared, Placement } from './types';
 import { IconCheckCircle, IconChevronRight, IconCircle, IconHand, IconPlus, IconSparkle } from './Icons';
@@ -81,6 +82,7 @@ export function BoardView({
   const [overCardId, setOverCardId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<ColumnId>>(() => new Set());
   const dropHandled = useRef(false);
+  const boardRef = useBoardWheelScroll();
   const counts = countByColumn(cards);
 
   const toggleCollapsed = (column: ColumnId) => {
@@ -296,6 +298,7 @@ export function BoardView({
     const current = COLUMNS.includes(activeColumn) ? activeColumn : 'running';
     return (
       <div
+        ref={boardRef}
         className={`kb-board kb-board--mobile${selectionMode ? ' kb-board--selection' : ''}`}
         role="region" aria-label={t('a11y.boardRegion', { name: board.name })}>
         <div className="kb-column-switch" role="tablist" aria-label={t('app.viewBoard')}>
@@ -321,6 +324,7 @@ export function BoardView({
 
   return (
     <div
+      ref={boardRef}
       className={`kb-board${selectionMode ? ' kb-board--selection' : ''}`}
       role="region" aria-label={t('a11y.boardRegion', { name: board.name })}>
       {COLUMNS.map(renderColumn)}

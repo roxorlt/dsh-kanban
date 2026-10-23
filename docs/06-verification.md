@@ -151,6 +151,21 @@
 | 自测 | Web vitest 14 文件 / 86 测试；tsc 0 error；build 成功且产物与已发布版本一致（`index-D6pSvrZj.css` / `index-CvJIeErd.js` 重建无 diff）；令牌 lint 0/0；服务端 67/67 |
 | 截图 | `docs/assets/screens/focus-reply-before-after.png`（回复框 before/after light+dark）、`focus-approval-note-before-after.png`（审批备注框 before/after） |
 
+## 1.12 v0.7.2（竖屏触摸板横滑 + 轴向锁定）
+
+| 项 | 结果 |
+| --- | --- |
+| 复现（真实宿主 `/dsh-kanban/`，1028×1800 = 1080 竖屏减宿主侧栏） | 4 列 300px + 间隙 + padding 总宽 1268px，视口 1028 → 横向溢出 240px；真实 Chrome wheel 事件在列间隙（`elementFromPoint` = `.kb-board`）横滑可滚到底，在卡片标题/列体空白（目标在 `.kb-column__body` 内）横滑 `scrollLeft` 始终 0；960×1600 视口溢出 308，现象相同 |
+| 根因 | 列体 `.kb-column__body` 是纵向滚动容器（`overflow-y: auto` + `overscroll-behavior: contain`），`overflow-x` 按规范计算成 `auto`：横向 wheel 落在列体上被当作本容器滚动；列体无横向溢出且 `contain` 禁止链式滚动交给 `.kb-board`，事件链在这里截断。只有目标落在列间隙/列头（不属于列体滚动容器）时才能滚 |
+| 次要根因 | 720–1099px 的 `scroll-snap-type: x proximity`：单次 wheel 后立即吸附，1268/1028 宽下有效吸附点只有起点 16 与末端 308/240，出现「小横滑弹回原位、大横滑直接跳底」 |
+| 修复 A（手势接管） | `web/src/lib/useBoardWheelScroll.ts`：看板容器挂非 passive `wheel` 监听（React 根监听是 passive，无法 preventDefault），横向手势 `preventDefault` + `board.scrollLeft += deltaX`，光标在卡片/列体空白/列头/列间隙任意位置都能横滑；`ResizeObserver` + 手势首帧测量横向溢出，无溢出（≥1100px、<720px）时完全不接管 |
+| 修复 B（轴向锁定） | `web/src/lib/boardWheel.ts`：手势首帧按两轴绝对值占比锁定 x/y，整个手势只走一个轴，停顿 >150ms 才重新判定；纵向手势一律不 preventDefault（列体自滚）；⌘/Ctrl+滚轮不接管（缩放），Shift+滚轮把 deltaY 当横向，deltaMode 1/2 换算为 16px/行、100px/页 |
+| 修复 C（吸附与边界） | 720–1099px 的 `scroll-snap` 只保留给 `(pointer: coarse)` 触摸设备，精细指针自由横滚；`.kb-board` 加 `overscroll-behavior-x: contain` 避免两端触发 macOS 后退手势 |
+| 自动化实测（真实 Chrome + CDP wheel，真实宿主 1028×1800） | 横滑·卡片 0→240（到底）；横滑·列间隙 0→240；横滑·列头 0→240；横滑·列体空白 0→240；竖滑·卡片 `scrollLeft` 0、列体 360；斜滑 90/40（横为主）只横滚 240、列体 0；斜滑 40/90（竖为主）看板 0、列体 270；反向横滑看板 0、列体 0；动量式 17 连发累积到 303（max 308）；横滑→停顿→竖滑新手势正确重判；`列表 ↔ 看板` 切换后横滑仍生效；console 0 error |
+| 其他视口 | 960×1600（溢出 308 → 到底 308）、1080×1920（188→188）、720×1280（548 溢出，3 发 120 累积 360，竖滚 0）、1440×900（无溢出：横滑不接管、列体竖滚正常）、390×844（单列：横滑不接管） |
+| 自测 | Web vitest 15 文件 / 102 测试（新增 `boardWheel.test.ts` 16 例）；tsc 0 error；令牌 lint 8 CSS 0/0；build 成功；服务端 67/67 |
+| 截图 | `design/screens/board-wheel-portrait-1028-before.png` / `-after.png`（1028 竖屏横滑前/后，后图第 4 列完整可见）、`board-wheel-portrait-1080-before.png` / `-after.png` |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

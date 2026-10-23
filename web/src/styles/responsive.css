@@ -1,6 +1,7 @@
 /* lint-tokens-ignore: global-sheet */
 /* 响应式四档 + 竖屏触控目标
-   ≥1440 四列宽松；1100–1440 四列紧凑；720–1100 横向滚动；<720 顶部列分段 + 单列。 */
+   ≥1440 四列宽松；1100–1440 四列紧凑；720–1100 横向滚动（触摸板自由横滚，
+   触摸设备按列吸附）；<720 顶部列分段 + 单列。 */
 
 @media (max-width: 1439px) {
   .kb-app-scope {
@@ -30,11 +31,6 @@
   .kb-board {
     grid-template-columns: repeat(4, minmax(300px, 1fr));
     overflow-x: auto;
-    scroll-snap-type: x proximity;
-  }
-
-  .kb-column {
-    scroll-snap-align: start;
   }
 
   .kb-filter-chips {
@@ -47,6 +43,19 @@
 
   .kb-statusbar span:nth-last-child(-n + 2) {
     display: none;
+  }
+}
+
+/* 触摸设备保留按列吸附；触摸板/鼠标（精细指针）用自由横滚。
+   proximity 吸附会在每一帧小横滑后把看板弹回原位，触摸板横滑到第 4 列
+   基本不可控；横滑已在 useBoardWheelScroll 里逐帧接管，不需要吸附。 */
+@media (max-width: 1099px) and (pointer: coarse) {
+  .kb-board {
+    scroll-snap-type: x proximity;
+  }
+
+  .kb-column {
+    scroll-snap-align: start;
   }
 }
 

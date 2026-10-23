@@ -11,6 +11,9 @@
   padding: 12px var(--kb-pad-x) 16px;
   overflow-x: auto;
   overflow-y: hidden;
+  /* 触摸板横滑由 useBoardWheelScroll 接管；滚到两端时不触发浏览器的横向
+     overscroll（macOS 会把它误判成「后退」手势）。 */
+  overscroll-behavior-x: contain;
 }
 
 .kb-column {
