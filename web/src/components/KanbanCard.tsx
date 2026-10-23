@@ -205,12 +205,13 @@ export function KanbanCard({
       }
       return;
     }
-    if (event.key === 'Enter' || event.key.toLowerCase() === 'o') {
-      event.preventDefault();
-      onOpenDetail(card.id);
-    } else if (event.key === ' ') {
+    // 与 demo/规范一致：Enter / Space 展开收起，O 打开详情
+    if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       onToggleExpanded(card.id);
+    } else if (event.key.toLowerCase() === 'o') {
+      event.preventDefault();
+      onOpenDetail(card.id);
     } else if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
       event.preventDefault();
       const columnIndex = COLUMNS.indexOf(COLUMN_OF_STATUS[card.status]);
@@ -247,11 +248,17 @@ export function KanbanCard({
       onDragEnd={onDragEnd}
       onKeyDown={onKeyDown}
       onClick={(event) => {
-        if (!selectionMode) return;
         const target = event.target as HTMLElement;
-        // 标题/复选框有自己的 toggle，避免冒泡到 article 造成双切换
-        if (target.closest('button, a, input, textarea, select, label, .kb-card-title')) return;
-        onToggleSelection(card.id);
+        if (target.closest('button, a, input, textarea, select, label')) return;
+        // 拖选文字时不误触发
+        if (window.getSelection()?.toString()) return;
+        if (selectionMode) {
+          onToggleSelection(card.id);
+          return;
+        }
+        // 展开区与审批面板内部点击不折叠，避免阅读/作答时误触
+        if (target.closest('.kb-card-expanded, .kb-decision')) return;
+        onToggleExpanded(card.id);
       }}
       onDoubleClick={() => {
         if (!selectionMode) onOpenDetail(card.id);
@@ -271,12 +278,7 @@ export function KanbanCard({
             />
           </span>
         ) : null}
-        <h3
-          className="kb-card-title"
-          onClick={() => (selectionMode ? onToggleSelection(card.id) : onOpenDetail(card.id))}
-        >
-          {card.title}
-        </h3>
+        <h3 className="kb-card-title">{card.title}</h3>
         {!selectionMode ? (
         <>
         <button

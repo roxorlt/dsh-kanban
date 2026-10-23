@@ -14,8 +14,8 @@ const SHORTCUTS: { keys: string[]; labelKey: I18nKey }[] = [
   { keys: ['Esc'], labelKey: 'shortcut.close' },
   { keys: ['?'], labelKey: 'shortcut.help' },
   { keys: ['T'], labelKey: 'shortcut.theme' },
-  { keys: ['Enter'], labelKey: 'shortcut.open' },
-  { keys: ['Space'], labelKey: 'shortcut.expand' },
+  { keys: ['Enter', 'Space'], labelKey: 'shortcut.expand' },
+  { keys: ['O'], labelKey: 'shortcut.open' },
 ];
 
 /** 键盘快捷键帮助（`?` 打开，Esc 关闭）。 */

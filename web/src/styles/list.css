@@ -106,6 +106,7 @@
 .kb-list__item {
   display: flex;
   flex-direction: column;
+  cursor: pointer;
 }
 
 .kb-list__item + .kb-list__item {
@@ -258,6 +259,7 @@
   gap: 10px;
   padding: 10px 12px 12px 29px;
   border-top: 0.5px solid var(--dsw-alias-border-l1);
+  cursor: auto;
   animation: kb-reveal var(--kb-dur) var(--kb-ease-out);
 }
 

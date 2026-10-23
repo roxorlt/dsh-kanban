@@ -246,16 +246,49 @@ function ListRow({
         selectionMode ? ' kb-list__item--selectable' : ''
       }${selectionSelected ? ' kb-list__item--selected' : ''}${highlighted ? ' kb-list__item--highlight' : ''}`}
       data-card-id={card.id}
-    >
-      <div
-        className="kb-list__row"
-        onClick={(event) => {
-          if (!selectionMode) return;
-          const target = event.target as HTMLElement;
-          if (target.closest('button, a, input, textarea, select, label')) return;
+      tabIndex={0}
+      role="group"
+      aria-label={t('a11y.cardLabel', { title: card.title, status: t(statusKey) })}
+      onClick={(event) => {
+        const target = event.target as HTMLElement;
+        if (target.closest('button, a, input, textarea, select, label')) return;
+        // 拖选文字时不误触发
+        if (window.getSelection()?.toString()) return;
+        if (selectionMode) {
           onToggleSelection(card.id);
-        }}
-      >
+          return;
+        }
+        // 展开区内部点击不折叠，避免阅读/作答时误触
+        if (target.closest('.kb-list__expanded')) return;
+        actions.onToggleExpanded(card.id);
+      }}
+      onDoubleClick={(event) => {
+        if (selectionMode) return;
+        const target = event.target as HTMLElement;
+        if (target.closest('button, a, input, textarea, select, label')) return;
+        actions.onOpenDetail(card.id);
+      }}
+      onKeyDown={(event) => {
+        const target = event.target as HTMLElement;
+        if (target.closest('button, input, textarea, select, a')) return;
+        if (selectionMode) {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onToggleSelection(card.id);
+          }
+          return;
+        }
+        // 与看板卡一致：Enter / Space 展开收起，O 打开详情
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          actions.onToggleExpanded(card.id);
+        } else if (event.key.toLowerCase() === 'o') {
+          event.preventDefault();
+          actions.onOpenDetail(card.id);
+        }
+      }}
+    >
+      <div className="kb-list__row">
         {selectionMode ? (
           <label className="kb-list__check" onClick={(event) => event.stopPropagation()}>
             <input
@@ -271,8 +304,10 @@ function ListRow({
         <button
           type="button"
           className="kb-list__title"
-          onClick={() => (selectionMode ? onToggleSelection(card.id) : actions.onOpenDetail(card.id))}
-          aria-label={`${t('card.openDetail')}：${card.title}`}
+          aria-expanded={expanded}
+          aria-controls={`kb-list-exp-${card.id}`}
+          aria-label={`${t(expanded ? 'list.collapseRow' : 'list.expandRow')}：${card.title}`}
+          onClick={() => (selectionMode ? onToggleSelection(card.id) : actions.onToggleExpanded(card.id))}
         >
           <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
           <span className="kb-list__title-text">{card.title}</span>
@@ -305,6 +340,7 @@ function ListRow({
                 type="button"
                 className="kb-btn kb-btn--icon kb-btn--sm kb-btn--ghost"
                 aria-expanded={expanded}
+                aria-controls={`kb-list-exp-${card.id}`}
                 aria-label={expanded ? t('list.collapseRow') : t('list.expandRow')}
                 onClick={() => actions.onToggleExpanded(card.id)}
               >
@@ -352,7 +388,7 @@ function ListRow({
       </div>
 
       {expanded && !selectionMode ? (
-        <div className="kb-list__expanded">
+        <div className="kb-list__expanded" id={`kb-list-exp-${card.id}`}>
           {card.currentAction ? <p className="kb-list__action">{card.currentAction}</p> : null}
           {pendingApproval ? (
             <ApprovalPanel

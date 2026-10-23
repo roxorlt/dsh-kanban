@@ -104,6 +104,19 @@
 | 截图 | `docs/assets/screens/return-bubble-aligned.png`、`return-highlight.png` |
 | 设计 | docs/03 §7.13 增加对齐/HIGHLIGHT/reduced-motion/验收标准 |
 
+## 1.9 v0.6.1（恢复「点卡片非交互区展开/收起」）
+
+| 项 | 结果 |
+| --- | --- |
+| 看板卡 | 点摘要 / 标题 / 属性行展开收起；再点收起；点菜单按钮不展开；展开区内文字不误收起 |
+| 键盘 | `Enter` 展开、`Space` 收起、`O` 打开详情；`Esc` 关闭详情 |
+| 审批面板 | 隔离 dev-server 种子数据：点问题标题 / 说明 / 选项 / 备注框均不展开；点选项可正常选中 |
+| 列表行 | 点摘要 / 标题展开收起；键盘 `Enter` 展开、`O` 详情 |
+| 选择模式 | 点卡身 = 勾选，不展开；`Esc` 退出 |
+| 自测 | web tsc 0 error；vitest 12 文件 / 69 测试；build / 令牌 lint 0/0；服务端 67/67 |
+| headless Chrome | 线上看板 24/25（1 项因线上无待审批卡跳过），隔离种子数据审批面板 10/10；console 0 error |
+| 设计 | docs/03 §2.3、§7.4、§7.8 同步触发区域与快捷键 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
