@@ -5,7 +5,7 @@ import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import type { ColumnGroups } from '../lib/grouping';
 import { COLUMNS } from '../lib/status';
-import { countByColumn, dropTarget } from '../lib/grouping';
+import { countByColumn, planCardDrop } from '../lib/grouping';
 import { DONE_PREVIEW_LIMIT } from '../lib/listGroups';
 import { useBoardWheelScroll } from '../lib/useBoardWheelScroll';
 import { KanbanCard } from './KanbanCard';
@@ -108,9 +108,16 @@ export function BoardView({
     const cardId = draggedId ?? event.dataTransfer.getData('text/plain');
     if (cardId) {
       const ids = groups[column].map((card) => card.id);
-      const targetId = overCardId && overCardId !== cardId ? overCardId : null;
-      const placement = dropTarget(ids, cardId, targetId);
-      onMoveWithPlacement(cardId, column, placement);
+      const sourceColumn = COLUMNS.find((key) => groups[key].some((card) => card.id === cardId));
+      const placement = planCardDrop({
+        ids,
+        draggedId: cardId,
+        targetId: overCardId,
+        sameColumn: sourceColumn === column,
+        column,
+      });
+      // placement 为 null = 放回原位：不请求后端，也不触发「移到某列」的 toast 与时间线。
+      if (placement) onMoveWithPlacement(cardId, column, placement);
     }
     resetDrag();
   };
@@ -130,6 +137,7 @@ export function BoardView({
     const isDone = column === 'done';
     const visibleCards = isDone ? allColumnCards.slice(0, DONE_PREVIEW_LIMIT) : allColumnCards;
     const isOver = overColumn === column && draggedId !== null;
+    const isSelfDrag = draggedId !== null && allColumnCards.some((card) => card.id === draggedId);
     const isCollapsed = collapsed.has(column) && !mobile;
     const totalForColumn = isDone && !filtering ? doneTotal : allColumnCards.length;
     const hiddenDone = isDone ? Math.max(0, totalForColumn - visibleCards.length) : 0;
@@ -221,7 +229,11 @@ export function BoardView({
                 )}
               </div>
             ) : (
-              visibleCards.map((card) => (
+              <>
+                {isDone && isOver && !overCardId && !isSelfDrag ? (
+                  <div className="kb-drop-line" aria-hidden="true" />
+                ) : null}
+                {visibleCards.map((card) => (
                 <div
                   role="listitem"
                   key={card.id}
@@ -274,7 +286,8 @@ export function BoardView({
                     }}
                   />
                 </div>
-              ))
+                ))}
+              </>
             )}
             {hiddenDone > 0 ? (
               <button type="button" className="kb-column__more" onClick={onViewAllDone}>
@@ -287,7 +300,9 @@ export function BoardView({
             {column === 'done' && !selectionMode ? (
               <p className="kb-column__hint">{t('board.autoArchiveHint')}</p>
             ) : null}
-            {isOver && !overCardId ? <div className="kb-drop-line" aria-hidden="true" /> : null}
+            {/* 列体空白区的落点提示：已完成列内拖回空白区 = 放回原位，不画落点线；
+                跨列拖进已完成列插到列头，提示线画在首张卡片前；其他列画在末尾。 */}
+            {isOver && !overCardId && !isDone ? <div className="kb-drop-line" aria-hidden="true" /> : null}
           </div>
         )}
       </section>

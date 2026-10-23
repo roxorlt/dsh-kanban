@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../types';
-import { countByColumn, dropTarget, groupCardsByColumn } from './grouping';
+import { countByColumn, groupCardsByColumn, planCardDrop } from './grouping';
 
 function makeCard(overrides: Partial<Card> & { id: string }): Card {
   return {
@@ -72,14 +72,60 @@ describe('countByColumn', () => {
   });
 });
 
-describe('dropTarget', () => {
-  it('拖到某卡片上时返回它前一个卡片作为 afterId', () => {
-    expect(dropTarget(['a', 'b', 'c'], 'c', 'b')).toEqual({ afterId: 'a' });
-    expect(dropTarget(['a', 'b', 'c'], 'a', 'b')).toEqual({});
+describe('planCardDrop', () => {
+  type Context = Parameters<typeof planCardDrop>[0];
+  const ctx = (over: Partial<Context>): Context => ({
+    ids: ['a', 'b', 'c'],
+    draggedId: 'b',
+    targetId: null,
+    sameColumn: true,
+    column: 'backlog',
+    ...over,
   });
 
-  it('拖到列表末尾返回最后一个卡片作为 beforeId', () => {
-    expect(dropTarget(['a', 'b'], 'x', null)).toEqual({ beforeId: 'b' });
-    expect(dropTarget([], 'x', null)).toEqual({});
+  it('拖到某张卡片上：插到该卡片前（前一张卡作为 afterId）', () => {
+    expect(planCardDrop(ctx({ sameColumn: false, draggedId: 'x', targetId: 'c' }))).toEqual({ afterId: 'b' });
+    expect(planCardDrop(ctx({ sameColumn: false, draggedId: 'x', targetId: 'a' }))).toEqual({});
+  });
+
+  it('同列拖回原处 / 拖到后一张卡：放回原位（null，不请求）', () => {
+    expect(planCardDrop(ctx({ draggedId: 'b', targetId: 'b' }))).toBeNull();
+    expect(planCardDrop(ctx({ draggedId: 'b', targetId: 'c' }))).toBeNull();
+    expect(planCardDrop(ctx({ draggedId: 'a', ids: ['a', 'b'], targetId: 'a' }))).toBeNull();
+  });
+
+  it('同列拖到前面的卡片：上移一位', () => {
+    expect(planCardDrop(ctx({ draggedId: 'c', targetId: 'b' }))).toEqual({ afterId: 'a' });
+    expect(planCardDrop(ctx({ draggedId: 'b', targetId: 'a' }))).toEqual({});
+  });
+
+  it('同列落到空白区：已完成列放回原位，其他列落到真正末尾', () => {
+    expect(planCardDrop(ctx({ draggedId: 'b', targetId: null, column: 'done' }))).toBeNull();
+    expect(planCardDrop(ctx({ draggedId: 'c', targetId: null, column: 'done' }))).toBeNull();
+    expect(planCardDrop(ctx({ draggedId: 'b', targetId: null, column: 'backlog' }))).toEqual({ afterId: 'c' });
+    // 已在末尾：落回原位，不请求
+    expect(planCardDrop(ctx({ draggedId: 'c', targetId: null, column: 'running' }))).toBeNull();
+    expect(planCardDrop(ctx({ ids: ['only'], draggedId: 'only', targetId: null, column: 'backlog' }))).toBeNull();
+  });
+
+  it('跨列落到空白区：已完成列插到列头（最近完成可见），其他列插到末尾', () => {
+    expect(planCardDrop(ctx({ sameColumn: false, ids: ['a', 'b'], draggedId: 'x', column: 'done' }))).toEqual({});
+    expect(planCardDrop(ctx({ sameColumn: false, ids: ['a', 'b'], draggedId: 'x', column: 'running' }))).toEqual({
+      afterId: 'b',
+    });
+    expect(planCardDrop(ctx({ sameColumn: false, ids: [], draggedId: 'x', column: 'running' }))).toEqual({});
+  });
+
+  it('跨列拖到已完成列的某张卡片上：插到该卡片前', () => {
+    expect(planCardDrop(ctx({ sameColumn: false, ids: ['a', 'b'], draggedId: 'x', targetId: 'b', column: 'done' }))).toEqual({
+      afterId: 'a',
+    });
+  });
+
+  it('目标卡片已不在列表（并发刷新）：按空白区规则兜底', () => {
+    expect(
+      planCardDrop(ctx({ sameColumn: false, ids: ['a', 'b'], draggedId: 'x', targetId: 'gone', column: 'running' })),
+    ).toEqual({ afterId: 'b' });
+    expect(planCardDrop(ctx({ ids: ['a', 'b'], draggedId: 'a', targetId: 'gone', column: 'done' }))).toBeNull();
   });
 });

@@ -1,11 +1,10 @@
 import type { Activity, Approval, ApprovalOption, Card, ColumnId, SessionRow } from '../types';
 import type { ActivityFeed } from '../lib/activities';
+import type { CardPlacement } from '../lib/grouping';
 import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 
-export interface Placement {
-  beforeId?: string;
-  afterId?: string;
-}
+/** 拖拽落点（与 lib/grouping 的落点计算共用同一类型）。 */
+export type Placement = CardPlacement;
 
 /** 卡片相关的共享视图状态（Board / List / Drawer 共用）。 */
 export interface CardViewShared {

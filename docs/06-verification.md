@@ -163,7 +163,7 @@
 | 修复 C（吸附与边界） | 720–1099px 的 `scroll-snap` 只保留给 `(pointer: coarse)` 触摸设备，精细指针自由横滚；`.kb-board` 加 `overscroll-behavior-x: contain` 避免两端触发 macOS 后退手势 |
 | 自动化实测（真实 Chrome + CDP wheel，真实宿主 1028×1800） | 横滑·卡片 0→240（到底）；横滑·列间隙 0→240；横滑·列头 0→240；横滑·列体空白 0→240；竖滑·卡片 `scrollLeft` 0、列体 360；斜滑 90/40（横为主）只横滚 240、列体 0；斜滑 40/90（竖为主）看板 0、列体 270；反向横滑看板 0、列体 0；动量式 17 连发累积到 303（max 308）；横滑→停顿→竖滑新手势正确重判；`列表 ↔ 看板` 切换后横滑仍生效；console 0 error |
 | 其他视口 | 960×1600（溢出 308 → 到底 308）、1080×1920（188→188）、720×1280（548 溢出，3 发 120 累积 360，竖滚 0）、1440×900（无溢出：横滑不接管、列体竖滚正常）、390×844（单列：横滑不接管） |
-| 自测 | Web vitest 15 文件 / 102 测试（新增 `boardWheel.test.ts` 16 例）；tsc 0 error；令牌 lint 8 CSS 0/0；build 成功；服务端 67/67 |
+| 自测 | Web vitest 15 文件 / 102 测试（新增 `boardWheel.test.ts` 16 例）；tsc 0 error；令牌 lint 8 CSS 0/0；build 成功；服务端 71/71 |
 | 截图 | `design/screens/board-wheel-portrait-1028-before.png` / `-after.png`（1028 竖屏横滑前/后，后图第 4 列完整可见）、`board-wheel-portrait-1080-before.png` / `-after.png` |
 
 ## 1.13 v0.7.2 补记（详情抽屉摘要宽度）
@@ -177,6 +177,18 @@
 | 宿主实测 | 真实桌面宿主 `/dsh-kanban/`（不重启进程，仅刷新页面即加载新 `web/dist`）打开「横划交互问题」：1440px 摘要 428 = 正文内容 428、右边缘 1424 = chips 1424、6 行；390px 摘要 358 = 正文 358；页面错误 / console error 0 |
 | 自测 | Web vitest 15 文件 / 102 测试；tsc 0 error；build 成功（`index-2_jo36uV.css` / `index-CX6NhCBz.js`，重建无 diff）；令牌 lint 8 CSS 0/0；服务端 67/67 |
 | 截图 | `design/screens/web-drawer-summary-before-1440.png` / `-after-1440.png`、`-before-390.png` / `-after-390.png`、`-after-1440-dark.png`（亮/暗同宽）、`-after-host-1440.png`（真实宿主卡片）；对比图 `docs/assets/screens/drawer-summary-width-before-after.png`、`drawer-summary-width-narrow-before-after.png` |
+
+## 1.14 v0.7.3（已完成列内拖动落点）
+
+| 项 | 结果 |
+| --- | --- |
+| 复现（隔离 dev-server，1440×1800 / 1028×1800，已完成 13 张） | 在「已完成」预览第 2 张按住拖到列体空白区松手：请求 `POST /cards/card-…/move {"column":"done","beforeId":"<列表最后一张>"}` → 卡片从位置 1 落到位置 11（共 13），预览里消失、进「查看全部 13」，同时弹 toast「已移动到「已完成」」；卡片 `completedAt` 被刷新 |
+| 根因 | 空白区落点的 `dropTarget` 返回 `beforeId = 列表最后一张`（插到倒数第二，不是真正末尾）；已完成列只渲染最近 5 张，预览外都折进「查看全部」，松手即消失。同列拖回原处/松手在卡片自身也走同一路径（会静默改顺序、刷新完成时间、写「移到已完成」时间线）；其他列空白区落点也差一位（与末尾 2px 落点线不一致） |
+| 修复 | `web/src/lib/grouping.ts` 用 `planCardDrop` 统一落点判断：① 同列空白区 / 卡片自身 → 返回 null（放回原位：不请求、不重排、不弹 toast、不写时间线）；② 同列拖到其他可见卡片 → 排序，落点与当前顺序相同也返回 null；③ 跨列拖进「已完成」空白区 → 插到列头（最近完成，预览可见）；④ 其他列空白区 → 真正末尾。`BoardView` 同步：落点提示线在已完成列内拖回空白时不画、跨列拖进已完成画在首张卡片之前、其他列画在末尾 |
+| 自动化实测（Playwright + 真实 Chrome，源码 dev-server，1440×1800） | A1 同列第 2 张 → 空白区：drop 事件触发 1 次、`/move` 请求 **0**、位置 1→1、预览完全不变、toast 0；A2 拖回自身：请求 0、顺序不变；A3 同列第 1 张拖到第 4 张卡：`afterId` 请求 1 次、位置 0→2、仍在预览内；A4 跨列（待你确认→已完成空白）：请求体只有 `column/version`、落在完成列表位置 0（预览第 1 张）；A5 跨列（待你确认→进行中空白）：`afterId=最后一张`、落在末尾；A6 落点线：已完成列内拖回空白 0 条线、跨列进已完成 1 条线且在首张卡片前、其他列 1 条线在末尾；console 0 error |
+| 真机宿主实测 | 真实桌面宿主 `/dsh-kanban/`（1028×1800，已完成 20 张，真实数据）把预览第 2 张「卡片的“摘要”文案…」拖到列体空白区松手：**0 个写请求**、位置 1→1、预览列表完全不变、无 toast、console 0 error |
+| 自测 | Web vitest 15 文件 / 107 测试（新增 `planCardDrop` 8 例）；tsc 0 error；令牌 lint 8 CSS 0/0；build 成功；服务端 71/71 |
+| 截图 | `design/screens/board-drag-done-cross-drop-top.png`（跨列拖进已完成：落点线在首张卡片前）、`board-drag-done-same-no-drop-line.png`（同列拖回空白：不画落点线） |
 
 ## 2. 自动化测试
 
