@@ -783,3 +783,60 @@ test('PATCH handoff：写入返回 + /state 含 handoff + handoff 活动 + 覆�
   const finalState = await api(server, '/api/kanban/state')
   assert.equal(finalState.json.cards.find(item => item.id === card.id).handoff, undefined)
 })
+
+test('审批解决后卡片状态与列立即变更（HTTP）：默认回进行中、outcome:done 进入已完成', async t => {
+  const { server } = await setup(t)
+  const card = await createCard(server, { title: '审批后归列' })
+  const ask = await api(server, `/api/kanban/cards/${card.id}/approvals`, {
+    method: 'POST',
+    body: {
+      title: '这次任务可以收尾了吗？',
+      options: [{ id: 'finish', label: '确认完成', outcome: 'done' }, { id: 'keep', label: '继续处理' }],
+    },
+  })
+  assert.equal(ask.status, 200)
+  assert.equal(ask.json.card.status, 'needs_you')
+
+  const resolved = await api(server, `/api/kanban/cards/${card.id}/approvals/${ask.json.approval.id}/resolve`, {
+    method: 'POST',
+    body: { optionIds: ['finish'], comment: '收尾' },
+  })
+  assert.equal(resolved.status, 200)
+  assert.equal(resolved.json.card.status, 'done')
+  assert.ok(resolved.json.card.completedAt > 0)
+  const state = await api(server, '/api/kanban/state')
+  assert.ok(state.json.board.cardOrder.done.includes(card.id))
+  assert.ok(!state.json.board.cardOrder.needs_you.includes(card.id))
+  const timeline = await api(server, `/api/kanban/cards/${card.id}/activities?limit=5`)
+  assert.ok(timeline.json.activities.some(item => item.type === 'status' && /进入「已完成」/.test(item.text)))
+
+  // 未声明 column：提交后默认回「进行中」
+  const card2 = await createCard(server, { title: '默认回进行中' })
+  const ask2 = await api(server, `/api/kanban/cards/${card2.id}/approvals`, {
+    method: 'POST', body: { title: '继续吗？', options: ['继续'] },
+  })
+  const resolved2 = await api(server, `/api/kanban/cards/${card2.id}/approvals/${ask2.json.approval.id}/resolve`, {
+    method: 'POST', body: { optionIds: ['option-1'] },
+  })
+  assert.equal(resolved2.json.card.status, 'running')
+  const state2 = await api(server, '/api/kanban/state')
+  assert.ok(state2.json.board.cardOrder.running.includes(card2.id))
+
+  // 驳回且未声明 outcome：固定回「待办」
+  const card3 = await createCard(server, { title: '驳回回待办' })
+  const ask3 = await api(server, `/api/kanban/cards/${card3.id}/approvals`, {
+    method: 'POST', body: { title: '现在发布吗？', options: [{ id: 'yes', label: '发布' }, { id: 'no', label: '先不发', tone: 'danger' }] },
+  })
+  const rejected = await api(server, `/api/kanban/cards/${card3.id}/approvals/${ask3.json.approval.id}/resolve`, {
+    method: 'POST', body: { optionIds: ['no'] },
+  })
+  assert.equal(rejected.json.approval.status, 'rejected')
+  assert.equal(rejected.json.card.status, 'backlog')
+
+  // 非法 outcome：创建时 400，不落库
+  const bad = await api(server, `/api/kanban/cards/${card2.id}/approvals`, {
+    method: 'POST', body: { title: '坏去向', options: [{ label: '收尾', outcome: 'canceled' }] },
+  })
+  assert.equal(bad.status, 400)
+  assert.equal(bad.json.error.code, 'BAD_REQUEST')
+})

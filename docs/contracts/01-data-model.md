@@ -35,6 +35,11 @@ const COLUMN_OF_STATUS: Record<Status, ColumnId> = {
 
 - agent 通过工具移动卡片时写 `status`；用户拖拽到某列时写该列的代表 status：`backlog→backlog`、`running→running`、`needs_you→needs_you`、`done→done`。
 - `blocked` / `failed` 卡片显示在"待你确认"列，并带警示样式与原因；解决后 agent 改回 `running` 或 `done`。
+- **审批提交即改列（v0.9.5）**：当卡片 `status=needs_you` 且不存在其它 `pending` 审批时，`resolve` 会在同一事务内立即迁移卡片：
+  1. 所选选项声明了 `outcome` → 进入该列（`running` / `backlog` / `done`，多选取提交顺序里第一个声明值；多题按题序）；
+  2. 未声明时：批准（非全 danger）→ `running`，驳回（所选全为 danger/no/reject/deny/cancel）→ `backlog`；
+  3. 迁移写入 `status` 活动并以评论者身份进时间线。
+  仍有其它 `pending` 审批、卡片已归档、或卡片不在 `needs_you`（`blocked`/`failed`、被人工拖到别的列）时保持原状态，等人处理。
 - 列内顺序由 `Board.cardOrder[columnId]: string[]` 决定；不在数组里的卡片按 `updatedAt desc` 兜底。
 
 ## 3. 实体定义
@@ -135,6 +140,7 @@ interface ApprovalOption {
   label: string;
   description?: string;
   tone?: 'primary' | 'danger' | 'ghost';  // 渲染建议
+  outcome?: 'running' | 'backlog' | 'done';  // v0.9.5：提交该项后卡片立即进入的列；不填＝批准回进行中、驳回回待办
 }
 
 interface Handoff {

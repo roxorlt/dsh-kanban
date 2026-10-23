@@ -269,16 +269,29 @@
 | 生效方式 | 纯前端类名/CSS 改动，**刷新看板即可**（无需重启 DSH；宿主按 `no-store` 返回 index.html、资源带内容哈希） |
 | 截图 | `design/screens/align-fix-before-after.png`（前后对照总图）、`align-card-dot-before-1440.png` / `align-card-dot-after-1440.png`、`align-option-before-1200.png` / `align-option-after-1200.png`、`align-option-after-1200-dark.png`、`align-option-after-390.png` |
 
+## 1.20 v0.9.5（审批提交即改列）
+
+| 项 | 结果 |
+|---|---|
+| 反馈 | 用户：在「待你确认」提交选项后卡片一直还在「待你确认」列，预期应立即进入对应列（继续处理→进行中、已完结→已完成），重点是「没有立即变更状态」而不是写死「进行中」 |
+| 复现（修复前） | 建卡 running → 请求审批后 `status=needs_you` → `POST .../resolve` 返回 `approval.status=approved`，但 `card.status` 仍是 `needs_you`、仍在「待你确认」列 |
+| 根因 | `lib/domain.js#resolveApproval` 只写审批结果与时间线，不改 `status`/`cardOrder`；契约旧文案「解决后卡片仍留在 needs_you」 |
+| 规则（按设计文档 §2.5 / §7.2） | 最终一条 pending 审批提交后同事务迁移：选中选项声明 `outcome` 即进该列（running/backlog/done，多问按题序、多选取提交序第一个声明）；未声明时批准→`running`、驳回→`backlog`（自定义回答算批准）；追加 `status` 节点；仍有 pending / `blocked`/`failed` / 已归档 / 不在 `needs_you` 保持原状态 |
+| 单测 | 合并后服务端 94/94（新增：默认回进行中、outcome done/backlog、驳回回待办、多题/多选声明、仍有 pending 留原列、blocked 保持、非法 outcome 400、旧数据宽松读取丢弃坏 outcome） |
+| Web | 提交瞬间乐观移列（`approvalOutcome.ts` 纯逻辑，7 例单测）；失败回滚并 toast；`DecisionOption` 对声明 outcome 的选项显示「提交后进入「已完成」」；合并后 vitest 20 文件 / 165 测试，tsc 0 error，build 通过，令牌 lint 9 CSS 0/0 |
+| 真实浏览器（合并后主仓库源码 dev-server + dist；Chromium 1440×900；Playwright） | ① 选项 hint「提交后进入「已完成」」可见；② 点「批准」（`outcome:"done"`）后 250ms 内卡片在「已完成」列、服务端 status=done、时间线 `审批已提交，卡片进入「已完成」`；③ 未声明 outcome 的审批提交后回「进行中」；④ 点「拒绝」后回「待办」；⑤ 刷新后三张卡片仍在目标列且「待你确认」列清空；⑥ 多题审批「自定义回答 + 选项」提交后按批准回「进行中」（服务端 status=running）；⑦ console 0 error |
+| 截图 | `design/screens/approval-outcome-hint.png`（选项去向提示）、`approval-outcome-move.png`（提交后立即出现在已完成列 + 未绑定会话兜底）、`approval-outcome-columns.png`（刷新后：待办/进行中/已完成三列 + 待你确认清空） |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
 
 ```
 $ npm test
-# tests 49
-# pass 49
+# tests 94
+# pass 94
 # fail 0
-# duration_ms ~0.65s
+# duration_ms ~1.1s
 ```
 
 覆盖：`store`（原子写 / 串行队列 / revision / 损坏备份重建 / schema 迁移）、`domain`（状态列映射 / 规范化 / 种子 / 写原语）、`routes`（CRUD / move / 乐观锁 409 / 审批 resolve / comments / session link / 同源 403 / SSE 首帧 / 静态资源防穿越与 SPA fallback）、`tools`（10 个工具 schema 与 execute）、`index`（插件注册）。
@@ -289,9 +302,9 @@ $ npm test
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
 > vite build     # dist: JS gzip ~74KB / CSS gzip ~9KB
-$ npm --prefix web run test    # vitest 24/24
+$ npm --prefix web run test    # vitest 20 文件 / 165 测试
 $ npm --prefix web run lint:tokens
-# 8 个 CSS 文件：0 error / 0 warning
+# 9 个 CSS 文件：0 error / 0 warning
 ```
 
 ### 2.3 令牌规范

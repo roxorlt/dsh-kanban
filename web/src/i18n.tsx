@@ -329,6 +329,7 @@ const zh = {
   'drawer.sectionEmpty': '暂无内容',
 
   'approval.heading': '待你确认',
+  'approval.goesTo': '提交后进入「{column}」',
   'approval.requestedBy': '{name} 请求确认',
   'approval.commentPlaceholder': '备注（可选，会随决定一起发送）',
   'approval.approve': '批准',
@@ -787,6 +788,7 @@ const en: Record<I18nKey, string> = {
   'drawer.sectionEmpty': 'Nothing yet',
 
   'approval.heading': 'Needs your confirmation',
+  'approval.goesTo': 'Submitting moves the card to “{column}”',
   'approval.requestedBy': '{name} requested confirmation',
   'approval.commentPlaceholder': 'Note (optional, sent with your decision)',
   'approval.approve': 'Approve',

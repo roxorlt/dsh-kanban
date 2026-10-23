@@ -2,6 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { FocusEvent as ReactFocusEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { ApprovalOption } from '../types';
+import { useI18n } from '../i18n';
+import type { I18nKey } from '../i18n';
 import { createLongPressGuard } from '../lib/longPress';
 import { pushOverlay } from '../lib/overlayStack';
 import { computeTooltipPosition } from '../lib/tooltipPosition';
@@ -37,6 +39,7 @@ interface DecisionOptionProps {
  * overflow 裁剪，并在下方放不下时翻到上方。
  */
 export function DecisionOption({ option, type, name, checked, disabled, onChange }: DecisionOptionProps) {
+  const { t } = useI18n();
   const labelRef = useRef<HTMLLabelElement | null>(null);
   const labelTextRef = useRef<HTMLSpanElement | null>(null);
   const descriptionRef = useRef<HTMLSpanElement | null>(null);
@@ -228,6 +231,11 @@ export function DecisionOption({ option, type, name, checked, disabled, onChange
         {option.description ? (
           <span ref={descriptionRef} className="kb-decision-option__desc">
             {option.description}
+          </span>
+        ) : null}
+        {option.outcome ? (
+          <span className="kb-decision-option__desc">
+            {t('approval.goesTo', { column: t(`column.${option.outcome}` as I18nKey) })}
           </span>
         ) : null}
       </label>

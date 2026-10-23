@@ -21,6 +21,7 @@ import {
 import type { SelectionState } from './lib/selection';
 import { SelectionBar } from './components/SelectionBar';
 import { formatApprovalSessionText } from './lib/approvalQuestions';
+import { approvalMoveTarget } from './lib/approvalOutcome';
 import { buildStartPrompt, shouldPromptStartAfterReply, startCardFlow } from './lib/startCard';
 import { setupNewCardSession } from './lib/createCardSession';
 import type { HostInfo } from './types';
@@ -695,7 +696,7 @@ export function App() {
           title: values.title,
           detail: values.detail,
           options: [
-            { id: 'continue', label: values.continueLabel, tone: 'primary' },
+            { id: 'continue', label: values.continueLabel, tone: 'primary', outcome: 'running' },
             { id: 'stop', label: values.stopLabel, tone: 'danger' },
           ],
           multiSelect: false,
@@ -738,6 +739,11 @@ export function App() {
       sessionIdOverride?: string,
     ) => {
       setResolvingApprovalId(approval.id);
+      // 提交即离开「待你确认」：先乐观移列，接口失败再整体回滚（v0.9.5）
+      const previous = snapshotRef.current;
+      const current = previous.cards.find((item) => item.id === card.id) ?? card;
+      const moveTarget = approvalMoveTarget(current, approval, submission, decision);
+      if (moveTarget) setSnapshot(applyOptimisticMove(previous, card.id, moveTarget));
       try {
         await api.resolveApproval(
           card.id,
@@ -797,6 +803,7 @@ export function App() {
         }
         await refresh({ silent: true });
       } catch (error) {
+        if (moveTarget) setSnapshot(previous);
         notifyToast(error instanceof Error ? error.message : t('toast.approvalFailed'), 'error');
         await refresh({ silent: true });
       } finally {

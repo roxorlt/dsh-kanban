@@ -37,11 +37,16 @@ export interface ChecklistItem {
   done: boolean;
 }
 
+/** 审批选项声明的提交去向（设计文档 outcome 枚举；不含 needs_you）。 */
+export type ApprovalOutcome = 'running' | 'backlog' | 'done';
+
 export interface ApprovalOption {
   id: string;
   label: string;
   description?: string;
   tone?: 'primary' | 'danger' | 'ghost';
+  /** 提交该项后卡片立即进入的列；不填＝批准回「进行中」、驳回回「待办」（v0.9.5） */
+  outcome?: ApprovalOutcome;
 }
 
 export interface ApprovalQuestion {
