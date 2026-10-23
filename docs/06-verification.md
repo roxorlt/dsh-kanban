@@ -281,6 +281,8 @@
 | Web | 提交瞬间乐观移列（`approvalOutcome.ts` 纯逻辑，7 例单测）；失败回滚并 toast；`DecisionOption` 对声明 outcome 的选项显示「提交后进入「已完成」」；合并后 vitest 20 文件 / 165 测试，tsc 0 error，build 通过，令牌 lint 9 CSS 0/0 |
 | 真实浏览器（合并后主仓库源码 dev-server + dist；Chromium 1440×900；Playwright） | ① 选项 hint「提交后进入「已完成」」可见；② 点「批准」（`outcome:"done"`）后 250ms 内卡片在「已完成」列、服务端 status=done、时间线 `审批已提交，卡片进入「已完成」`；③ 未声明 outcome 的审批提交后回「进行中」；④ 点「拒绝」后回「待办」；⑤ 刷新后三张卡片仍在目标列且「待你确认」列清空；⑥ 多题审批「自定义回答 + 选项」提交后按批准回「进行中」（服务端 status=running）；⑦ console 0 error |
 | 截图 | `design/screens/approval-outcome-hint.png`（选项去向提示）、`approval-outcome-move.png`（提交后立即出现在已完成列 + 未绑定会话兜底）、`approval-outcome-columns.png`（刷新后：待办/进行中/已完成三列 + 待你确认清空） |
+| 生效方式 | 含服务端改动（`lib/domain.js` / `lib/tools.js`），需重启 DSH；仅刷新页面会继续用旧服务端（旧服务端不改状态，乐观移列会被刷新回滚） |
+| 提交 | `814c17e`（合并 `fix/approval-resolve-outcome` → v0.9.5） |
 
 ## 2. 自动化测试
 
