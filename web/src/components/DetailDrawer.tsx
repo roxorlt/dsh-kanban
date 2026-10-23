@@ -192,61 +192,64 @@ export function DetailDrawer({
       >
         <span className="kb-drawer__grabber" aria-hidden="true" />
         <header className="kb-drawer__header">
-          <div className="kb-drawer__heading">
-            <p className="kb-drawer__kicker">
-              <span>{boardName}</span>
-              <span aria-hidden="true"> · </span>
-              <span>{t(statusKey)}</span>
-              {card.project ? (
-                <>
-                  <span aria-hidden="true"> · </span>
-                  <span>{card.project}</span>
-                </>
-              ) : null}
-              {isWarningStatus(card.status) ? (
-                <>
-                  <span aria-hidden="true"> · </span>
-                  <span className="kb-drawer__warning">{card.currentAction ?? t(statusKey)}</span>
-                </>
-              ) : null}
-            </p>
-            <div className="kb-drawer__title-row">
-              <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
-              <h2 id={titleId} className="kb-drawer__title">
-                {card.title}
-              </h2>
+          {/* 标题区与操作按钮同排；摘要独占一行，宽度跟抽屉正文内容对齐 */}
+          <div className="kb-drawer__header-row">
+            <div className="kb-drawer__heading">
+              <p className="kb-drawer__kicker">
+                <span>{boardName}</span>
+                <span aria-hidden="true"> · </span>
+                <span>{t(statusKey)}</span>
+                {card.project ? (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    <span>{card.project}</span>
+                  </>
+                ) : null}
+                {isWarningStatus(card.status) ? (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    <span className="kb-drawer__warning">{card.currentAction ?? t(statusKey)}</span>
+                  </>
+                ) : null}
+              </p>
+              <div className="kb-drawer__title-row">
+                <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
+                <h2 id={titleId} className="kb-drawer__title">
+                  {card.title}
+                </h2>
+              </div>
             </div>
-            {card.summary ? <p className="kb-drawer__summary">{card.summary}</p> : null}
+            <div className="kb-drawer__header-actions">
+              <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => actions.onEdit(card)}>
+                <span className="kb-icon" aria-hidden="true">
+                  <IconEdit />
+                </span>
+                {t('card.edit')}
+              </button>
+              <button
+                type="button"
+                className="kb-btn kb-btn--icon kb-btn--ghost"
+                aria-label={t('card.archive')}
+                title={t('card.archive')}
+                onClick={() => actions.onArchive(card)}
+              >
+                <span className="kb-icon" aria-hidden="true">
+                  <IconArchive />
+                </span>
+              </button>
+              <button
+                type="button"
+                className="kb-btn kb-btn--icon kb-btn--ghost"
+                aria-label={t('drawer.close')}
+                onClick={requestClose}
+              >
+                <span className="kb-icon" aria-hidden="true">
+                  <IconClose />
+                </span>
+              </button>
+            </div>
           </div>
-          <div className="kb-drawer__header-actions">
-            <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => actions.onEdit(card)}>
-              <span className="kb-icon" aria-hidden="true">
-                <IconEdit />
-              </span>
-              {t('card.edit')}
-            </button>
-            <button
-              type="button"
-              className="kb-btn kb-btn--icon kb-btn--ghost"
-              aria-label={t('card.archive')}
-              title={t('card.archive')}
-              onClick={() => actions.onArchive(card)}
-            >
-              <span className="kb-icon" aria-hidden="true">
-                <IconArchive />
-              </span>
-            </button>
-            <button
-              type="button"
-              className="kb-btn kb-btn--icon kb-btn--ghost"
-              aria-label={t('drawer.close')}
-              onClick={requestClose}
-            >
-              <span className="kb-icon" aria-hidden="true">
-                <IconClose />
-              </span>
-            </button>
-          </div>
+          {card.summary ? <p className="kb-drawer__summary">{card.summary}</p> : null}
         </header>
 
         <div className="kb-drawer__body">

@@ -53,9 +53,16 @@
 .kb-drawer__header {
   flex: none;
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 12px 0 16px;
+}
+
+/* 标题区 + 操作按钮：只有这一行被按钮挤窄，摘要单独占满整行 */
+.kb-drawer__header-row {
+  display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 12px 12px 0 16px;
 }
 
 .kb-drawer__heading {
@@ -95,9 +102,12 @@
 }
 
 .kb-drawer__summary {
-  margin-top: 6px;
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-s-14);
+  overflow-wrap: anywhere;
+  /* 摘要独占整行：头部操作区右边距 12 比正文内容 16 少 4，这里补回，
+     让摘要右边缘与正文（chips/元数据/composer）落在同一条线上 */
+  margin-right: 4px;
 }
 
 .kb-drawer__header-actions {

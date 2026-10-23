@@ -166,6 +166,18 @@
 | 自测 | Web vitest 15 文件 / 102 测试（新增 `boardWheel.test.ts` 16 例）；tsc 0 error；令牌 lint 8 CSS 0/0；build 成功；服务端 67/67 |
 | 截图 | `design/screens/board-wheel-portrait-1028-before.png` / `-after.png`（1028 竖屏横滑前/后，后图第 4 列完整可见）、`board-wheel-portrait-1080-before.png` / `-after.png` |
 
+## 1.13 v0.7.2 补记（详情抽屉摘要宽度）
+
+| 项 | 结果 |
+| --- | --- |
+| 复现（隔离 dev-server 种子卡 + 真实宿主卡片） | 打开卡片详情抽屉后，摘要段落只有抽屉内容区约 2/3 宽：1440px 下 286px（内容区 428px）、1100px 下 206px（348px）、390px 底图 216px（358px）；长摘要（「横划交互问题」）在 1440px 被折成 9 行，右边缘停在 x=1282，比下方 chips / 元数据卡片右边缘（1424）短 142px |
+| 根因 | `.kb-drawer__summary` 位于 `.kb-drawer__heading` 内，而 heading 是头部 flex 行中与「编辑 + 归档 + 关闭」（共 138px）并排的可收缩列：`heading = 抽屉宽 − 左右内边距 − gap − 操作簇`（1440px：460−16−12−8−138 = 286）。摘要在 DOM 上排在按钮下方，本可独占整行，却跟着标题列一起被挤窄 |
+| 修复 | 头部拆两行：首行 `.kb-drawer__header-row`（kicker + 标题｜编辑/归档/关闭），第二行 `.kb-drawer__summary` 作为 `header` 直接子元素独占整行；摘要加 `margin-right: 4px` 抵消「头部操作区 12px 内缩 vs 正文内容 16px」的差，右边缘与正文内容对齐；另加 `overflow-wrap: anywhere` 防止无空格长串横向溢出。标题列宽、操作按钮尺寸与位置保持不变 |
+| 自动化实测（Playwright + Chromium，隔离 dev-server，同一张长摘要测试卡） | 摘要宽度 = 正文内容宽：1440px 428 = 428、1100px 348 = 348、390px 358 = 358，右边缘与 chips / 元数据误差 **0**；摘要行数 9 / 13 / 12 → **6 / 8 / 8**，头部高度 260 → 194（1440px）；标题宽度保持 270 / 190 / 200px 不变（390px 不额外折行）；操作簇仍 138×32、右边缘 1428（12px 内缩，未被本修复改动）；无摘要卡片（本卡自身）摘要节点不渲染、头部高度 80px 不塌陷；暗色主题同宽；英文界面（Edit 按钮）摘要 428 = 正文 428；含长 URL 的无空格摘要 `scrollWidth = clientWidth`（348），抽屉横向溢出 0；编辑弹窗可打开、Esc 关闭后抽屉仍在、关闭按钮正常关闭；console 0 error |
+| 宿主实测 | 真实桌面宿主 `/dsh-kanban/`（不重启进程，仅刷新页面即加载新 `web/dist`）打开「横划交互问题」：1440px 摘要 428 = 正文内容 428、右边缘 1424 = chips 1424、6 行；390px 摘要 358 = 正文 358；页面错误 / console error 0 |
+| 自测 | Web vitest 15 文件 / 102 测试；tsc 0 error；build 成功（`index-2_jo36uV.css` / `index-CX6NhCBz.js`，重建无 diff）；令牌 lint 8 CSS 0/0；服务端 67/67 |
+| 截图 | `design/screens/web-drawer-summary-before-1440.png` / `-after-1440.png`、`-before-390.png` / `-after-390.png`、`-after-1440-dark.png`（亮/暗同宽）、`-after-host-1440.png`（真实宿主卡片）；对比图 `docs/assets/screens/drawer-summary-width-before-after.png`、`drawer-summary-width-narrow-before-after.png` |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
