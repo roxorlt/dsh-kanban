@@ -276,14 +276,6 @@ export function DetailDrawer({
               <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
               {t(statusKey)}
             </span>
-            {card.priority !== 'none' ? (
-              <span className="kb-pill">{t(`priority.${card.priority}` as I18nKey)}</span>
-            ) : null}
-            {card.labels.map((label) => (
-              <span className="kb-tag" key={label}>
-                {label}
-              </span>
-            ))}
             {card.agent?.name ? (
               <span className="kb-pill">
                 {t('card.agent')} · {card.agent.name}
@@ -432,7 +424,9 @@ export function DetailDrawer({
                         </span>
                         <span>{artifact.label}</span>
                         {artifact.path && artifact.path !== artifact.label ? (
-                          <code className="kb-artifacts__path">{artifact.path}</code>
+                          <code className="kb-artifacts__path" title={artifact.path}>
+                            {artifact.path}
+                          </code>
                         ) : null}
                       </>
                     );
@@ -565,7 +559,9 @@ export function DetailDrawer({
                 <div className="kb-meta-grid__wide">
                   <dt>{t('drawer.workspace')}</dt>
                   <dd>
-                    <code className="kb-meta-grid__code">{card.cwd}</code>
+                    <code className="kb-meta-grid__code" title={card.cwd}>
+                      {card.cwd}
+                    </code>
                   </dd>
                 </div>
               ) : null}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../types';
-import { EMPTY_FILTERS, extractLabels, extractProjects, filterCards, hasActiveFilters } from './filter';
+import { EMPTY_FILTERS, extractProjects, filterCards, hasActiveFilters } from './filter';
 
 function makeCard(overrides: Partial<Card> & { id: string }): Card {
   return {
@@ -39,18 +39,20 @@ describe('filterCards', () => {
     expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'sse' }).map((card) => card.id)).toEqual(['a']);
   });
 
-  it('搜索命中摘要、项目、标签', () => {
+  it('搜索命中摘要与项目', () => {
     expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'postgres' }).map((card) => card.id)).toEqual(['b']);
     expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'backend' }).map((card) => card.id)).toEqual(['b']);
-    expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'REALTIME' }).map((card) => card.id)).toEqual(['a']);
   });
 
-  it('项目 + 标签筛选是 AND 关系', () => {
-    expect(filterCards(cards, { query: '', project: 'dsh-kanban', label: 'ui' }).map((card) => card.id)).toEqual([
-      'a',
-      'c',
-    ]);
-    expect(filterCards(cards, { query: '', project: 'backend', label: 'ui' })).toEqual([]);
+  it('隐藏的标签不再参与搜索（v0.9.0 起 UI 隐藏优先级/标签）', () => {
+    expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'REALTIME' })).toEqual([]);
+    expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'ui' })).toEqual([]);
+  });
+
+  it('项目筛选（AND 组合）', () => {
+    expect(filterCards(cards, { query: '', project: 'dsh-kanban' }).map((card) => card.id)).toEqual(['a', 'c']);
+    expect(filterCards(cards, { query: 'postgres', project: 'backend' }).map((card) => card.id)).toEqual(['b']);
+    expect(filterCards(cards, { query: '', project: 'nope' })).toEqual([]);
   });
 
   it('query 首尾空白不影响匹配', () => {
@@ -63,13 +65,9 @@ describe('筛选项提取', () => {
     expect(extractProjects(cards)).toEqual(['backend', 'dsh-kanban']);
   });
 
-  it('标签去重排序且忽略归档', () => {
-    expect(extractLabels(cards)).toEqual(['db', 'realtime', 'ui']);
-  });
-
   it('hasActiveFilters', () => {
     expect(hasActiveFilters(EMPTY_FILTERS)).toBe(false);
     expect(hasActiveFilters({ ...EMPTY_FILTERS, query: ' ' })).toBe(false);
-    expect(hasActiveFilters({ ...EMPTY_FILTERS, label: 'ui' })).toBe(true);
+    expect(hasActiveFilters({ ...EMPTY_FILTERS, project: 'dsh-kanban' })).toBe(true);
   });
 });

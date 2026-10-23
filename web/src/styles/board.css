@@ -128,6 +128,14 @@
   padding: 0 10px 4px;
 }
 
+/* 列体内部的卡片列表（与原生收件区并列，保持 role=list 语义） */
+.kb-column__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
 .kb-column__empty {
   display: flex;
   flex-direction: column;
@@ -347,6 +355,7 @@
   gap: 7px;
 }
 
+/* 状态点对齐标题首行：flex-start 下用上边距把 8px 圆点压到 20px 行高中线 */
 .kb-card-head__dot {
   margin-top: 6px;
 }
@@ -461,33 +470,6 @@
   gap: 5px;
   flex-wrap: wrap;
   min-width: 0;
-}
-
-.kb-priority {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 5px;
-  font: var(--dsw-font-xxxs-strong-11);
-  letter-spacing: 0.02em;
-}
-
-.kb-priority[data-p='P0'] {
-  background: color-mix(in srgb, var(--kb-status-failed) 12%, transparent);
-  color: var(--kb-status-failed);
-}
-
-.kb-priority[data-p='P1'] {
-  background: color-mix(in srgb, var(--kb-status-needs) 14%, transparent);
-  color: var(--kb-status-needs-text);
-}
-
-.kb-priority[data-p='P2'],
-.kb-priority[data-p='P3'] {
-  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
-  color: var(--dsw-alias-label-tertiary);
 }
 
 .kb-prop-project {
@@ -932,6 +914,12 @@
   border: 0;
 }
 
+/* 选项保持自然高度：审批区用 max-height + overflow 滚动，flex 压缩会让
+   2 行文案后的选项比内容矮，文字溢出边框、被下一个选项背景盖住。 */
+.kb-decision-options > .kb-decision-option {
+  flex: none;
+}
+
 .kb-decision-option {
   display: flex;
   align-items: flex-start;
@@ -943,6 +931,7 @@
   border-radius: 7px;
   background: var(--dsw-alias-bg-layer-1);
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .kb-decision-option:hover {
@@ -962,17 +951,74 @@
 }
 
 .kb-decision-option__label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  /* 选项是 flex-wrap 容器：label 必须占满圆点右侧剩余宽度并在自身内部换行，
+     否则 max-content 宽度（长文案约 201px）超过剩余空间时整块换到下一 flex 行，
+     圆点被单独留在第一行、与文案上下错位。 */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xxs-12);
   line-height: 18px;
 }
 
 .kb-decision-option__desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   flex-basis: 100%;
   padding-left: 19px;
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxxs-11);
   line-height: 16px;
+}
+
+/* 移动端长按看全文：别让系统文字选择/长按菜单抢走手势 */
+@media (pointer: coarse) {
+  .kb-decision-option {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+}
+
+/* 选项完整文案提示：portal + fixed，逃出卡片/列体/审批区的 overflow 裁剪 */
+.kb-option-tip {
+  position: fixed;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dsw-specific-tip);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-elevation-panel);
+  font: var(--dsw-font-xxs-12);
+  line-height: 18px;
+  pointer-events: none;
+  animation: kb-pop var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-option-tip__label {
+  font: var(--dsw-font-xxs-strong-12);
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.kb-option-tip__desc {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* ---------------------------------------------------- 多问题审批（v0.3） */
@@ -999,10 +1045,27 @@
   padding-right: 2px;
 }
 
+/* 同上：题目块也不许被压缩 */
+.kb-decision-questions > .kb-decision-question {
+  flex: none;
+}
+
 .kb-decision--in-drawer .kb-decision-questions {
   max-height: none;
   overflow: visible;
   padding-right: 0;
+}
+
+/* 详情抽屉空间足够：选项不再截断、也不在选项内滚动（由抽屉自身滚动） */
+.kb-decision--in-drawer .kb-decision-option__label,
+.kb-decision--in-drawer .kb-decision-option__desc {
+  display: block;
+  overflow: visible;
+}
+
+.kb-decision--in-drawer .kb-decision-options {
+  max-height: none;
+  overflow: visible;
 }
 
 .kb-decision-question {
@@ -1066,6 +1129,135 @@
   font: var(--dsw-font-xxxs-11);
 }
 
+/* --------------------------------------- 多问题翻页 / 自定义回答（v0.4） */
+
+/* 一次一题：上一题 / 题号进度点 / 下一题 */
+.kb-decision-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.kb-decision-pager__btn {
+  flex: none;
+  height: 26px;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+.kb-decision-pager__dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+
+.kb-decision-dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-border-l4);
+  cursor: pointer;
+  transition:
+    width var(--kb-dur-fast) var(--kb-ease-out),
+    background-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-decision-dot:hover:not(:disabled) {
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.kb-decision-dot--answered {
+  background: var(--dsw-alias-label-secondary);
+}
+
+.kb-decision-dot--current {
+  width: 14px;
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.kb-decision-dot:disabled {
+  cursor: default;
+}
+
+/* 选项末尾的「其他（自行填写）」与展开后的输入框 */
+.kb-decision-custom-option {
+  margin-top: 2px;
+}
+
+.kb-decision-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 2px;
+  padding: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kb-decision-custom__input {
+  min-height: 60px;
+  height: auto;
+}
+
+.kb-decision-custom__count {
+  align-self: flex-end;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 一题一页后不再需要「题目区 + 选项区」两层内部滚动：卡片自然长高，
+   由列体滚动；自定义输入框展开后也能完整看到（外层不允许再出滚动条）。 */
+.kb-decision--multi .kb-decision-questions,
+.kb-decision--multi .kb-decision-options {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+/* 统一备注默认收起：先显示一行「添加备注」，展开后才是输入框 */
+.kb-decision-note-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kb-decision-note-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kb-decision-note-label {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-decision-note-block .kb-decision-note {
+  height: 56px;
+  min-height: 56px;
+}
+
+.kb-decision-note-toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.kb-decision-note-toggle .kb-icon {
+  width: 12px;
+  height: 12px;
+}
+
 .kb-decision-answers {
   display: flex;
   flex-direction: column;
@@ -1097,6 +1289,14 @@
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
   overflow-wrap: anywhere;
+}
+
+/* 卡片里自定义回答可能较长：最多 3 行，详情抽屉里完整展示 */
+.kb-card .kb-decision-answer__value {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .kb-decision-note {

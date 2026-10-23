@@ -126,7 +126,7 @@ test('createCard：默认列、ID/version、截断、startedAt、created 节点�
   const { card, activity } = createCard(draft, {
     boardId: DEFAULT_BOARD_ID,
     title: 'x'.repeat(300),
-    summary: '摘要'.repeat(200),
+    summary: '摘要'.repeat(350),
     status: 'running',
     priority: 'high',
     labels: ['a', 'a', 'b'],
@@ -520,6 +520,111 @@ test('多问题审批 resolve：answers 逐题作答、拍平 resolution、全 d
   })
   assert.equal(rejected.approval.status, 'rejected')
   assert.match(rejected.activity.text, /已拒绝/)
+})
+
+test('摘要上限提升到 600 字：创建与更新都截断到 LIMITS.summary', () => {
+  assert.equal(LIMITS.summary, 600)
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'backlog')
+  const created = createCard(draft, { title: '长摘要', summary: '摘'.repeat(900) }, { now: FIXED_NOW })
+  assert.equal(created.card.summary.length, LIMITS.summary)
+  const patched = patchCard(draft, card.id, { summary: '要'.repeat(900) }, { now: FIXED_NOW + 1 })
+  assert.equal(patched.card.summary.length, LIMITS.summary)
+})
+
+test('多问题审批：每题可只填自定义回答（custom），落库并参与判定', () => {
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'backlog')
+  const { approval } = requestApproval(draft, card.id, {
+    questions: [
+      { header: '发布窗口', question: '何时发布？', options: [{ id: 'today', label: '今天' }, { id: 'hold', label: '暂缓', tone: 'danger' }] },
+      { header: '通知渠道', question: '通知到哪？', multiSelect: true, options: [{ id: 'metrics', label: '#metrics' }, { id: 'weekly', label: '周报' }] },
+    ],
+  }, { now: FIXED_NOW })
+  const [q1, q2] = approval.questions
+
+  // 既没选项也没自定义 → 400
+  assert.throws(() => resolveApproval(draft, card.id, approval.id, {
+    answers: [
+      { questionId: q1.id, optionIds: [] },
+      { questionId: q2.id, optionIds: ['metrics'] },
+    ],
+  }), error => error.code === 'BAD_REQUEST' && /自定义/.test(error.message))
+  // 单选同时给选项与自定义 → 400
+  assert.throws(() => resolveApproval(draft, card.id, approval.id, {
+    answers: [
+      { questionId: q1.id, optionIds: ['today'], custom: '明晚' },
+      { questionId: q2.id, optionIds: ['metrics'] },
+    ],
+  }), error => error.code === 'BAD_REQUEST' && /单选/.test(error.message))
+  // 未逐题作答 → 400
+  assert.throws(() => resolveApproval(draft, card.id, approval.id, {
+    answers: [{ questionId: q1.id, optionIds: [], custom: '明晚 22:30' }],
+  }), error => error.code === 'BAD_REQUEST' && /未作答/.test(error.message))
+  assert.equal(LIMITS.approvalAnswerCustom, 600)
+
+  const resolved = resolveApproval(draft, card.id, approval.id, {
+    answers: [
+      { questionId: q1.id, optionIds: [], custom: '今晚 22:30 之后（等值班同学就位）' },
+      { questionId: q2.id, optionIds: ['metrics'], custom: '再加一个飞书群' },
+    ],
+    now: FIXED_NOW + 1,
+  })
+  assert.equal(resolved.approval.status, 'approved')
+  assert.deepEqual(resolved.approval.resolution.answers[0], {
+    questionId: q1.id, optionIds: [], labels: [], custom: '今晚 22:30 之后（等值班同学就位）',
+  })
+  assert.deepEqual(resolved.approval.resolution.answers[1], {
+    questionId: q2.id, optionIds: ['metrics'], labels: ['#metrics'], custom: '再加一个飞书群',
+  })
+  // 拍平字段只含真实选项
+  assert.deepEqual(resolved.approval.resolution.optionIds, ['metrics'])
+  assert.deepEqual(resolved.approval.resolution.labels, ['#metrics'])
+  assert.equal(resolved.activity.data.customCount, 2)
+  assert.match(resolved.activity.text, /2 题自定义/)
+
+  // 存储往返保留 custom
+  const reloaded = normalizeStore(JSON.parse(JSON.stringify(draft)), FIXED_NOW)
+  const stored = requireCard(reloaded, card.id).approvals.find(item => item.id === approval.id)
+  assert.equal(stored.resolution.answers[0].custom, '今晚 22:30 之后（等值班同学就位）')
+  assert.equal(stored.resolution.answers[1].custom, '再加一个飞书群')
+})
+
+test('多问题审批：只有自定义回答时不算拒绝；全 danger 且无自定义仍判 rejected', () => {
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'backlog')
+  const { approval } = requestApproval(draft, card.id, {
+    questions: [
+      { question: 'Q1', options: [{ id: 'no', label: '否', tone: 'danger' }] },
+      { question: 'Q2', options: [{ id: 'reject', label: '拒绝', tone: 'danger' }] },
+    ],
+  }, { now: FIXED_NOW })
+  const [q1, q2] = approval.questions
+  const customOnly = resolveApproval(draft, card.id, approval.id, {
+    answers: [
+      { questionId: q1.id, optionIds: [], custom: '先做 A 方案' },
+      { questionId: q2.id, optionIds: [], custom: '再观察一周' },
+    ],
+    now: FIXED_NOW + 1,
+  })
+  assert.equal(customOnly.approval.status, 'approved')
+  assert.equal(customOnly.activity.data.customCount, 2)
+
+  const { approval: second } = requestApproval(draft, card.id, {
+    questions: [
+      { question: 'Q1', options: [{ id: 'no', label: '否', tone: 'danger' }] },
+      { question: 'Q2', options: [{ id: 'reject', label: '拒绝', tone: 'danger' }] },
+    ],
+  }, { now: FIXED_NOW + 2 })
+  const allDanger = resolveApproval(draft, card.id, second.id, {
+    answers: [
+      { questionId: second.questions[0].id, optionIds: ['no'] },
+      { questionId: second.questions[1].id, optionIds: ['reject'] },
+    ],
+    now: FIXED_NOW + 3,
+  })
+  assert.equal(allDanger.approval.status, 'rejected')
+  assert.equal(allDanger.activity.data.customCount, undefined)
 })
 
 test('多问题审批兼容：单题旧字段 resolve 不受影响，旧数据读取仍可用', () => {

@@ -21,10 +21,6 @@
   .kb-col-en {
     display: none;
   }
-
-  .kb-card-props .kb-tag:nth-of-type(n + 2) {
-    display: none;
-  }
 }
 
 @media (max-width: 1099px) {
@@ -344,10 +340,6 @@
   .kb-list__status-line {
     flex-wrap: wrap;
     white-space: normal;
-  }
-
-  .kb-list__labels {
-    flex-wrap: wrap;
   }
 
   .kb-list__expanded {

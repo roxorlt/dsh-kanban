@@ -29,7 +29,7 @@
 | GET | `/api/kanban/cards/:id/activities?limit=&before=` | 单卡时间线（倒序，默认 30，上限 100）。`before` 为上一页最后一条 activity id，用于「加载更早」；返回 `{ok, activities, hasMore, nextBefore}`。`/state` 不内嵌全量时间线 |
 | POST | `/api/kanban/cards/:id/comments` | `{text, actor?}` → `{ok, activity, card, revision}`（UI 提交后由客户端桥把同一文本发到主会话） |
 | POST | `/api/kanban/cards/:id/approvals` | 二选一：单题 `{title, detail, options[], multiSelect?, sessionId?}`；多题 `{questions:[{header?,question,multiSelect?,options[]}], detail?, sessionId?}` → `{ok, approval, card, revision}`；卡片 status→`needs_you`；多题时每题独立单选/多选 |
-| POST | `/api/kanban/cards/:id/approvals/:approvalId/resolve` | 单题：`{optionIds: string[], comment?}`；多题：`{answers:[{questionId, optionIds[]}], comment?}`（也兼容旧的 `{optionId}`）→ `{ok, approval, card, revision}`；多题必须逐题作答、每题至少 1 项；判定：所有所选 option 均为 danger/no/reject/deny/cancel → `rejected`，否则 `approved`；解决后卡片仍留在 `needs_you`；UI 随后把逐题答案文本发到主会话 |
+| POST | `/api/kanban/cards/:id/approvals/:approvalId/resolve` | 单题：`{optionIds: string[], comment?}`；多题：`{answers:[{questionId, optionIds[], custom?}], comment?}`（也兼容旧的 `{optionId}`）→ `{ok, approval, card, revision}`；多题必须逐题作答，每题「至少 1 个选项」或「custom ≤600 字」（单选两者互斥，多选可共存）；判定：所有所选 option 均为 danger/no/reject/deny/cancel 且无任何 custom → `rejected`，否则 `approved`；解决后卡片仍留在 `needs_you`；UI 随后把逐题答案文本发到主会话 |
 | POST | `/api/kanban/cards/:id/session` | `{sessionId, title?}` 绑定主会话（去重、置顶）→ `{ok, card, revision}` |
 | DELETE | `/api/kanban/cards/:id/session/:sessionId` | 解绑 → `{ok, card, revision}` |
 | POST | `/api/kanban/cards/:id/ack` | 用户已读/已看审批 → `{ok, revision}`，清未读红点 |
@@ -74,6 +74,8 @@
 }
 ```
 - 服务端忽略未知字段；`sessionIds` / `approvals` 不走 PATCH，走专用接口。
+- v0.4 起 `summary` 上限由 240 提升到 **600** 字（工具 schema、HTTP 校验、Web 表单一致）；超长仍按旧规则截断而不是报错。
+- v0.9.0 起 Web 端新建/编辑表单、筛选与列表分组不再发送或展示 `priority` / `labels`；服务端与 `kanban_*` 工具仍接受并返回这两个字段，旧数据与旧调用方兼容。
 - `status` 变化自动写 Activity（`status` 类型），并同步 `startedAt`（首次 running）与 `completedAt`（done/canceled）。
 - `actor` 只用于时间线展示，默认 `{kind:'user', name:'你'}`；工具调用时由工具传 agent actor。
 - `VERSION_CONFLICT` 返回 `{ok:false, error:{code:'VERSION_CONFLICT'}, card}`（最新卡片）便于 UI 合并。

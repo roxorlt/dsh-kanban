@@ -57,6 +57,8 @@ export interface ApprovalAnswer {
   questionId: string;
   optionIds: string[];
   labels: string[];
+  /** v0.4 自定义回答：用户选中「其他（自行填写）」时填的文本，≤600 字 */
+  custom?: string;
 }
 
 export interface ApprovalResolution {

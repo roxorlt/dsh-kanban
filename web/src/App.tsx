@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import type { Approval, Board, BoardSummary, Card, ColumnId, SessionRow, WorkspaceRow } from './types';
 import { KanbanApiError, api } from './api';
-import { bridge, nextThemePreference, useBridgeState } from './bridge';
+import { BridgeUnavailableError, bridge, nextThemePreference, useBridgeState } from './bridge';
+import { buildNativeInbox } from './lib/nativeInbox';
+import type { NativeInboxEntry, NativeQuestionAnswer } from './lib/nativeInbox';
+import { NativeAnswerModal } from './components/NativeAnswerModal';
+import type { NativeInboxProps } from './components/NativeInbox';
 import { batchCards } from './api';
 import {
   EMPTY_SELECTION,
@@ -23,7 +27,7 @@ import type { HostInfo } from './types';
 import { I18nContext, readStoredLang, resolveLang, storeLang, translate } from './i18n';
 import type { I18nKey, Lang, TranslateVars } from './i18n';
 import { copyText } from './lib/clipboard';
-import { hasActiveFilters, EMPTY_FILTERS, extractLabels, extractProjects, filterCards } from './lib/filter';
+import { hasActiveFilters, EMPTY_FILTERS, extractProjects, filterCards } from './lib/filter';
 import { cardIdForSession, consumeHighlightSession } from './lib/highlight';
 import type { CardFilters } from './lib/filter';
 import { countByColumn, groupCardsByColumn } from './lib/grouping';
@@ -361,10 +365,24 @@ export function App() {
     [filteredCards, snapshot.board],
   );
   const projects = useMemo(() => extractProjects(snapshot.cards), [snapshot.cards]);
-  const labels = useMemo(() => extractLabels(snapshot.cards), [snapshot.cards]);
   const activeCard = activeCardId ? snapshot.cards.find((card) => card.id === activeCardId) ?? null : null;
   const doneTotal = useMemo(() => doneCardsOf(snapshot.cards).length, [snapshot.cards]);
-  const needsYouCount = countByColumn(snapshot.cards).needs_you;
+  // ---- 原生待确认收件（工具授权 / Agent 提问 / 计划审批，见 docs/contracts/04）----
+  const nativeEntries = useMemo(
+    () => buildNativeInbox(bridgeState.nativePending.items, snapshot.cards, lang),
+    [bridgeState.nativePending.items, snapshot.cards, lang],
+  );
+  const [nativeModalId, setNativeModalId] = useState<string | null>(null);
+  const [nativeBusyIds, setNativeBusyIds] = useState<ReadonlySet<string>>(() => new Set());
+  const nativeModal = nativeModalId
+    ? nativeEntries.find((entry) => entry.id === nativeModalId) ?? null
+    : null;
+  // 项被别处处理（作答道成功、原生 composer 先答、宿主撤回）时关闭弹窗
+  useEffect(() => {
+    if (nativeModalId && !nativeEntries.some((entry) => entry.id === nativeModalId)) setNativeModalId(null);
+  }, [nativeEntries, nativeModalId]);
+  /** 「待你确认」总数 = 业务审批卡片 + 原生待确认项 */
+  const needsYouCount = countByColumn(snapshot.cards).needs_you + nativeEntries.length;
   const sessionsRunning = snapshot.cards.filter((card) => card.status === 'running' && !card.archived).length;
 
   // 首次有数据时把移动端默认列指向最需要看的列
@@ -453,6 +471,125 @@ export function App() {
   const handleOpenDetail = useCallback((cardId: string) => {
     setActiveCardId(cardId);
   }, []);
+
+  // ------------------------------------------------------------ 原生待确认作答
+  const setNativeBusy = useCallback((id: string, busy: boolean) => {
+    setNativeBusyIds((current) => {
+      const next = new Set(current);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const handleNativeError = useCallback(
+    (error: unknown) => {
+      const code = error instanceof BridgeUnavailableError ? error.code : '';
+      if (code === 'PENDING_NOT_FOUND' || code === 'PENDING_UNANSWERABLE') {
+        notifyToast(t('native.toast.resolvedElsewhere'), 'info');
+        return;
+      }
+      notifyToast(
+        t('native.toast.failed', { message: error instanceof Error ? error.message : String(error) }),
+        'error',
+      );
+    },
+    [notifyToast, t],
+  );
+
+  const handleNativeApproval = useCallback(
+    async (entry: NativeInboxEntry, outcome: 'allowed-once' | 'rejected') => {
+      setNativeBusy(entry.id, true);
+      try {
+        await bridge.request('pending.answerApproval', {
+          sessionId: entry.sessionId,
+          key: entry.id,
+          outcome,
+        });
+        notifyToast(
+          outcome === 'allowed-once'
+            ? t('native.toast.approved', { tool: entry.toolName ?? '' })
+            : t('native.toast.rejected', { tool: entry.toolName ?? '' }),
+          'success',
+        );
+      } catch (error) {
+        handleNativeError(error);
+      } finally {
+        setNativeBusy(entry.id, false);
+      }
+    },
+    [handleNativeError, notifyToast, setNativeBusy, t],
+  );
+
+  const handleNativeSubmit = useCallback(
+    async (entry: NativeInboxEntry, answers: NativeQuestionAnswer[]) => {
+      setNativeBusy(entry.id, true);
+      try {
+        await bridge.request('pending.answerQuestion', {
+          sessionId: entry.sessionId,
+          key: entry.id,
+          answers,
+        });
+        notifyToast(t('native.toast.submitted'), 'success');
+        setNativeModalId(null);
+      } catch (error) {
+        handleNativeError(error);
+      } finally {
+        setNativeBusy(entry.id, false);
+      }
+    },
+    [handleNativeError, notifyToast, setNativeBusy, t],
+  );
+
+  const handleNativeDismiss = useCallback(
+    async (entry: NativeInboxEntry) => {
+      setNativeBusy(entry.id, true);
+      try {
+        await bridge.request('pending.dismiss', { sessionId: entry.sessionId, key: entry.id });
+        notifyToast(t('native.toast.dismissed'), 'success');
+        setNativeModalId(null);
+      } catch (error) {
+        handleNativeError(error);
+      } finally {
+        setNativeBusy(entry.id, false);
+      }
+    },
+    [handleNativeError, notifyToast, setNativeBusy, t],
+  );
+
+  const handleNativeSession = useCallback(
+    async (entry: NativeInboxEntry) => {
+      if (!embedded) {
+        notifyToast(t('native.channelNotReady'), 'info');
+        return;
+      }
+      try {
+        await bridge.request('session.open', { sessionId: entry.sessionId });
+      } catch (error) {
+        notifyToast(error instanceof Error ? error.message : String(error), 'error');
+      }
+    },
+    [embedded, notifyToast, t],
+  );
+
+  const nativeInbox = useMemo<NativeInboxProps>(
+    () => ({
+      entries: nativeEntries,
+      busyIds: nativeBusyIds,
+      onAnswerApproval: (entry, outcome) => void handleNativeApproval(entry, outcome),
+      onOpenQuestion: (entry) => setNativeModalId(entry.id),
+      onOpenPlan: (entry) => setNativeModalId(entry.id),
+      onOpenSession: (entry) => void handleNativeSession(entry),
+      onOpenCard: (card) => handleOpenDetail(card.id),
+    }),
+    [
+      handleNativeApproval,
+      handleNativeSession,
+      handleOpenDetail,
+      nativeBusyIds,
+      nativeEntries,
+    ],
+  );
 
   const handleEdit = useCallback((card: Card) => {
     setFormError(null);
@@ -607,7 +744,11 @@ export function App() {
           approval.id,
           submission.answers?.length
             ? {
-                answers: submission.answers.map(({ questionId, optionIds }) => ({ questionId, optionIds })),
+                answers: submission.answers.map(({ questionId, optionIds, custom }) => ({
+                  questionId,
+                  optionIds,
+                  ...(custom ? { custom } : {}),
+                })),
                 ...(comment ? { comment } : {}),
               }
             : { optionIds: submission.optionIds, ...(comment ? { comment } : {}) },
@@ -855,8 +996,6 @@ export function App() {
               title: values.title,
               summary: values.summary,
               status: values.status,
-              priority: values.priority,
-              labels: values.labels,
               project: values.project || undefined,
               cwd: values.cwd || undefined,
             });
@@ -875,8 +1014,6 @@ export function App() {
             title: values.title,
             summary: values.summary || undefined,
             status: values.status,
-            priority: values.priority,
-            labels: values.labels,
             project: values.project || undefined,
             workspaceId: values.workspaceId || undefined,
             cwd: values.cwd || undefined,
@@ -1207,11 +1344,12 @@ export function App() {
           shared={shared}
           actions={actions}
           filtering={hasActiveFilters(filters)}
-          onClearFilters={() => setFilters({ query: '', project: null, label: null })}
+          onClearFilters={() => setFilters({ query: '', project: null })}
           selectionMode={selectionMode}
           selectedIds={selectedIds}
           onToggleSelection={handleToggleSelect}
           highlightedCardId={highlightCardId}
+          nativeInbox={nativeInbox}
         />
       );
     }
@@ -1233,11 +1371,12 @@ export function App() {
         onMoveWithPlacement={(cardId, column, placement) => void handleMove(cardId, column, placement)}
         onViewAllDone={handleViewAllDone}
         filtering={hasActiveFilters(filters)}
-        onClearFilters={() => setFilters({ query: '', project: null, label: null })}
+        onClearFilters={() => setFilters({ query: '', project: null })}
         selectionMode={selectionMode}
         selectedIds={selectedIds}
         onToggleSelection={handleToggleSelect}
         highlightedCardId={highlightCardId}
+        nativeInbox={nativeInbox}
       />
     );
   })();
@@ -1261,7 +1400,6 @@ export function App() {
           filters={filters}
           onFiltersChange={setFilters}
           projects={projects}
-          labels={labels}
           lang={lang}
           onToggleLang={toggleLang}
           onNewCard={handleCreateCard}
@@ -1371,7 +1509,6 @@ export function App() {
             {...(formState.mode === 'edit' ? { initial: formState.card } : {})}
             {...(formState.mode === 'create' ? { defaultColumn: formState.column } : {})}
             projects={projects}
-            labels={labels}
             workspaces={workspaces}
             sessions={sessions}
             cards={snapshot.cards}
@@ -1410,6 +1547,17 @@ export function App() {
         ) : null}
 
         {helpOpen ? <HelpDialog onClose={() => setHelpOpen(false)} /> : null}
+
+        {nativeModal ? (
+          <NativeAnswerModal
+            key={nativeModal.id}
+            entry={nativeModal}
+            busy={nativeBusyIds.has(nativeModal.id)}
+            onClose={() => setNativeModalId(null)}
+            onSubmit={(answers) => void handleNativeSubmit(nativeModal, answers)}
+            onDismiss={nativeModal.kind === 'plan-review' ? () => void handleNativeDismiss(nativeModal) : null}
+          />
+        ) : null}
 
         <div className="kb-sr-only" role="status" aria-live="polite" aria-atomic="true">
           {announcement}

@@ -424,6 +424,55 @@ test('多问题审批：POST questions 创建、resolve answers 逐题作答、�
   assert.equal(legacy.json.approval.questions, undefined)
 })
 
+test('多问题审批：answers 支持 custom 自定义回答（HTTP），校验与旧单题兼容', async t => {
+  const { server } = await setup(t)
+  const card = await createCard(server, { title: '自定义回答 HTTP' })
+  const created = await api(server, `/api/kanban/cards/${card.id}/approvals`, {
+    method: 'POST',
+    body: {
+      questions: [
+        { header: '发布窗口', question: '何时发布？', options: [{ id: 'today', label: '今天' }, { id: 'hold', label: '暂缓', tone: 'danger' }] },
+        { header: '通知渠道', question: '通知到哪？', multiSelect: true, options: [{ id: 'metrics', label: '#metrics' }, { id: 'weekly', label: '周报' }] },
+      ],
+    },
+  })
+  assert.equal(created.status, 200)
+  const approval = created.json.approval
+  const [q1, q2] = approval.questions
+
+  // 空答案（无选项无自定义）400
+  assert.equal((await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST', body: { answers: [{ questionId: q1.id, optionIds: [] }, { questionId: q2.id, optionIds: ['metrics'] }] },
+  })).status, 400)
+  // 单选同时给选项 + 自定义 400
+  assert.equal((await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST', body: { answers: [{ questionId: q1.id, optionIds: ['today'], custom: '明晚' }, { questionId: q2.id, optionIds: ['metrics'] }] },
+  })).status, 400)
+
+  const resolved = await api(server, `/api/kanban/cards/${card.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST',
+    body: {
+      answers: [
+        { questionId: q1.id, optionIds: [], custom: '今晚 22:30 之后' },
+        { questionId: q2.id, optionIds: ['metrics'], custom: '再加飞书群' },
+      ],
+      comment: '自定义回答',
+    },
+  })
+  assert.equal(resolved.status, 200)
+  assert.equal(resolved.json.approval.status, 'approved')
+  assert.deepEqual(resolved.json.approval.resolution.answers[0], {
+    questionId: q1.id, optionIds: [], labels: [], custom: '今晚 22:30 之后',
+  })
+  assert.deepEqual(resolved.json.approval.resolution.answers[1], {
+    questionId: q2.id, optionIds: ['metrics'], labels: ['#metrics'], custom: '再加飞书群',
+  })
+  assert.deepEqual(resolved.json.approval.resolution.optionIds, ['metrics'])
+  const timeline = await api(server, `/api/kanban/cards/${card.id}/activities`)
+  const activity = timeline.json.activities.find(item => item.type === 'approval_resolved')
+  assert.equal(activity.data.customCount, 2)
+})
+
 test('时间线分页：before 游标/hasMore/nextBefore、limit 默认 30 上限 100、非法游标 400', async t => {
   const { server, store } = await setup(t)
   const card = await createCard(server)

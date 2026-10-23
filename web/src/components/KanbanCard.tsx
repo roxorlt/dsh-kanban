@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { Approval, Card, ColumnId, Priority, SessionRow } from '../types';
+import type { Approval, Card, ColumnId, SessionRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { COLUMN_OF_STATUS, COLUMNS, STATUS_OF_COLUMN, STATUS_TONE, isWarningStatus } from '../lib/status';
@@ -67,13 +67,6 @@ interface KanbanCardProps {
   onDragStart: (cardId: string) => void;
   onDragEnd: () => void;
 }
-
-const PRIORITY_CODE: Record<Exclude<Priority, 'none'>, string> = {
-  urgent: 'P0',
-  high: 'P1',
-  medium: 'P2',
-  low: 'P3',
-};
 
 /** 折叠卡：标题/摘要/当前动作/属性行/页脚/审批/素材；展开卡追加分页时间线与内联回复。 */
 export function KanbanCard({
@@ -220,8 +213,6 @@ export function KanbanCard({
     }
   };
 
-  const visibleLabels = card.labels.slice(0, 2);
-  const extraLabels = card.labels.length - visibleLabels.length;
   const actionTone =
     card.status === 'running'
       ? 'busy'
@@ -265,7 +256,7 @@ export function KanbanCard({
       }}
     >
       <div className="kb-card-head">
-        <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
+        <span className={`kb-dot kb-dot--${tone} kb-card-head__dot`} aria-hidden="true" />
         {selectionMode ? (
           <span className="kb-card-select" onClick={(event) => event.stopPropagation()}>
             <input
@@ -316,11 +307,6 @@ export function KanbanCard({
       ) : null}
 
       <div className="kb-card-props">
-        {card.priority !== 'none' ? (
-          <span className="kb-priority" data-p={PRIORITY_CODE[card.priority]}>
-            {PRIORITY_CODE[card.priority]}
-          </span>
-        ) : null}
         {card.project ? (
           <span className="kb-prop-project" title={card.project}>
             <span className="kb-icon" aria-hidden="true">
@@ -329,12 +315,6 @@ export function KanbanCard({
             {card.project}
           </span>
         ) : null}
-        {visibleLabels.map((label) => (
-          <span className="kb-tag" key={label}>
-            {label}
-          </span>
-        ))}
-        {extraLabels > 0 ? <span className="kb-tag">+{extraLabels}</span> : null}
         {card.handoff ? (
           <span
             className="kb-tag kb-tag--handoff"

@@ -9,18 +9,17 @@ import { pushOverlay } from '../lib/overlayStack';
 interface FilterMenuProps {
   filters: CardFilters;
   projects: string[];
-  labels: string[];
   onChange: (filters: CardFilters) => void;
 }
 
-/** 筛选浮层：项目 / 标签 两组单选，浮层 border:0 + elevation，Esc/外点关闭。 */
-export function FilterMenu({ filters, projects, labels, onChange }: FilterMenuProps) {
+/** 筛选浮层：项目单选，浮层 border:0 + elevation，Esc/外点关闭。 */
+export function FilterMenu({ filters, projects, onChange }: FilterMenuProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const activeCount = (filters.project ? 1 : 0) + (filters.label ? 1 : 0);
+  const activeCount = filters.project ? 1 : 0;
 
   const close = useCallback(() => {
     setOpen(false);
@@ -143,41 +142,12 @@ export function FilterMenu({ filters, projects, labels, onChange }: FilterMenuPr
                 </div>
               </div>
 
-              <div className="kb-filter-group">
-                <span className="kb-filter-group__label">{t('app.filterLabel')}</span>
-                <div className="kb-filter-group__list">
-                <label className={`kb-check${!filters.label ? ' kb-check--on' : ''}`}>
-                  <input
-                    type="radio"
-                    name="kb-filter-label"
-                    checked={!filters.label}
-                    onChange={() => onChange({ ...filters, label: null })}
-                  />
-                  <span className="kb-check__label">{t('app.allLabels')}</span>
-                  {!filters.label ? <span className="kb-icon" aria-hidden="true"><IconCheck /></span> : null}
-                </label>
-                {labels.map((label) => (
-                  <label className={`kb-check${filters.label === label ? ' kb-check--on' : ''}`} key={label}>
-                    <input
-                      type="radio"
-                      name="kb-filter-label"
-                      checked={filters.label === label}
-                      onChange={() => onChange({ ...filters, label })}
-                    />
-                    <span className="kb-check__label" title={label}>{label}</span>
-                    {filters.label === label ? <span className="kb-icon" aria-hidden="true"><IconCheck /></span> : null}
-                  </label>
-                ))}
-                {!labels.length ? <p className="kb-filter-group__empty">{t('filter.noLabels')}</p> : null}
-                </div>
-              </div>
-
               <div className="kb-filter-panel__foot">
                 <button
                   type="button"
                   className="kb-btn kb-btn--sm kb-btn--ghost"
                   disabled={!hasActiveFilters(filters)}
-                  onClick={() => onChange({ query: filters.query, project: null, label: null })}
+                  onClick={() => onChange({ query: filters.query, project: null })}
                 >
                   {t('app.clearFilters')}
                 </button>

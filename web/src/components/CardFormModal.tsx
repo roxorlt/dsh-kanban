@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { Card, ColumnId, Priority, SessionRow, Status, WorkspaceRow } from '../types';
+import type { Card, ColumnId, SessionRow, Status, WorkspaceRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { COLUMNS, COLUMN_OF_STATUS, STATUS_OF_COLUMN } from '../lib/status';
@@ -22,8 +22,6 @@ export interface CardFormValues {
   title: string;
   summary: string;
   project: string;
-  labels: string[];
-  priority: Priority;
   status: Status;
   workspaceId: string;
   cwd: string;
@@ -31,12 +29,14 @@ export interface CardFormValues {
   session: { kind: NewCardSessionKind; sessionId?: string };
 }
 
+/** 摘要长度上限，与服务端 `LIMITS.summary` 保持一致。 */
+const SUMMARY_MAX = 600;
+
 interface CardFormModalProps {
   mode: 'create' | 'edit';
   initial?: Card;
   defaultColumn?: ColumnId;
   projects: string[];
-  labels: string[];
   workspaces: WorkspaceRow[];
   sessions: SessionRow[];
   cards: Card[];
@@ -45,16 +45,6 @@ interface CardFormModalProps {
   error: string | null;
   onSubmit: (values: CardFormValues) => void;
   onClose: () => void;
-}
-
-const PRIORITIES: Priority[] = ['none', 'low', 'medium', 'high', 'urgent'];
-
-function parseLabels(input: string): string[] {
-  return input
-    .split(/[,，、]/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .slice(0, 12);
 }
 
 /**
@@ -67,7 +57,6 @@ export function CardFormModal({
   initial,
   defaultColumn = 'backlog',
   projects,
-  labels,
   workspaces,
   sessions,
   cards,
@@ -82,8 +71,6 @@ export function CardFormModal({
   const [title, setTitle] = useState(initial?.title ?? '');
   const [summary, setSummary] = useState(initial?.summary ?? '');
   const [project, setProject] = useState(initial?.project ?? '');
-  const [labelsInput, setLabelsInput] = useState(initial?.labels.join(', ') ?? '');
-  const [priority, setPriority] = useState<Priority>(initial?.priority ?? 'none');
   const [column, setColumn] = useState<ColumnId>(initialColumn);
   const [workspaceId, setWorkspaceId] = useState(initial?.workspaceId ?? '');
   const [cwd, setCwd] = useState(initial?.cwd ?? '');
@@ -101,8 +88,6 @@ export function CardFormModal({
     title: initial?.title ?? '',
     summary: initial?.summary ?? '',
     project: initial?.project ?? '',
-    labels: initial?.labels.join(', ') ?? '',
-    priority: initial?.priority ?? 'none',
     column: initialColumn,
     workspaceId: initial?.workspaceId ?? '',
     cwd: initial?.cwd ?? '',
@@ -113,8 +98,6 @@ export function CardFormModal({
     title !== baseline.title ||
     summary !== baseline.summary ||
     project !== baseline.project ||
-    labelsInput !== baseline.labels ||
-    priority !== baseline.priority ||
     column !== baseline.column ||
     workspaceId !== baseline.workspaceId ||
     cwd !== baseline.cwd ||
@@ -192,8 +175,6 @@ export function CardFormModal({
       title: title.trim(),
       summary: summary.trim(),
       project: project.trim(),
-      labels: parseLabels(labelsInput),
-      priority,
       status: statusOfColumn(column),
       workspaceId: workspaceId.trim(),
       cwd: cwd.trim(),
@@ -264,28 +245,41 @@ export function CardFormModal({
           </label>
 
           <label className="kb-field">
-            <span className="kb-field__label">{t('modal.summaryLabel')}</span>
+            <span className="kb-field__label-line">
+              <span className="kb-field__label">{t('modal.summaryLabel')}</span>
+              <span className="kb-field__counter" aria-hidden="true">
+                {t('modal.summaryCounter', { count: summary.length, max: SUMMARY_MAX })}
+              </span>
+            </span>
             <textarea
               className="kb-textarea"
               value={summary}
-              maxLength={240}
+              maxLength={SUMMARY_MAX}
               rows={3}
               placeholder={t('modal.summaryPlaceholder')}
               onChange={(event) => setSummary(event.target.value)}
             />
           </label>
 
-          <div className="kb-form__row">
+          {/* 工作区/执行目录各占整行：两列会把 cwd 输入框挤到 233px，路径（247px）末尾被截 */}
+          <div className="kb-form__row kb-form__row--stack">
             <label className="kb-field">
               <span className="kb-field__label">{t('modal.workspaceLabel')}</span>
               <select
                 className="kb-select"
                 value={workspaceId}
+                title={
+                  workspaces.find((workspace) => workspace.workspaceId === workspaceId)?.path || undefined
+                }
                 onChange={(event) => handleWorkspaceChange(event.target.value)}
               >
                 <option value="">{t('modal.workspaceNone')}</option>
                 {workspaces.map((workspace) => (
-                  <option key={workspace.workspaceId} value={workspace.workspaceId}>
+                  <option
+                    key={workspace.workspaceId}
+                    value={workspace.workspaceId}
+                    title={workspace.path || workspace.title}
+                  >
                     {workspace.title}
                     {workspace.path ? ` · ${workspace.path}` : ''}
                   </option>
@@ -299,6 +293,7 @@ export function CardFormModal({
               <input
                 className="kb-input"
                 value={cwd}
+                title={cwd.trim() || undefined}
                 placeholder={t('modal.cwdPlaceholder')}
                 onChange={(event) => setCwd(event.target.value)}
               />
@@ -343,23 +338,6 @@ export function CardFormModal({
               <span className="kb-field__note">{t('modal.projectHint')}</span>
             </label>
             <label className="kb-field">
-              <span className="kb-field__label">{t('modal.priorityLabel')}</span>
-              <select
-                className="kb-select"
-                value={priority}
-                onChange={(event) => setPriority(event.target.value as Priority)}
-              >
-                {PRIORITIES.map((item) => (
-                  <option key={item} value={item}>
-                    {t(`priority.${item}` as I18nKey)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="kb-form__row">
-            <label className="kb-field">
               <span className="kb-field__label">{t('modal.columnLabel')}</span>
               <select
                 className="kb-select"
@@ -372,21 +350,6 @@ export function CardFormModal({
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="kb-field">
-              <span className="kb-field__label">{t('modal.labelsLabel')}</span>
-              <input
-                className="kb-input"
-                value={labelsInput}
-                list="kb-label-options"
-                placeholder={t('modal.labelsPlaceholder')}
-                onChange={(event) => setLabelsInput(event.target.value)}
-              />
-              <datalist id="kb-label-options">
-                {labels.map((item) => (
-                  <option key={item} value={item} />
-                ))}
-              </datalist>
             </label>
           </div>
 

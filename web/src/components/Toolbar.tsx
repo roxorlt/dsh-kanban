@@ -33,7 +33,6 @@ interface ToolbarProps {
   filters: CardFilters;
   onFiltersChange: (filters: CardFilters) => void;
   projects: string[];
-  labels: string[];
   lang: Lang;
   onToggleLang: () => void;
   onNewCard: () => void;
@@ -73,7 +72,6 @@ export function Toolbar({
   filters,
   onFiltersChange,
   projects,
-  labels,
   lang,
   onToggleLang,
   onNewCard,
@@ -250,7 +248,7 @@ export function Toolbar({
           )}
         </label>
 
-        <FilterMenu filters={filters} projects={projects} labels={labels} onChange={onFiltersChange} />
+        <FilterMenu filters={filters} projects={projects} onChange={onFiltersChange} />
 
         <div className="kb-filter-chips" aria-label={t('app.filterTitle')}>
           {filters.project ? (
@@ -260,18 +258,11 @@ export function Toolbar({
               onRemove={() => onFiltersChange({ ...filters, project: null })}
             />
           ) : null}
-          {filters.label ? (
-            <Chip
-              label={filters.label}
-              removeLabel={t('app.clearFilters')}
-              onRemove={() => onFiltersChange({ ...filters, label: null })}
-            />
-          ) : null}
           {activeFilters ? (
             <button
               type="button"
               className="kb-link-btn"
-              onClick={() => onFiltersChange({ query: '', project: null, label: null })}
+              onClick={() => onFiltersChange({ query: '', project: null })}
             >
               {t('app.clearFilters')}
             </button>

@@ -2,7 +2,6 @@ import type {
   Activity,
   ActivityPage,
   Approval,
-  ApprovalAnswer,
   ApprovalQuestion,
   Board,
   Card,
@@ -97,6 +96,7 @@ export function normalizeApproval(raw: Approval & { resolution?: Partial<Approva
     questionId: answer.questionId,
     optionIds: answer.optionIds ?? [],
     labels: answer.labels ?? [],
+    ...(typeof answer.custom === 'string' && answer.custom.trim() ? { custom: answer.custom } : {}),
   }));
   return {
     ...raw,
@@ -219,7 +219,10 @@ export type ApprovalCreateInput =
 
 export type ApprovalResolveInput =
   | { optionIds: string[]; comment?: string }
-  | { answers: Pick<ApprovalAnswer, 'questionId' | 'optionIds'>[]; comment?: string };
+  | {
+      answers: { questionId: string; optionIds: string[]; custom?: string }[];
+      comment?: string;
+    };
 
 export type BatchAction = 'archive' | 'move';
 
@@ -393,6 +396,5 @@ export function filtersToQuery(filters: CardFilters): string {
   const params = new URLSearchParams();
   if (filters.query) params.set('q', filters.query);
   if (filters.project) params.set('project', filters.project);
-  if (filters.label) params.set('label', filters.label);
   return params.toString();
 }

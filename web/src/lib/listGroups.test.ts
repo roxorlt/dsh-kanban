@@ -49,17 +49,6 @@ describe('groupCardsForList', () => {
     expect(groups.map((group) => group.label)).toEqual(['alpha', 'beta', '']);
     expect(groups[0]?.cards.map((card) => card.id)).toEqual(['a', 'c']);
   });
-
-  it('优先级分组：紧急→高→中→低→无', () => {
-    const groups = groupCardsForList(cards, 'priority');
-    expect(groups.map((group) => group.key)).toEqual([
-      'priority:urgent',
-      'priority:high',
-      'priority:medium',
-      'priority:low',
-      'priority:none',
-    ]);
-  });
 });
 
 describe('done 预览', () => {

@@ -5,6 +5,7 @@
  */
 import { useEffect, useState } from 'react';
 import type { HostInfo, SessionRow, WorkspaceRow } from './types';
+import type { NativePendingItem, NativeQuestionAnswer } from './lib/nativeInbox';
 
 export type BridgeMethod =
   | 'app.info'
@@ -18,7 +19,10 @@ export type BridgeMethod =
   | 'card.open'
   | 'panel.select'
   | 'toast'
-  | 'theme.set';
+  | 'theme.set'
+  | 'pending.answerApproval'
+  | 'pending.answerQuestion'
+  | 'pending.dismiss';
 
 export interface BridgeParamsMap {
   'app.info': undefined;
@@ -33,6 +37,9 @@ export interface BridgeParamsMap {
   'panel.select': { panel: 'kanban' | 'conversation' };
   toast: { text: string; tone?: 'info' | 'success' | 'error' };
   'theme.set': { preference: ThemePreference };
+  'pending.answerApproval': { sessionId: string; key: string; outcome: 'allowed-once' | 'rejected' };
+  'pending.answerQuestion': { sessionId: string; key: string; answers: NativeQuestionAnswer[] };
+  'pending.dismiss': { sessionId: string; key: string };
 }
 
 export interface BridgeDataMap {
@@ -48,6 +55,9 @@ export interface BridgeDataMap {
   'panel.select': { ok: true };
   toast: { ok: true };
   'theme.set': { applied: boolean };
+  'pending.answerApproval': { ok: true };
+  'pending.answerQuestion': { ok: true };
+  'pending.dismiss': { ok: true };
 }
 
 interface RequestMessage {
@@ -72,6 +82,12 @@ type ParentPush =
   | { type: 'kanban:sessions'; version: 1; sessions: SessionRow[]; current: string | null }
   | { type: 'kanban:visibility'; version: 1; visible: boolean }
   | {
+      type: 'kanban:pending';
+      version: 1;
+      items: NativePendingItem[];
+      at?: number;
+    }
+  | {
       type: 'kanban:host';
       version: 1;
       locale: 'zh' | 'en';
@@ -91,6 +107,14 @@ export interface HostInsets {
   fullscreen?: boolean;
 }
 
+export interface NativePendingState {
+  /** 父页面推送过 kanban:pending（哪怕空数组）= 宿主支持原生待确认 */
+  support: boolean;
+  items: NativePendingItem[];
+  /** 最近一次推送时间（宿主 ms） */
+  at: number;
+}
+
 export interface BridgeState {
   mode: BridgeMode;
   host: HostInfo | null;
@@ -107,6 +131,8 @@ export interface BridgeState {
   themeMode: 'light' | 'dark';
   /** 主题来源：host=宿主统一换主题；local=看板本地令牌兜底 */
   themeSource: 'host' | 'local';
+  /** 原生待确认收件（工具授权 / Agent 提问 / 计划审批） */
+  nativePending: NativePendingState;
 }
 
 export class BridgeUnavailableError extends Error {
@@ -137,6 +163,7 @@ function isParentPush(value: unknown): value is ParentPush {
     type === 'kanban:theme' ||
     type === 'kanban:sessions' ||
     type === 'kanban:visibility' ||
+    type === 'kanban:pending' ||
     type === 'kanban:host'
   );
 }
@@ -153,6 +180,7 @@ class KanbanBridge {
     themePreference: readThemePreference(),
     themeMode: 'light',
     themeSource: readThemeSource(),
+    nativePending: { support: false, items: [], at: 0 },
   };
 
   private listeners = new Set<(state: BridgeState) => void>();
@@ -299,6 +327,18 @@ class KanbanBridge {
       }
       case 'kanban:sessions': {
         this.setState({ sessions: data.sessions, currentSessionId: data.current });
+        break;
+      }
+      case 'kanban:pending': {
+        // 全量快照；空数组同样表示「宿主支持但没有待确认项」。
+        const items = Array.isArray(data.items) ? data.items : [];
+        this.setState({
+          nativePending: {
+            support: true,
+            items,
+            at: typeof data.at === 'number' ? data.at : Date.now(),
+          },
+        });
         break;
       }
       case 'kanban:visibility': {

@@ -391,6 +391,21 @@ ul {
   font: var(--dsw-font-xxs-strong-12);
 }
 
+/* 字段标题行：左侧标题 + 右侧字数计数（摘要等有长度上限的字段） */
+.kb-field__label-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kb-field__counter {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
 .kb-field__hint {
   color: var(--dsw-alias-state-error-primary);
   font: var(--dsw-font-xxs-12);

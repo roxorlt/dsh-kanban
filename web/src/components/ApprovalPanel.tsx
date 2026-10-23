@@ -1,26 +1,35 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { Approval, ApprovalAnswer } from '../types';
+import type { Approval, ApprovalAnswer, ApprovalOption } from '../types';
 import { useI18n } from '../i18n';
 import { formatRelative } from '../lib/time';
 import {
+  APPROVAL_CUSTOM_MAX,
+  APPROVAL_CUSTOM_OPTION_ID,
   allAnswersAreReject,
   approvalQuestions,
   buildApprovalAnswers,
+  createApprovalDraft,
+  emptyApprovalDraftValue,
   flattenAnswers,
+  isCustomPicked,
+  isDraftValueAnswered,
   isMultiQuestionApproval,
   isRejectOption,
   resolvedAnswerGroups,
-  validateApprovalSelection,
+  toggleApprovalDraftOption,
+  updateApprovalDraftCustom,
+  validateApprovalDraft,
 } from '../lib/approvalQuestions';
-import type { ApprovalSelection } from '../lib/approvalQuestions';
-import { IconAlert, IconCheck, IconClose, IconInfo } from './Icons';
+import type { ApprovalDraft, ApprovalDraftIssue } from '../lib/approvalQuestions';
+import { DecisionOption } from './DecisionOption';
+import { IconAlert, IconCheck, IconClose, IconInfo, IconPlus } from './Icons';
 
 export type ApprovalDecision = 'approve' | 'reject';
 
 export interface ApprovalSubmission {
   /** 拍平后的 option id（单题/多题都填） */
   optionIds: string[];
-  /** v0.3 多问题逐题答案 */
+  /** v0.3 多问题逐题答案（v0.4 起每题可带 custom） */
   answers?: ApprovalAnswer[];
 }
 
@@ -46,12 +55,29 @@ function defaultSingleSelection(approval: Approval): string[] {
   return preferred ? [preferred.id] : [];
 }
 
+/** 多题草稿合并：刷新后保留仍合法的选择（题目被服务端替换时按新题裁剪）。 */
+function mergeDraft(approval: Approval, current: ApprovalDraft): ApprovalDraft {
+  const next: ApprovalDraft = {};
+  for (const question of approvalQuestions(approval)) {
+    const previous = current[question.id];
+    if (!previous) continue;
+    const isValidId = (id: string) =>
+      id === APPROVAL_CUSTOM_OPTION_ID || question.options.some((option) => option.id === id);
+    const optionIds = question.multiSelect
+      ? previous.optionIds.filter(isValidId)
+      : previous.optionIds.filter(isValidId).slice(0, 1);
+    next[question.id] = { optionIds, custom: previous.custom };
+  }
+  return next;
+}
+
 /**
  * 审批区：
  * - 单题（v0.2 兼容）：radio/checkbox + 驳回/批准；
- * - 多题（v0.3 questions[]）：逐题 fieldset（header、题号、单选/多选徽标、全部选项与说明）+ 统一备注 +
- *   「提交全部回答」，逐题校验（缺题高亮/聚焦 + toast），提交 answers[]。
- * resolved 态逐题展示所选 labels（兼容旧 resolution.optionIds/labels）。
+ * - 多题（v0.3 questions[]）：一次一题翻页作答（上一题 / 下一题 + 题号进度点），
+ *   每题末尾固定「其他（自行填写）」选项——选中后展开并自动聚焦输入框，自定义文本计入作答；
+ *   统一备注默认收起（点「添加备注」展开）；提交时逐题校验（缺题跳到该题 / 自定义为空高亮并聚焦）。
+ * resolved 态逐题展示所选 labels 与自定义回答（兼容旧 resolution.optionIds/labels）。
  */
 export function ApprovalPanel({
   approval,
@@ -68,40 +94,63 @@ export function ApprovalPanel({
 
   // —— 单题状态 ——
   const [singleSelection, setSingleSelection] = useState<string[]>(() => defaultSingleSelection(approval));
-  // —— 多题状态（按 question.id 存 optionIds） ——
-  const [selection, setSelection] = useState<ApprovalSelection>({});
+  // —— 多题状态（按 question.id 存草稿 + 当前页） ——
+  const [drafts, setDrafts] = useState<ApprovalDraft>(() => createApprovalDraft(approval));
+  const [page, setPage] = useState(0);
   const [comment, setComment] = useState('');
+  const [noteOpen, setNoteOpen] = useState(false);
   const [validation, setValidation] = useState<string | null>(null);
-  const [missingIndex, setMissingIndex] = useState<number | null>(null);
+  const [issue, setIssue] = useState<ApprovalDraftIssue | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const customRef = useRef<HTMLTextAreaElement | null>(null);
+  const pageFocusRef = useRef(false);
 
   useEffect(() => {
     setSingleSelection((current) => {
       const valid = current.filter((id) => approval.options.some((option) => option.id === id));
       return valid.length ? valid : defaultSingleSelection(approval);
     });
-    setSelection((current) => {
-      const next: ApprovalSelection = {};
-      for (const question of approvalQuestions(approval)) {
-        const valid = (current[question.id] ?? []).filter((id) =>
-          question.options.some((option) => option.id === id),
-        );
-        if (valid.length) next[question.id] = valid;
-      }
-      return next;
-    });
+    setDrafts((current) => mergeDraft(approval, current));
+    setPage((current) => Math.min(current, Math.max(0, approvalQuestions(approval).length - 1)));
   }, [approval]);
 
+  const currentQuestion = questions[page];
+  const currentDraft = currentQuestion
+    ? drafts[currentQuestion.id] ?? emptyApprovalDraftValue()
+    : emptyApprovalDraftValue();
+  const customPicked = isCustomPicked(currentDraft);
+
+  // 选中「其他（自行填写）」后把焦点交给输入框（默认激活）
   useEffect(() => {
-    if (missingIndex === null) return;
+    if (!multiQuestion || !customPicked) return;
+    const frame = window.requestAnimationFrame(() => customRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [customPicked, page, multiQuestion]);
+
+  // 翻页后把焦点交给新题的选项（首次渲染不抢焦点）
+  useEffect(() => {
+    if (!multiQuestion || !pageFocusRef.current) return;
+    pageFocusRef.current = false;
     const frame = window.requestAnimationFrame(() => {
-      const node = panelRef.current?.querySelector<HTMLElement>(
-        `[data-question-index="${missingIndex}"] input`,
-      );
-      node?.focus();
+      const fieldset = panelRef.current?.querySelector<HTMLElement>(`[data-question-index="${page}"]`);
+      fieldset?.querySelector<HTMLInputElement>('input')?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [missingIndex]);
+  }, [page, multiQuestion]);
+
+  // 提交校验失败：聚焦缺题 / 自定义输入
+  useEffect(() => {
+    if (!multiQuestion || !issue) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (issue.kind === 'custom-empty') {
+        customRef.current?.focus();
+        return;
+      }
+      const fieldset = panelRef.current?.querySelector<HTMLElement>(`[data-question-index="${issue.index}"]`);
+      fieldset?.querySelector<HTMLInputElement>('input')?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [issue, multiQuestion]);
 
   const pending = approval.status === 'pending';
 
@@ -129,16 +178,25 @@ export function ApprovalPanel({
         </div>
         {multiQuestion && groups.length ? (
           <ul className="kb-decision-answers">
-            {groups.map((group, index) => (
-              <li className="kb-decision-answer" key={group.question.id}>
-                <span className="kb-decision-answer__label">
-                  {group.question.header?.trim() || `${index + 1} / ${groups.length}`}
-                </span>
-                <span className="kb-decision-answer__value">
-                  {group.labels.length ? group.labels.join('、') : t('approval.noAnswer')}
-                </span>
-              </li>
-            ))}
+            {groups.map((group, index) => {
+              const labels = group.labels.join('、');
+              const value = [
+                labels,
+                group.custom ? t('approval.customAnswer', { text: group.custom }) : '',
+              ]
+                .filter(Boolean)
+                .join(' · ');
+              return (
+                <li className="kb-decision-answer" key={group.question.id}>
+                  <span className="kb-decision-answer__label">
+                    {group.question.header?.trim() || `${index + 1} / ${groups.length}`}
+                  </span>
+                  <span className="kb-decision-answer__value">
+                    {value || t('approval.noAnswer')}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         ) : legacyLabels.length ? (
           <p className="kb-decision-resolved">
@@ -185,7 +243,11 @@ export function ApprovalPanel({
       );
     };
     return (
-      <section className="kb-decision" aria-label={t('approval.heading')} ref={panelRef}>
+      <section
+        className={`kb-decision${inDrawer ? ' kb-decision--in-drawer' : ''}`}
+        aria-label={t('approval.heading')}
+        ref={panelRef}
+      >
         <div className="kb-decision-q">
           <span className="kb-icon" aria-hidden="true">
             <IconAlert />
@@ -210,20 +272,15 @@ export function ApprovalPanel({
           {approval.options.map((option) => {
             const checked = singleSelection.includes(option.id);
             return (
-              <label key={option.id} className={`kb-decision-option${checked ? ' kb-decision-option--selected' : ''}`}>
-                <input
-                  type={multiSelectSingle ? 'checkbox' : 'radio'}
-                  name={multiSelectSingle ? `${groupId}-${option.id}` : groupId}
-                  value={option.id}
-                  checked={checked}
-                  disabled={busy}
-                  onChange={() => toggleSingle(option.id)}
-                />
-                <span className="kb-decision-option__label">{option.label}</span>
-                {option.description ? (
-                  <span className="kb-decision-option__desc">{option.description}</span>
-                ) : null}
-              </label>
+              <DecisionOption
+                key={option.id}
+                option={option}
+                type={multiSelectSingle ? 'checkbox' : 'radio'}
+                name={multiSelectSingle ? `${groupId}-${option.id}` : groupId}
+                checked={checked}
+                disabled={busy}
+                onChange={() => toggleSingle(option.id)}
+              />
             );
           })}
         </fieldset>
@@ -279,35 +336,52 @@ export function ApprovalPanel({
   }
 
   // ------------------------------------------------- multi-question mode
+  const total = questions.length;
+  const goToPage = (index: number) => {
+    if (index < 0 || index >= total || index === page) return;
+    pageFocusRef.current = true;
+    setPage(index);
+    setValidation(null);
+    setIssue(null);
+  };
+
   const toggleQuestionOption = (questionId: string, optionId: string, multiSelect: boolean) => {
     setValidation(null);
-    setMissingIndex(null);
-    setSelection((current) => {
-      const existing = current[questionId] ?? [];
-      if (!multiSelect) return { ...current, [questionId]: [optionId] };
-      return {
-        ...current,
-        [questionId]: existing.includes(optionId)
-          ? existing.filter((id) => id !== optionId)
-          : [...existing, optionId],
-      };
-    });
+    setIssue(null);
+    setDrafts((current) => ({
+      ...current,
+      [questionId]: toggleApprovalDraftOption(
+        current[questionId] ?? emptyApprovalDraftValue(),
+        optionId,
+        multiSelect,
+      ),
+    }));
   };
 
   const submitMulti = () => {
-    const result = validateApprovalSelection(approval, selection);
+    const result = validateApprovalDraft(approval, drafts);
     if (!result.ok) {
-      const index = result.missingIndex ?? 0;
-      setMissingIndex(index);
-      const message = t('approval.missingQuestion', { index: index + 1 });
+      const { index, kind } = result.issue;
+      const message =
+        kind === 'custom-empty'
+          ? t('approval.customEmpty', { index: index + 1 })
+          : t('approval.missingQuestion', { index: index + 1 });
+      setPage(index);
+      setIssue(result.issue);
       setValidation(message);
       onValidationError?.(message);
       return;
     }
-    const answers = buildApprovalAnswers(approval, selection);
+    const answers = buildApprovalAnswers(approval, drafts);
     const flattened = flattenAnswers(answers);
     const decision: ApprovalDecision = allAnswersAreReject(approval, answers) ? 'reject' : 'approve';
     onResolve(approval, { optionIds: flattened.optionIds, answers }, comment.trim(), decision);
+  };
+
+  const customOption: ApprovalOption = {
+    id: APPROVAL_CUSTOM_OPTION_ID,
+    label: t('approval.otherOption'),
+    description: t('approval.otherOptionDesc'),
   };
 
   return (
@@ -321,7 +395,11 @@ export function ApprovalPanel({
           <IconAlert />
         </span>
         <span className="kb-decision-q__title">{approval.title}</span>
-        <span className="kb-pill kb-pill--warn">{t('approval.questionCount', { count: questions.length })}</span>
+        <span className="kb-pill kb-pill--warn">
+          {total > 1
+            ? t('approval.pageOf', { index: page + 1, total })
+            : t('approval.questionCount', { count: total })}
+        </span>
         <span className="kb-decision-time">
           {t('approval.requestedBy', { name: approval.requestedBy.name })} ·{' '}
           {formatRelative(approval.requestedAt, now, lang)}
@@ -337,75 +415,179 @@ export function ApprovalPanel({
       ) : null}
 
       <div className="kb-decision-questions">
-        {questions.map((question, index) => {
-          const isMissing = missingIndex === index;
-          return (
-            <fieldset
-              className={`kb-decision-question${isMissing ? ' kb-decision-question--missing' : ''}`}
-              key={question.id}
-              data-question-index={index}
-              aria-label={`${question.header ?? ''} ${question.question}`.trim()}
-            >
-              <legend className="kb-sr-only">{question.question}</legend>
-              <div className="kb-decision-question__head">
-                {question.header ? <span className="kb-decision-question__header">{question.header}</span> : null}
-                <span className="kb-decision-question__index">
-                  {index + 1} / {questions.length}
-                </span>
-                <span className="kb-decision-question__title">{question.question}</span>
-                <span className={`kb-pill${question.multiSelect ? ' kb-pill--business' : ''}`}>
-                  {question.multiSelect ? t('approval.multipleChoice') : t('approval.singleChoice')}
-                </span>
-              </div>
-              <div className="kb-decision-options">
-                {question.options.map((option) => {
-                  const checked = (selection[question.id] ?? []).includes(option.id);
-                  return (
-                    <label
-                      key={option.id}
-                      className={`kb-decision-option${checked ? ' kb-decision-option--selected' : ''}`}
-                    >
-                      <input
-                        type={question.multiSelect ? 'checkbox' : 'radio'}
-                        name={`${groupId}-${question.id}`}
-                        value={option.id}
-                        checked={checked}
-                        disabled={busy}
-                        onChange={() => toggleQuestionOption(question.id, option.id, question.multiSelect === true)}
-                      />
-                      <span className="kb-decision-option__label">{option.label}</span>
-                      {option.description ? (
-                        <span className="kb-decision-option__desc">{option.description}</span>
-                      ) : null}
-                    </label>
-                  );
-                })}
-              </div>
-              {question.multiSelect ? (
-                <p className="kb-decision-question__hint">{t('approval.multiAtLeastOne')}</p>
+        {currentQuestion ? (
+          <fieldset
+            className={`kb-decision-question${issue?.index === page ? ' kb-decision-question--missing' : ''}`}
+            data-question-index={page}
+            aria-label={`${currentQuestion.header ?? ''} ${currentQuestion.question}`.trim()}
+          >
+            <legend className="kb-sr-only">{currentQuestion.question}</legend>
+            <div className="kb-decision-question__head">
+              {currentQuestion.header ? (
+                <span className="kb-decision-question__header">{currentQuestion.header}</span>
               ) : null}
-            </fieldset>
-          );
-        })}
+              <span className="kb-decision-question__title">{currentQuestion.question}</span>
+              <span className={`kb-pill${currentQuestion.multiSelect ? ' kb-pill--business' : ''}`}>
+                {currentQuestion.multiSelect ? t('approval.multipleChoice') : t('approval.singleChoice')}
+              </span>
+            </div>
+            <div className="kb-decision-options">
+              {currentQuestion.options.map((option) => (
+                <DecisionOption
+                  key={option.id}
+                  option={option}
+                  type={currentQuestion.multiSelect ? 'checkbox' : 'radio'}
+                  name={`${groupId}-${currentQuestion.id}`}
+                  checked={currentDraft.optionIds.includes(option.id)}
+                  disabled={busy}
+                  onChange={() =>
+                    toggleQuestionOption(currentQuestion.id, option.id, currentQuestion.multiSelect === true)
+                  }
+                />
+              ))}
+              <div className="kb-decision-custom-option">
+                <DecisionOption
+                  key={APPROVAL_CUSTOM_OPTION_ID}
+                  option={customOption}
+                  type={currentQuestion.multiSelect ? 'checkbox' : 'radio'}
+                  name={`${groupId}-${currentQuestion.id}`}
+                  checked={customPicked}
+                  disabled={busy}
+                  onChange={() =>
+                    toggleQuestionOption(
+                      currentQuestion.id,
+                      APPROVAL_CUSTOM_OPTION_ID,
+                      currentQuestion.multiSelect === true,
+                    )
+                  }
+                />
+              </div>
+              {customPicked ? (
+                <div className="kb-decision-custom">
+                  <label className="kb-sr-only" htmlFor={`${groupId}-custom-${currentQuestion.id}`}>
+                    {t('approval.customLabel')}
+                  </label>
+                  <textarea
+                    ref={customRef}
+                    id={`${groupId}-custom-${currentQuestion.id}`}
+                    className="kb-textarea kb-decision-custom__input"
+                    rows={3}
+                    maxLength={APPROVAL_CUSTOM_MAX}
+                    placeholder={t('approval.customPlaceholder')}
+                    value={currentDraft.custom}
+                    disabled={busy}
+                    aria-invalid={issue?.index === page && issue.kind === 'custom-empty' ? true : undefined}
+                    onChange={(event) => {
+                      setValidation(null);
+                      setIssue(null);
+                      const questionId = currentQuestion.id;
+                      const custom = event.target.value;
+                      setDrafts((current) => ({
+                        ...current,
+                        [questionId]: updateApprovalDraftCustom(
+                          current[questionId] ?? emptyApprovalDraftValue(),
+                          custom,
+                        ),
+                      }));
+                    }}
+                  />
+                  <span className="kb-decision-custom__count" aria-hidden="true">
+                    {currentDraft.custom.length} / {APPROVAL_CUSTOM_MAX}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            {currentQuestion.multiSelect ? (
+              <p className="kb-decision-question__hint">{t('approval.multiAtLeastOne')}</p>
+            ) : null}
+          </fieldset>
+        ) : null}
       </div>
 
-      <label className="kb-decision-note-wrap">
-        <span className="kb-sr-only">{t('approval.comment')}</span>
-        <textarea
-          className="kb-textarea kb-decision-note"
-          placeholder={t('approval.unifiedNotePlaceholder')}
-          value={comment}
-          rows={1}
-          disabled={busy}
-          onChange={(event) => setComment(event.target.value)}
-        />
-      </label>
+      {total > 1 ? (
+        <div className="kb-decision-pager" role="group" aria-label={t('approval.pager')}>
+          <button
+            type="button"
+            className="kb-btn kb-btn--ghost kb-btn--sm kb-decision-pager__btn"
+            disabled={busy || page === 0}
+            onClick={() => goToPage(page - 1)}
+          >
+            {t('approval.prevQuestion')}
+          </button>
+          <div className="kb-decision-pager__dots">
+            {questions.map((question, index) => {
+              const answered = isDraftValueAnswered(drafts[question.id] ?? emptyApprovalDraftValue());
+              return (
+                <button
+                  key={question.id}
+                  type="button"
+                  className={`kb-decision-dot${index === page ? ' kb-decision-dot--current' : ''}${
+                    answered ? ' kb-decision-dot--answered' : ''
+                  }`}
+                  aria-label={t(answered ? 'approval.jumpQuestionAnswered' : 'approval.jumpQuestion', {
+                    index: index + 1,
+                  })}
+                  aria-current={index === page ? 'step' : undefined}
+                  disabled={busy}
+                  onClick={() => goToPage(index)}
+                />
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            className="kb-btn kb-btn--ghost kb-btn--sm kb-decision-pager__btn"
+            disabled={busy || page === total - 1}
+            onClick={() => goToPage(page + 1)}
+          >
+            {t('approval.nextQuestion')}
+          </button>
+        </div>
+      ) : null}
 
       {validation ? (
         <p className="kb-decision-validation" role="alert">
           {validation}
         </p>
       ) : null}
+
+      {noteOpen || comment.trim() ? (
+        <div className="kb-decision-note-block">
+          <label className="kb-decision-note-wrap">
+            <span className="kb-decision-note-label">{t('approval.overallNote')}</span>
+            <textarea
+              className="kb-textarea kb-decision-note"
+              placeholder={t('approval.unifiedNotePlaceholder')}
+              value={comment}
+              rows={2}
+              disabled={busy}
+              onChange={(event) => setComment(event.target.value)}
+            />
+          </label>
+          {comment.trim() ? null : (
+            <button
+              type="button"
+              className="kb-link-btn kb-decision-note-toggle"
+              disabled={busy}
+              onClick={() => setNoteOpen(false)}
+            >
+              {t('approval.hideNote')}
+            </button>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="kb-link-btn kb-decision-note-toggle"
+          disabled={busy}
+          onClick={() => setNoteOpen(true)}
+        >
+          <span className="kb-icon" aria-hidden="true">
+            <IconPlus />
+          </span>
+          {t('approval.addNote')}
+        </button>
+      )}
 
       <div className="kb-decision-actions">
         <button type="button" className="kb-btn kb-btn--primary kb-btn--sm" disabled={busy} onClick={submitMulti}>

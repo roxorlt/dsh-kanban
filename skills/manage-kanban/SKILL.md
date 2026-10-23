@@ -95,8 +95,8 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 - `CARD_NOT_FOUND`：卡片不存在或已归档，用 `kanban_cards` 重新查找。
 - `BAD_REQUEST`：检查参数（状态枚举、选项数量 1–4、必填文本）。
 - `CONFLICT`：卡片状态已被用户改变，重新读卡后再决定下一步。
-- 审批决议在 `approval.resolution`：单题 `{ optionIds, labels, comment? }`；多题额外有 `answers: [{questionId, optionIds, labels}]`（`optionIds/labels` 仍是拍平后的兼容字段）。不要假设旧的单值 `optionId`。
-- 多题审批用户会逐题作答；你只能在用户完成后读取 `answers`，不要自行补答或推断用户选择。
+- 审批决议在 `approval.resolution`：单题 `{ optionIds, labels, comment? }`；多题额外有 `answers: [{questionId, optionIds, labels, custom?}]`（`optionIds/labels` 仍是拍平后的兼容字段；`custom` 是用户选「其他（自行填写）」时填的自定义回答，≤600 字，单选自定义时 `optionIds` 为空）。不要假设旧的单值 `optionId`。
+- 多题审批用户会逐题作答；你只能在用户完成后读取 `answers`，不要自行补答或推断用户选择。看到 `custom` 就按用户原文理解，不要把它当备注忽略。
 - 工具返回 `{ok:false,error:{code,message}}` 时不要重试同样的错误参数；根据 `message` 修正。
 
 ## 收到卡片回复 / 开始推进时的第一步

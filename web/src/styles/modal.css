@@ -80,6 +80,11 @@
   gap: 10px;
 }
 
+/* 路径类字段（工作区/执行目录）整行展示：两列会把 cwd 输入框挤到路径末尾截断 */
+.kb-form__row--stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .kb-form__error {
   color: var(--dsw-alias-state-error-primary);
   font: var(--dsw-font-xxs-12);

@@ -200,6 +200,75 @@
 | 清除 | `handoff:null` 清除并追加「清除了交接摘要」活动，卡片状态不变 |
 | 截图 | `handoff-badge.png`、`handoff-detail.png`、`handoff-drawer.png`、`handoff-prompt.png` |
 
+## 1.15 v0.9.0（优先级/标签从界面隐藏）
+
+| 项 | 结果 |
+| --- | --- |
+| 决策 | 用户审批选择「先隐藏，保留 API 与数据」（ap-3c40b051 / option-3）；不做数据迁移，旧卡片字段原样保留 |
+| 改动面（仅 Web） | 新建/编辑表单去掉「优先级」「标签」；看板卡去掉 P0–P3 徽标与标签；列表行去掉标签；详情抽屉去掉优先级 pill 与标签；筛选菜单只剩「项目」；列表分组只剩「状态 / 项目」；搜索不再匹配标签；i18n 键与 `kb-priority` / `kb-list__labels` CSS 清理。服务端 `lib/`、HTTP API、`kanban_*` 工具与数据字段未动 |
+| 自动化 | 服务端 `node --test` 85/85；Web vitest 17 文件 / 136 测试；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 9 CSS 0 error / 0 warning |
+| 真实 dev-server（隔离数据 `/tmp/dsh-kanban-v09`，demo 8 卡，CDP + headless Chrome 1440×900） | DOM 断言：`.kb-priority` 0 个、`.kb-card-props .kb-tag` 0 个、`.kb-list__labels` 0 个；分组选项只有「状态 / 项目」；筛选浮层分组只有「项目」；新建表单字段为 标题/摘要/工作区/执行目录/项目/列/会话，无「优先级 / 标签」；console 0 error |
+| 真实数据回归（用户 `~/.dsh-kanban/data.json` 只读副本，41 张卡、8 个会话运行中） | 看板卡片数与列计数正常（共 41 张）；`.kb-priority` 0 个、`.kb-card-props .kb-tag` 0 个、项目属性仍显示 24 个；打开详情抽屉 chips 只剩状态（待办），无优先级/标签；console 0 error |
+| API 保留验证 | `GET /api/kanban/state` 仍返回 `priority: "medium"` 与 `labels: ["ui","nice-to-have","示例"]`；旧卡片数据未迁移，随时可恢复展示 |
+| 截图 | `docs/assets/screens/v0.9-board-no-priority-labels.png`、`v0.9-list-no-priority-labels.png`、`v0.9-filter-no-label-group.png`、`v0.9-form-no-priority-labels.png`、`v0.9-real-board-hidden-fields.png`、`v0.9-real-drawer-hidden-fields.png` |
+
+## 1.16 v0.9.1（「待你确认」选项文案溢出 → 2 行截断 + hover/长按看全文）
+
+| 项 | 结果 |
+| --- | --- |
+| 决策 | 用户在审批中选择方案 C：选项文案最多 2 行（省略号），hover/长按看全文；不增加卡片高度，键盘 focus-visible 同样能看到完整文案 |
+| 根因 | `.kb-decision-options` 是纵向 flex + `max-height: 260px` 滚动容器，选项显式 `min-height: 28px` 覆盖自动最小尺寸；长文案换行后需 84–132px，被 flex-shrink 压到 61–99px，文字 `overflow: visible` → 溢出边框、被下方选项背景遮住（1180–1280px 同文案 3/3 溢出 15–44px） |
+| 修复 | 选项 label/desc 各 2 行 clamp + `overflow-wrap: anywhere`；新增 `DecisionOption`（截断检测 + portal/fixed 提示气泡 + 下方放不下翻转 + 视口夹取 + hover 320ms / focus-visible / 长按 450ms + 抬起 click 抑制 + 长按滑动取消）；`.kb-decision-options > .kb-decision-option`、`.kb-decision-questions > .kb-decision-question` 设 `flex: none`；详情抽屉内取消截断与限高；暗色气泡令牌 |
+| 自动化 | Web vitest 19 文件 / 158 测试（新增 `tooltipPosition` 8 例、`longPress` 10 例）；tsc 0 error；`vite build` 通过；令牌 lint 9 CSS 0 error / 0 warning；服务端 89/89 |
+| 隔离 dev-server（demo + 复现卡；1440/1280/1180/1100/390） | 选项溢出 0（修复前 3/3 溢出 15–44px）；hover 320ms 弹完整 label+description，移开/滚动/Esc/点外部收起；键盘 Tab 到选项（focus-visible）弹提示；移动端长按 450ms 弹提示、不误选中、长按中滑动取消；未截断选项不弹；超长无空格串折行且 `pageScrollWidth=clientWidth`；近底部翻到上方；抽屉内全文展开（无 clamp、无选项内滚动）；暗色气泡 bg `rgb(53,54,56)` / 文字 `rgb(249,250,251)`；中英界面；console 0 error |
+| 真实宿主 `/dsh-kanban/`（真实待确认卡 card-032f9d01） | 重新构建后刷新：选项无溢出；hover 气泡与长按提示可读、未被裁剪；详情抽屉内全文展开；console 0 error |
+| 版本/文档 | v0.9.1；`docs/03` §7.19 + §10.3 #9；本表；CHANGELOG |
+| 提交 | 未创建 git 提交：工作区仍有并行会话在途改动（审批面板翻页重做 / 原生收件），避免混提交，待其收尾后单独提交（同 v0.9.0 卡的处理方式） |
+| 截图 | `design/screens/approval-option-clamp-hover-1280.png`、`approval-option-clamp-longlabel-1280.png`、`approval-option-clamp-longpress-390.png`、`approval-option-clamp-dark-1440.png`、`approval-option-clamp-flip-1280x430.png`、`approval-option-drawer-fulltext-1440.png`、`approval-option-real-host-*.png` |
+
+## 1.17 v0.9.2（多题审批逐题翻页 + 每题自定义回答；摘要上限 600）
+
+| 项 | 结果 |
+| --- | --- |
+| 反馈 | 用户：多题审批把两道题的选项纵向叠在卡片里，底部只有一个「统一备注」输入框；选项都不符合需求时在备注里写了诉求，提交仍被「第 N 题还没有选择」拦住——备注不算作答，交互不完整。建议：① 多题之间翻页，一次只展示一题；② 输入框默认不展示，每题固定一个「其他」选项，选中后再展开并自动聚焦 |
+| 交互改版 | 一次一题（头部 pill「第 N / M 题」+ 上一题 / 题号进度点 / 下一题）；每题选项末尾固定「其他（自行填写）」→ 选中后原地展开输入框、自动聚焦、≤600 字计数；统一备注默认收起为「添加备注（可选）」；校验两种失败分别跳题并聚焦（没选任何东西 / 选了其他但没填）；卡片内取消「题目区 + 选项区」两层内部滚动，面板自然长高由列体滚动 |
+| 数据/服务端 | `ApprovalAnswer.custom`（≤600 字）；resolve `answers[].custom`；每题「至少 1 个选项」或「custom 非空」，单选互斥；rejected 需「选中选项全为拒绝语义且无任何 custom」；拍平 `optionIds/labels` 只含真实选项；旧数据/旧调用方兼容；时间线追加「+ N 题自定义」，会话全文按「题目标签：选项；自定义：文本」拼接 |
+| 摘要上限 | `summary` 240→600：服务端 `LIMITS.summary`、`kanban_create_card` / `kanban_update_card` schema 描述、Web 表单 `maxLength` 同步；新建/编辑表单标题行右侧新增「已用 / 600」计数；折叠卡仍两行截断、列表单行、抽屉全文 |
+| 自动化 | 服务端 `node --test` 89/89（新增自定义回答校验/落库/判定、摘要上限 4 例）；Web vitest 19 文件 / 158 测试（`approvalQuestions` 14 例）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 9 CSS 0 error / 0 warning |
+| 隔离 dev-server（`/tmp/dsh-kanban-v091`，demo 8 卡，CDP + headless Chrome） | pill 1/3→2/3→3/3、进度点 3 个；备注默认收起（`.kb-decision-note-block` 0 个）；选中「其他」→ 输入框出现、`document.activeElement` = 自定义 textarea、计数 `0 / 600`；Q1 已答、Q2 选了其他但留空时提交：停在「第 2 / 3 题」、红框、提示「第 2 题选了「其他（自行填写）」，请填写具体内容」、焦点回到输入框；填入后计数 20/600；提交后 `resolution.answers` = 两条 custom + 一条 option，拍平 optionIds=`['ready']`，status=approved，已解决态显示「自定义：」；抽屉内翻页按钮 2 个 / 进度点 3 个 / 备注默认收起；390×844：pill 1/2→2/2、其他选项、聚焦输入、15/600 计数；摘要表单 `maxLength=600`、`0 / 600`→`540 / 600`；API 直提 500 字摘要成功；console 0 error |
+| 生效方式 | 含服务端改动，需重启 DSH；只刷新页面会继续用旧服务端（旧服务端不接受单题 custom，UI 会收到 400） |
+| 版本/文档 | v0.9.2；CHANGELOG；`docs/03` §2.5.1 / §5 两行；`docs/contracts/01` §3.z + `ApprovalAnswer.custom` + summary；`docs/contracts/02` resolve 行 + summary 说明；本表 |
+| 提交 | 未创建 git 提交：工作区仍有并行会话在途改动，避免混提交 |
+| 截图 | `design/screens/v0.9.2-approval-pager-card.png`、`v0.9.2-approval-custom-required.png`、`v0.9.2-approval-filled.png`、`v0.9.2-approval-resolved-custom.png`、`v0.9.2-approval-drawer-pager.png`、`v0.9.2-summary-counter.png`、`v0.9.2-mobile-approval.png`、`v0.9.2-mobile-custom-filled.png`、`v0.9.2-mobile-page2.png`、`v0.9.2-dark-form.png` |
+
+## 1.18 v0.9.3（详情抽屉「执行目录」路径截断 + 抽屉加宽）
+
+| 项 | 结果 |
+| --- | --- |
+| 现象（真实宿主 `/dsh-kanban/`，1440×900，卡片 cwd=`/Users/roxor/Desktop/dsh/dsh kanban`） | 详情抽屉 →「新建会话」表单里，「执行目录」输入框只显示到 `/Users/roxor/Desktop/dsh/dsf`：输入框内容宽 196px、路径需 247px，末尾 51px 被裁；1028×1800 竖屏（抽屉 380px）只显示到 `/Users/roxor/Desktop/dsh/ds`，裁约 81px。新建/编辑卡片弹窗同字段输入框 233px、裁 14px（`…/dsh kanb`）。三处都没有 hover 提示 |
+| 根因 | 两处表单都用 `.kb-form__row` 两列栅格并排「工作区 + 执行目录」。抽屉正文内容宽 428px（460 抽屉）/348px（380 抽屉），减表单内边距 20 后两列各 203px / 166px；12px 等宽字体下该路径需 247px，输入框单行显示时末尾被裁。弹窗固定 520px、两列各 233px，同样差 14px |
+| 修复 | 路径类字段改整行：新增 `.kb-form__row--stack`（单列栅格），抽屉「新建会话」表单与新建/编辑卡片弹窗都变成「工作区」一整行 +「执行目录」一整行 + 建议 chips。改后输入框宽 344–478px，`scrollWidth = clientWidth`（0 裁切） |
+| hover 提示 | 执行目录输入框（抽屉/弹窗）、详情元数据「工作目录」、抽屉会话标题截断处、产物路径补 `title`；工作区下拉的每个选项也带完整 `title`（含 workspace path）；产物路径允许行内换行，长路径不再顶出抽屉 |
+| 抽屉宽度（按卡片「右侧抽屉样式」拍板 option-1） | `clamp(380px, 34vw, 460px)` → `clamp(400px, 36vw, 520px)`：1440px 下 460→518.4px、1512→520px、1028 竖屏 380→400px、900→400px；<720 仍是底部弹层全宽。同一张 17 段正文的长卡片在 1440：平均行数 3.00 → 2.59（**-14%**）、最高 13 → 11 行；会话标题可用宽 328 → 388px（完整显示需 358px 的会话名） |
+| 自动化实测（CDP + 真实 Chrome，隔离 dev-server，同一张测试卡） | 加宽后抽屉：1440×900 = **518.4px**（表单 1 列 464px、输入 462px、裁切 **0**）、1512×982 = **520px**、1028×1800 = **400px**（表单 346px、输入 344px、裁切 0）、900×900 = 400px、390×844 = 底部弹层 390px（输入 334px、裁切 0）；卡片弹窗 520px（输入 478px、裁切 0）。上述尺寸 × 中英 × 亮暗下元数据「工作目录」`scrollWidth = clientWidth`、抽屉内无任何截断元素缺 `title`；`title` 与完整值逐字一致；console 0 error |
+| 真实宿主实测（`/dsh-kanban/`，真实 42 张卡，刷新即生效） | 打开「右侧抽屉样式」：1440×900 抽屉 **518.4px**，「元数据 / 工作目录」= `/Users/roxor/Desktop/dsh/dsh kanban` 完整、带 `title`；新建会话表单 1 列 464.4px、执行目录输入 462px、裁切 **0**；会话标题被截断处有 `title`；抽屉内**无任何截断元素缺 `title`**。1028×1800（抽屉 **400px**）：表单 346px、输入 344px、裁切 0。真实最长卡片（「一直用看板新建卡片…」）在 1440：平均正文行数 3.0 → 2.0、最高 7 → 6 行、摘要 7 → 6 行；会话标题从 328px（截 36px）变为 386px（完整）；抽屉加宽前后同屏对比见截图 |
+| 自测 | Web vitest 16 文件 / 110 测试；tsc 0 error；令牌 lint 8 CSS 0/0；build 成功；服务端 71/71 |
+| 分支 | `fix/drawer-path-width` 提交 `4a2978b`（基于 v0.8.0，含 dist/文档/CHANGELOG/截图，便于单独合并） |
+| 截图 | `design/screens/web-drawer-cwd-before-1440.png` / `-after-1440.png`（同一张卡，抽屉 460→518px 且路径由截断变完整）、`web-drawer-cwd-before-1028.png` / `-after-1028.png`（380→400px）、`web-card-modal-cwd-before-1440.png` / `-after-1440.png`、`web-card-modal-cwd-after-1028.png`；真实宿主：`web-drawer-cwd-real-host-after-1440.png`、`web-drawer-cwd-real-host-after-1028.png` |
+
+## 1.19 v0.9.4（卡片状态点 / 审批选项圆点与文案竖直对齐）
+
+| 项 | 结果 |
+| --- | --- |
+| 现象（用户截图） | 待办、待你确认、已完成三列首卡标题左侧状态点均高于标题首行文字中心约 5.5px；同屏「待你确认」列长选项「仅手动：详情里点「归档会话」(推荐)」的圆点留在第一行、文案掉到第二行，错位 21px |
+| 根因 A（3 个卡片状态点） | `.kb-card-head` 为 `align-items: flex-start`，标题 14px/20px、状态点 8px，需要 `margin-top: 6px` 才能对齐首行中线；v0.1 起就有 `.kb-card-head__dot { margin-top: 6px }`，但 `KanbanCard.tsx` 的圆点从未带这个类（只有 `kb-dot kb-dot--${tone}`），属于死样式，圆点停在 flex 行顶 |
+| 根因 B（1 个审批选项圆点） | `.kb-decision-option` 是 `flex-wrap: wrap`，13px 圆点与 label 同行；label 没有 `flex` / `min-width`，按 max-content 量宽（约 201.17px）。1200×1022 下选项宽 223px，圆点右侧只剩约 197px，浏览器把整块 label 挪到下一 flex 行，圆点孤零零留在第一行 |
+| 修复 | ① `KanbanCard.tsx` 圆点补 `kb-card-head__dot` 类；② `.kb-decision-option__label` 增加 `flex: 1 1 0; min-width: 0`，label 占满剩余宽度并在自身内部换行（继续受 2 行截断约束），description 仍独占一行 |
+| 自动化实测（隔离 dev-server + Chrome，DPR 2，`design/screens/align-*`） | 修复前：1440×900 三列首卡状态点偏差 **-5.5px**、选项不换行；1200×1022 状态点 **-5.5px**、长选项换行 **2 个**、圆点与 label 首行偏差 **21px**。修复后：1440 / 1280 / 1200 / 1100 / 1028 / 900 / 839 / 720 / 390 × 亮暗全部 **状态点偏差 +0.5px（≈0）**、**选项换行 0**、**圆点/label 偏差 0px**、选项盒溢出 0、列头图标偏差 0、console 0 error |
+| 自测 | Web vitest 19 文件 / 158 测试；`tsc --noEmit` 0 error；令牌 lint 9 CSS 0 error / 0 warning；服务端 `node --test` 89/89；`vite build` 成功（`web/dist` 已重建） |
+| 生效方式 | 纯前端类名/CSS 改动，**刷新看板即可**（无需重启 DSH；宿主按 `no-store` 返回 index.html、资源带内容哈希） |
+| 截图 | `design/screens/align-fix-before-after.png`（前后对照总图）、`align-card-dot-before-1440.png` / `align-card-dot-after-1440.png`、`align-option-before-1200.png` / `align-option-after-1200.png`、`align-option-after-1200-dark.png`、`align-option-after-390.png` |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

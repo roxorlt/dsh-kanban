@@ -20,6 +20,12 @@
   padding: 2px 0;
 }
 
+/* 列表视图里的原生收件区：与行式卡片同宽，单独成块 */
+.kb-list__inbox {
+  display: flex;
+  flex-direction: column;
+}
+
 .kb-list__groupby-label {
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxxs-11);
@@ -246,11 +252,6 @@
 .kb-list__status-line .kb-dot {
   width: 6px;
   height: 6px;
-}
-
-.kb-list__labels {
-  display: flex;
-  gap: 4px;
 }
 
 .kb-list__expanded {

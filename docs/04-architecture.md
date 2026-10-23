@@ -18,9 +18,11 @@ flowchart LR
     Panel["main 面板<br/>看板 iframe"]
     Bridge["客户端插件<br/>桥接层"]
     BoardUI["看板 Web 应用<br/>React + Vite"]
+    Pending["宿主待确认投影<br/>uiSession.pendingInteraction"]
     Sidebar --> Panel
     Panel --> BoardUI
     Panel <--> Bridge
+    Bridge <-->|"kanban:pending / 作答"| Pending
   end
   subgraph Host["DSH 宿主进程"]
     WebServer["HTTP 路由<br/>/api/kanban"]
@@ -44,6 +46,7 @@ flowchart LR
 | --- | --- | --- |
 | 看板 UI ↔ 宿主数据 | 同源 HTTP + SSE | UI 可以是独立页面、可测试、可截图；宿主只做 JSON 存储 |
 | 看板 UI ↔ DSH 原生能力 | postMessage 桥（白名单方法） | iframe 拿不到 DSH 的 React 服务，桥是最小暴露面 |
+| 看板 UI ↔ 宿主待确认 | 客户端插件读 `uiSession` 投影 → 桥推送；作答回传宿主 pending 对象 | 原生审批/提问不复制状态、不新增审计路径，只多一个作答入口 |
 | Agent ↔ 看板 | `kanban_*` 工具 | agent 不需要学 HTTP，工具描述即工作流入口 |
 
 ## 3. 信息架构：Board → Card → Session → Activity
@@ -173,20 +176,53 @@ sequenceDiagram
   C->>A: 看到决定继续
 ```
 
+### 5.4 原生待确认收件（工具授权 / Agent 提问 / 计划审批）
+
+```mermaid
+%%{init: {"sequence": {"mirrorActors": false, "messageAlign": "left"}}}%%
+sequenceDiagram
+  participant A as Agent
+  participant H as DSH 宿主
+  participant P as uiSession 投影<br/>(客户端)
+  participant B as 客户端桥
+  participant W as 看板 UI
+  participant U as 用户
+  A->>H: bash（sandbox_permissions）或 ask_user_question
+  H->>H: approval/request 或 user-questions/request
+  H->>P: 注册 pendingInteraction（官方 UI 同时接管会话输入框）
+  B->>P: 订阅 sessionStatus（全量快照）
+  B->>W: kanban:pending（来源/风险原料/会话）
+  U->>W: 允许一次 / 拒绝 / 多题作答 / 计划审批
+  W->>B: pending.answerApproval / answerQuestion / dismiss
+  B->>P: pending.answer(...) / dismiss()
+  P->>H: 结算 waterfall（与原 composer 共用同一决定与审计）
+  H->>A: 工具结果 / 答案批次
+```
+
+要点：
+
+- 只看得到宿主投影里的**每会话最高优先级一项**（审批 0 → 提问 1 → 计划审批 2），与原生 composer 的单槽行为一致；
+- 原生 composer 不删除：两处都能作答，先答先得；别处作答后看板项随投影消失；
+- 计划审批的「同意执行」等价于提交 `approve` 选项，「要求修改」走宿主 `dismiss()`；
+- 旧版宿主没有 `uiSession` 服务时不推送，收件区不渲染，业务审批卡片不受影响。
+
 ## 6. 代码地图
 
 | 文件 | 职责 |
 | --- | --- |
-| `lib/client.js` | 客户端插件：侧栏入口、`main` 全屏面板、iframe 桥（主题/会话/面板切换） |
+| `lib/client.js` | 客户端插件：侧栏入口、`main` 全屏面板、iframe 桥（主题/会话/面板切换/原生待确认聚合） |
 | `lib/index.js` | 服务端插件入口：数据目录、路由注册、工具注册、SSE 广播 |
 | `lib/store.js` | `~/.dsh-kanban/data.json` 原子写、串行队列、乐观锁、revision |
 | `lib/domain.js` | 状态/列映射、默认看板、种子数据、节点/审批构造 |
 | `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`） |
 | `lib/tools.js` | 10 个 `kanban_*` agent 工具 |
 | `web/` | 看板 UI（React + Vite），构建产物 `web/dist` 由服务端直接服务 |
+| `web/src/lib/nativeInbox.ts` | 原生待确认的纯函数：风险分档、文案解析、计划审批派生、会话/卡片关联、排序 |
+| `web/src/components/NativeInbox.tsx` | 「待你确认」列顶部的收件区（来源徽标/风险/作答入口） |
+| `web/src/components/NativeAnswerModal.tsx` | 多题作答表单与计划审批弹窗 |
 | `skills/manage-kanban/` | 教 agent 使用看板的工作流技能 |
 | `scripts/dev-server.mjs` | 不依赖 DSH 的联调服务器 |
-| `docs/contracts/` | 冻结契约（数据模型 / HTTP / 桥） |
+| `docs/contracts/` | 冻结契约（数据模型 / HTTP / 桥 / 原生待确认收件） |
 
 ## 7. 安全与权限
 
@@ -196,6 +232,7 @@ sequenceDiagram
 | 静态资源 | 只服务 `web/dist`，拒绝 `..`、绝对路径、符号链接逃逸；`nosniff` |
 | 桥 | method 白名单；只接受同源 `postMessage`；不透传任意函数 |
 | 工具 | 工具名固定；文本截断；`action` 需审批才能继续；工具不能替用户 resolve 审批 |
+| 原生待确认 | 父页面只读宿主 `uiSession` 投影；作答只经 pending 对象的 `answer()/dismiss()`，不新增审计路径、不伪造结果；`key` 不落盘；计划正文只传宿主本来就展示给用户的内容 |
 | 数据 | 存 `~/.dsh-kanban`；损坏文件先备份再重建；不写插件目录 |
 | 会话 | 只发文本；不读取会话内容回写卡片（agent 自己选择写什么进展） |
 
@@ -208,15 +245,18 @@ sequenceDiagram
 | SSE 断线 | 指数退避重连；期间用 5s 轮询兜底；页面隐藏暂停 |
 | 会话被归档/删除 | 卡片保留绑定，打开会话报 `SESSION_NOT_FOUND`，提示重新绑定 |
 | 桥不可用（旧 DSH） | 会话操作降级为"复制文本"，看板 CRUD 不受影响 |
+| 宿主无 `uiSession`（旧版 DSH） | 原生待确认区不渲染（`pendingSupport=false`），业务审批卡片正常 |
+| 原生项已在别处作答 / 宿主撤回 | 下一次推送自动消失；看板作答返回 `PENDING_NOT_FOUND` / `PENDING_UNANSWERABLE`，提示"已在别处处理"并保留 toast |
+| 原生提问回答通道未就绪（`channel=none`） | 看板禁用提交并提示去会话内作答，不伪造结果 |
 | 并发写冲突 | 卡片 `version` 乐观锁，409 返回最新卡片，UI 合并后重试 |
 
 ## 9. 扩展路线
 
 | 阶段 | 内容 |
 | --- | --- |
-| M1（本次） | 单看板、4 列、卡片 CRUD、审批、会话绑定、回复、SSE、双布局、响应式 |
-| M2 | 多看板 / 每 workspace 一个看板；卡片依赖与阻塞关系；批量操作；卡片模板 |
-| M3 | 会话事件自动回填（工具调用计数、耗时、搜索结果数）；审批结果自动同步到 DSH 原生审批；定时/周期卡 |
+| M1 | 单看板、4 列、卡片 CRUD、审批、会话绑定、回复、SSE、双布局、响应式 |
+| M2（进行中） | 多会话回复目标、handoff 交接摘要（v0.8）、**审批收件箱合并（v0.10：原生工具授权/提问/计划审批进「待你确认」列）**；剩余：卡片依赖与阻塞、每 workspace 一个看板 |
+| M3 | 会话事件自动回填（工具调用计数、耗时、搜索结果数）；原生待确认的持久策略（always allow）入口；定时/周期卡 |
 | M4 | 团队协作（远端同步）、Jira/GitHub 集成、看板仪表盘（吞吐/阻塞时长）、导出 Markdown/JSON |
 | 暂不做 | 甘特图、看板内嵌对话全文、云端账号体系（参考项目有，但对个人工作流是负担） |
 
@@ -236,7 +276,7 @@ sequenceDiagram
 ### 10.1 已确认的其它产品规则
 
 - **看板范围**：单看板跨项目；项目是卡片上的逻辑分组字段，不等于 workspace。
-- **审批收件箱**：看板审批与 DSH 原生审批（工具授权等）未来合并为一个「待你确认」入口（M2/M3），当前先保持两套，看板侧只承接业务决策。
+- **审批收件箱（v0.10 已合并）**：「待你确认」列 = 业务审批卡片 + 原生待确认区（工具授权 / Agent 提问 / 计划审批）。原生项只镜像宿主的 `uiSession` 投影，作答仍走宿主 pending 对象（`answer` / `dismiss`），与原生 composer 共用同一条结算与审计；来源徽标 + 风险三档（高/中/低，tip 显示依据）。每会话只镜像宿主投影里的最高优先级一项；`ask_user_question` 的草稿仍以原生 composer 为准。
 - **失败/受阻**：仍在「待你确认」列；需要原因、重试入口与升级路径。
 - **多会话**：v1 回复进主会话；v1.1 增加回复目标选择器（mockup 已加入状态）。
 - **handoff（交接摘要）**：M2 增加字段，用于会话归档后从卡片续接。
@@ -245,7 +285,8 @@ sequenceDiagram
 ## 11. 待办与开放讨论
 
 1. **deep link**：已确认不做应用外链接；应用内跳转完成。提案文档保留为历史记录（docs/08）。
-2. **审批与原生审批合并**：需要宿主 `user-questions` / approval 接口的对齐方案（M2 评估）。
-3. **多选审批语义**：v1.1 已支持 options 多选（`multiSelect`）；是否支持「一次审批包含多个问题」仍待讨论（可对齐 DSH `ask_user_question` 的多问题结构）。
+2. **审批收件箱合并**：v0.10 已完成（原生工具授权 / Agent 提问 / 计划审批进「待你确认」列，看板内可直接作答），契约见 `docs/contracts/04-native-inbox.md`；剩余：原生 composer 的草稿与计时暂停策略尚未在看板镜像（看板作答不冻结倒计时）。
+3. **多选审批语义**：v1.1 已支持 options 多选（`multiSelect`）；服务端多问题审批（`questions[]`）也已支持。原生 `ask_user_question` 的多题作答已可在看板完成。
 4. **已完成膨胀**：v1 用「最近 5 张 + 查看全部 + 列表折叠」；自动归档（如 30 天）放 v1.1。
 5. **卡片自动重开**：关联会话收到新回合时是否自动把 done 卡片改回 running（建议 M3 做，避免误重开）。
+6. **同会话多项原生待确认**：宿主 `uiSession` 每会话只暴露一项（优先级 审批 0 → 提问 1 → 计划审批 2），看板侧接受同一限制；如需全部可见要等宿主投影扩容。

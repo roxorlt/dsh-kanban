@@ -1,24 +1,16 @@
-import type { Card, ColumnId, Priority } from '../types';
+import type { Card, ColumnId } from '../types';
 import { COLUMNS, COLUMN_OF_STATUS } from './status';
 import { groupCardsByColumn } from './grouping';
 
-/** 列表视图分组维度：状态 / 项目 / 优先级。 */
-export type ListGroupBy = 'status' | 'project' | 'priority';
+/** 列表视图分组维度：状态 / 项目（v0.9.0 起「优先级」从界面隐藏）。 */
+export type ListGroupBy = 'status' | 'project';
 
-export const LIST_GROUP_BY_OPTIONS: readonly ListGroupBy[] = ['status', 'project', 'priority'] as const;
+export const LIST_GROUP_BY_OPTIONS: readonly ListGroupBy[] = ['status', 'project'] as const;
 
 /** 看板「已完成」列首屏展示条数 */
 export const DONE_PREVIEW_LIMIT = 5;
 /** 列表「已完成」分组首屏 / 每次加载更多条数 */
 export const DONE_LIST_LIMIT = 5;
-
-const PRIORITY_ORDER: Record<Priority, number> = {
-  urgent: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-  none: 4,
-};
 
 export interface ListGroup {
   key: string;
@@ -35,8 +27,7 @@ const byUpdatedDesc = (a: Card, b: Card): number => b.updatedAt - a.updatedAt;
 /**
  * 列表视图分组：
  * - status：沿用看板的 cardOrder 顺序，四列固定顺序；
- * - project：项目名字母序，「无项目」放最后；
- * - priority：紧急→高→中→低→无。
+ * - project：项目名字母序，「无项目」放最后。
  * 归档卡片一律不出现。
  */
 export function groupCardsForList(
@@ -54,27 +45,6 @@ export function groupCardsForList(
       cards: groups[column],
       count: groups[column].length,
     }));
-  }
-
-  if (by === 'priority') {
-    const buckets = new Map<Priority, Card[]>();
-    for (const card of active) {
-      const bucket = buckets.get(card.priority) ?? [];
-      bucket.push(card);
-      buckets.set(card.priority, bucket);
-    }
-    return (Object.keys(PRIORITY_ORDER) as Priority[])
-      .sort((a, b) => PRIORITY_ORDER[a] - PRIORITY_ORDER[b])
-      .map((priority) => {
-        const bucket = (buckets.get(priority) ?? []).sort(byUpdatedDesc);
-        return {
-          key: `priority:${priority}`,
-          label: `priority.${priority}`,
-          cards: bucket,
-          count: bucket.length,
-        };
-      })
-      .filter((group) => group.count > 0);
   }
 
   const buckets = new Map<string, Card[]>();

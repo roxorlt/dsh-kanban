@@ -126,7 +126,7 @@ export function SessionSection({
                   <span className="kb-icon kb-session__icon" aria-hidden="true">
                     <IconSession />
                   </span>
-                  <span className="kb-session__title">
+                  <span className="kb-session__title" title={session?.title ?? id}>
                     {session?.title ?? id}
                     {isPrimary ? (
                       <span className="kb-tag kb-session__primary">{t('drawer.primarySession')}</span>
@@ -245,7 +245,8 @@ export function SessionSection({
       {embedded && createOpen ? (
         <div className="kb-session-create" role="group" aria-label={t('drawer.createSessionFormTitle')}>
           <h4 className="kb-session-create__title">{t('drawer.createSessionFormTitle')}</h4>
-          <div className="kb-form__row">
+          {/* 抽屉只有 400–520px：工作区/执行目录各占整行，避免两列把路径输入框挤到截断 */}
+          <div className="kb-form__row kb-form__row--stack">
             <label className="kb-field">
               <span className="kb-field__label">{t('drawer.createSessionWorkspace')}</span>
               <select
@@ -273,6 +274,7 @@ export function SessionSection({
                 id={cwdInputId}
                 className="kb-input"
                 value={cwd}
+                title={cwd.trim() || undefined}
                 placeholder={t('drawer.createSessionCwdPlaceholder')}
                 onChange={(event) => setCwd(event.target.value)}
               />

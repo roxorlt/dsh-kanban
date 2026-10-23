@@ -7,3 +7,4 @@ data/
 web/dist/assets/
 !web/dist/
 !web/dist/**
+.gstack/

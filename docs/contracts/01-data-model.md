@@ -53,12 +53,12 @@ interface Card {
   id: string;                    // "card-" + 8 hex
   boardId: string;
   title: string;                 // 标题，≤ 120 字
-  summary: string;               // 一句话摘要（折叠态第二行），≤ 240 字
+  summary: string;               // 摘要（折叠卡只显示前两行），≤ 600 字（v0.4 由 240 提升）
   currentAction?: string;        // 当前动作（"正在读 diff 并写评审意见"），≤ 160 字
   result?: string;               // 完成结果（done 后展示），≤ 600 字
   status: Status;
-  priority: Priority;
-  labels: string[];              // ≤ 12 个，每个 ≤ 24 字
+  priority: Priority;            // v0.9.0 起 Web UI 隐藏，API 与数据保留
+  labels: string[];              // ≤ 12 个，每个 ≤ 24 字；v0.9.0 起 Web UI 隐藏，API 与数据保留
   project?: string;              // 项目名（展示用），如 "dsh-kanban"
   workspaceId?: string;          // DSH workspace id（可选）
   cwd?: string;                  // 绝对路径（创建会话时用）
@@ -102,8 +102,9 @@ interface ApprovalQuestion {
 
 interface ApprovalAnswer {
   questionId: string;
-  optionIds: string[];           // 单选长度 1
+  optionIds: string[];           // 单选长度 1；自定义回答时为空数组
   labels: string[];
+  custom?: string;               // v0.4：自定义回答（UI 内置「其他（自行填写）」），≤ 600 字
 }
 
 interface Approval {
@@ -123,7 +124,7 @@ interface Approval {
   resolution?: {
     optionIds: string[];         // 拍平后的全部所选 option id（兼容旧 UI）
     labels: string[];
-    answers?: ApprovalAnswer[];  // v0.3：逐题答案
+    answers?: ApprovalAnswer[];  // v0.3：逐题答案；v0.4 起每题可带 custom
     comment?: string;
   };
   sessionId?: string;
@@ -208,6 +209,15 @@ interface StoreFile {
 - 用途：会话归档/暂停或 agent 交接时记录上下文；卡片详情展示；从卡片启动/续接新会话时，启动提示拼接：
   `【交接摘要】\n{summary}\n后续：{nextSteps}`。
 - 限制：不改变卡片状态；不自动清空；每次覆盖写（保留活动历史）。
+
+## 3.z 多题审批的自定义回答（v0.4）
+
+- 每题作答二选一：选中至少 1 个选项（`optionIds`），或填写自定义回答（`custom`，≤600 字）。
+- 单选题目：选项与 `custom` 互斥（同时给 → `BAD_REQUEST`）；多选题目可同时给选项与 `custom`。
+- 校验：`answers` 必须覆盖全部题目，且每题满足上述条件；否则 `BAD_REQUEST`。
+- 判定：所有题目选中的选项都是拒绝语义（danger / no / reject / deny / cancel 等）**且没有任何 custom** 时 `rejected`，否则 `approved`；只有自定义回答的多题审批一律 `approved`。
+- `resolution.optionIds/labels` 只拍平真实选项；自定义回答只存在于 `resolution.answers[].custom`，不伪造 option id。
+- 自定义回答是界面内置入口（「其他（自行填写）」），服务端不需要在 `questions[].options` 里定义它。
 
 约束：
 - `cards[].version` 单调递增；PATCH/DELETE/move 必须带 `version`（UI）或强制 `force:true`（工具可省略）。
