@@ -480,7 +480,8 @@ ul {
   color: var(--dsw-alias-state-business-primary);
 }
 
-/* 卡片内部输入框：用 inset 阴影/描边代替外扩 outline，避免压到卡片边框 */
+/* 卡片内部输入框：焦点环用负偏移 outline 画在控件内侧，
+   既不外扩压到卡片边框，也不会「border 变色 + inset 阴影」叠成两层蓝框 */
 .kb-card :is(input, textarea):focus-visible,
 .kb-card :is(input, textarea):focus {
   outline: none;
@@ -488,8 +489,8 @@ ul {
 
 .kb-card :is(.kb-input, .kb-textarea):focus-visible,
 .kb-card :is(.kb-input, .kb-textarea):focus {
-  border-color: var(--dsw-alias-state-business-primary);
-  box-shadow: inset 0 0 0 1px var(--dsw-alias-state-business-primary);
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
 }
 
 /* 快捷键帮助 */

@@ -712,10 +712,11 @@
   background: var(--dsw-alias-bg-base);
 }
 
+/* 卡片内回复是「外层描边 + 内层无边框 input」的组合控件：
+   焦点环只由外层画一圈（负偏移画在内侧，不外扩压到卡片边框） */
 .kb-card-reply:focus-within {
-  outline: none;
-  border-color: var(--dsw-alias-state-business-primary);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, transparent);
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
 }
 
 .kb-card-reply__input {
@@ -728,8 +729,12 @@
   font: var(--dsw-font-xxs-12);
 }
 
-.kb-card-reply__input:focus-visible {
+/* 内层 input 也要吃掉 / 卡片内输入框统一焦点环 / 的规则（它带 .kb-input 类），
+   否则会在外层焦点环里再叠一圈 */
+.kb-card .kb-card-reply .kb-card-reply__input:is(:focus, :focus-visible) {
   outline: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .kb-card-reply__send {

@@ -139,6 +139,18 @@
 | 自测 | Web vitest 14 文件 / 86 测试；tsc 0 error；build 成功；令牌 lint 0/0；服务端 67/67 |
 | 宿主 | `~/.dsh/profiles/desktop` 以 link 指向本仓库，重建 `web/dist` 后宿主 `/dsh-kanban/` 首页引用新产物（`index-D6pSvrZj.css` / `index-CvJIeErd.js`），刷新页面即生效 |
 
+## 1.11 v0.7.1 补记（卡片内输入框聚焦态「双层蓝框」）
+
+| 项 | 结果 |
+| --- | --- |
+| 复现 | 看板展开卡内的回复框点入后出现两层嵌套蓝色圆角框；审批面板备注框（卡片内 textarea）同样。1440px、3x DPR 截图见 `docs/assets/screens/focus-reply-before-after.png` |
+| 根因 | 通用规则 `.kb-card :is(.kb-input,.kb-textarea):focus` 同时把 `border-color` 改为业务蓝并叠加 `box-shadow: inset 0 0 0 1px` 业务蓝（两层蓝线）；回复框外层 `.kb-card-reply:focus-within` 另有一圈蓝描边 + 45% 蓝内阴影，且内层带 `.kb-input` 类的无边框 input 也命中通用规则，外层/内层各画一圈 |
+| 修复 | 卡片内输入框焦点环统一为单圈 `outline: 2px solid var(--dsw-alias-state-business-primary)` + `outline-offset: -2px`（负偏移画在控件内侧，不外扩压到卡片边框）；`.kb-card-reply:focus-within` 只留这一圈；`.kb-card .kb-card-reply .kb-card-reply__input:is(:focus,:focus-visible)` 把内层 input 的 outline/border-color/box-shadow 全部清掉 |
+| 实测（computed style） | 聚焦时回复框外层：`outline: rgb(65,118,230) solid 2px; outline-offset: -2px; box-shadow: none; border: 1px solid rgba(0,0,0,0.1)`；内层 input：`outline: none; box-shadow: none`；暗色主题同样单圈（业务蓝自动换 token 值）；失焦后外层恢复 `outline: none`。卡片内审批备注 textarea 同规则 |
+| 宿主实测 | 真实宿主 `/dsh-kanban/`（1440px）刷新后：23 张卡、4 列正常渲染，展开卡回复框聚焦仅单圈；console/page error 0 |
+| 自测 | Web vitest 14 文件 / 86 测试；tsc 0 error；build 成功且产物与已发布版本一致（`index-D6pSvrZj.css` / `index-CvJIeErd.js` 重建无 diff）；令牌 lint 0/0；服务端 67/67 |
+| 截图 | `docs/assets/screens/focus-reply-before-after.png`（回复框 before/after light+dark）、`focus-approval-note-before-after.png`（审批备注框 before/after） |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

@@ -11,6 +11,13 @@
 - 去掉 `responsive.css` 中重复的 `<720` 页脚换行规则（已上移为全局）。
 - 验证：Web vitest 14 文件 / 86 测试；tsc 0 error；build 成功；令牌 lint 0/0；服务端 67/67；证据截图见 docs/06 §1.10 与 `design/screens/web-foot-warn-*.png`。
 
+### 修复：卡片内输入框聚焦态「双层蓝框」
+
+- 根因：卡片内输入框同时命中两条焦点规则——通用 `.kb-card :is(.kb-input,.kb-textarea):focus` 把 `border-color` 改成业务蓝并叠加 `box-shadow: inset 0 0 0 1px` 业务蓝（两层蓝线）；回复框外层 `.kb-card-reply:focus-within` 又画一圈蓝描边 + 45% 蓝内阴影，外层和内侧 input 各画一圈。
+- 修复：卡片内输入框统一改为单圈 `outline: 2px solid var(--dsw-alias-state-business-primary)` + `outline-offset: -2px`（负偏移画在控件内侧，既不外扩压到卡片边框，也不会与 border 叠成两层）；卡片内回复框只由外层画焦点环，内层无边框 input 不再参与。
+- 覆盖：看板卡片内回复框、审批面板备注 textarea；亮/暗主题；鼠标点击与键盘 Tab 进入都保留焦点环；失焦恢复中性 0.5px 边框。
+- 验证：Playwright + 真实 Chrome（1440px、3x DPR）聚焦态 computed style 仅剩一圈 `outline: 2px solid`（此前是 border 变蓝 + inset 蓝阴影两层）；宿主 `/dsh-kanban/` 刷新后实测同样单圈、console 0 error；Web vitest 14 文件 / 86 测试、tsc/build、令牌 lint 0/0、服务端 67/67 全绿。证据截图 `docs/assets/screens/focus-reply-before-after.png`、`docs/assets/screens/focus-approval-note-before-after.png`，见 docs/06 §1.11。
+
 ## v0.7.0 — 2026-10-23
 
 ### 新增：新建卡片建议 + 会话关联 + 进行中自动处理
