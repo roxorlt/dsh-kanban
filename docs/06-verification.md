@@ -200,6 +200,20 @@
 | 清除 | `handoff:null` 清除并追加「清除了交接摘要」活动，卡片状态不变 |
 | 截图 | `handoff-badge.png`、`handoff-detail.png`、`handoff-drawer.png`、`handoff-prompt.png` |
 
+## 1.15 v0.10.0（原生待确认收件箱合并）
+
+| 项 | 结果 |
+| --- | --- |
+| 契约 | `docs/contracts/04-native-inbox.md`（`kanban:pending` 全量快照 + `pending.answerApproval / answerQuestion / dismiss` 三个方法 + 风险分级规则 + 降级与限制） |
+| 单元/集成 | 根 `npm test` 85/85（新增 `test/client-pending.test.mjs` 14 例：真实 `lib/client.js` + 假 `uiSession` 验证推送、过滤（`answerable=false`/`review`/`closed`）、排序、`observedAt` 稳定、倒计时重推、三方法成功与 `PENDING_NOT_FOUND` / `PENDING_UNANSWERABLE` / `PENDING_ANSWER_FAILED` / `BAD_REQUEST`、错 sessionId/key、异源、旧宿主降级）；Web vitest 17 文件 / 137 测试（新增 `nativeInbox.test.ts` 27 例） |
+| 构建 | `tsc --noEmit` 0 error；`vite build` 成功；`lint:tokens` 9 个 CSS 文件 0/0 |
+| Mock 宿主 | 真实 web 构建 + 真实 postMessage 协议：4 项收件（高/中风险工具授权、两题提问、计划审批）按风险→来源排序；允许一次后项消失；未作答提交校验提示；多题作答提交后项消失；390px 窄屏与暗色可用；Tab 可达「允许一次」；console 0 error |
+| 真实宿主（工具授权） | DSH 0.2.1-rc.2 + `deepseek-flash`，隔离 profile，Playwright 驱动 GUI：agent 以 `sandbox_permissions: danger-full-access` 调 bash → 看板出现「工具授权 / 高风险 / 会话：执行看板审批端到端验证 / 申请原因」→ 看板点「允许一次」→ 宿主 `approval/decided: allowed-once`（asked 后 0.7s）→ `tool/result` 返回 `dsh-kanban-e2e-approval` 且 `isError:false` → `turn/end completed`，收件项消失 |
+| 真实宿主（Agent 提问） | agent 调 `ask_user_question`（单选 继续/停止）→ 看板出现「Agent 提问 / 低风险」→ 收件区「回答」选「继续」并提交 → 收件项消失；会话日志 `tool/result` = `{"answers":[{"id":"continue_verify","selected":["继续"]}]}` |
+| 真实宿主（原生 composer → 看板同步） | 原生审批框点「允许一次」→ 会话日志 `approval/decided: allowed-once` 且工具成功；看板项随同一 `uiSession` 投影消失 |
+| 截图 | `design/screens/native-inbox-board.png`、`native-inbox-board-dark.png`、`native-inbox-question-modal.png`、`native-inbox-plan-modal.png`、`native-inbox-mobile.png`、`native-inbox-real-host.png`、`native-inbox-real-question*.png`、`native-inbox-real-native-composer.png`（同步 `docs/assets/screens/`） |
+| 已知限制 | 每会话只镜像宿主投影最高优先级一项；提问草稿以原生 composer 为准；看板作答不冻结宿主倒计时；未命名提问不提供取消入口；持久权限策略（always allow）不在看板提供 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

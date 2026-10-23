@@ -9,6 +9,8 @@ import { countByColumn, planCardDrop } from '../lib/grouping';
 import { DONE_PREVIEW_LIMIT } from '../lib/listGroups';
 import { useBoardWheelScroll } from '../lib/useBoardWheelScroll';
 import { KanbanCard } from './KanbanCard';
+import { NativeInbox } from './NativeInbox';
+import type { NativeInboxProps } from './NativeInbox';
 import type { CardActionHandlers, CardViewShared, Placement } from './types';
 import { IconCheckCircle, IconChevronRight, IconCircle, IconHand, IconPlus, IconSparkle } from './Icons';
 
@@ -32,6 +34,8 @@ interface BoardViewProps {
   onViewAllDone: () => void;
   filtering: boolean;
   onClearFilters: () => void;
+  /** 原生待确认收件（工具授权 / Agent 提问 / 计划审批），只出现在「待你确认」列 */
+  nativeInbox: NativeInboxProps;
 }
 
 const COLUMN_TONE: Record<ColumnId, string> = {
@@ -75,6 +79,7 @@ export function BoardView({
   onViewAllDone,
   filtering,
   onClearFilters,
+  nativeInbox,
 }: BoardViewProps) {
   const { t } = useI18n();
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -203,7 +208,8 @@ export function BoardView({
             <span>{t('column.cardCount', { count: counts[column] })}</span>
           </div>
         ) : (
-          <div className="kb-column__body" role="list" aria-label={t('column.cardCount', { count: allColumnCards.length })}>
+          <div className="kb-column__body" role="group" aria-label={t('column.cardCount', { count: allColumnCards.length })}>
+            {column === 'needs_you' ? <NativeInbox {...nativeInbox} /> : null}
             {allColumnCards.length === 0 ? (
               <div className="kb-column__empty">
                 <span className="kb-empty-icon" aria-hidden="true">
@@ -229,7 +235,7 @@ export function BoardView({
                 )}
               </div>
             ) : (
-              <>
+              <div className="kb-column__cards" role="list" aria-label={t('column.cardCount', { count: allColumnCards.length })}>
                 {isDone && isOver && !overCardId && !isSelfDrag ? (
                   <div className="kb-drop-line" aria-hidden="true" />
                 ) : null}
@@ -287,7 +293,7 @@ export function BoardView({
                   />
                 </div>
                 ))}
-              </>
+              </div>
             )}
             {hiddenDone > 0 ? (
               <button type="button" className="kb-column__more" onClick={onViewAllDone}>

@@ -1,6 +1,6 @@
 {
   "name": "dsh-kanban",
-  "version": "0.8.0",
+  "version": "0.10.0",
   "description": "DSH 看板：以卡片为控制面、以 DSH 会话为执行面的任务看板插件。",
   "license": "MIT",
   "author": "roxorlt",
@@ -39,7 +39,8 @@
       "inject": [
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-layout",
-        "@deepseek-ai/dsh-api-session-controller"
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-session"
       ]
     }
   },

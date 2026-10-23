@@ -13,6 +13,8 @@ import {
 import type { ListGroupBy } from '../lib/listGroups';
 import type { CardActionHandlers, CardViewShared } from './types';
 import { ApprovalPanel } from './ApprovalPanel';
+import { NativeInbox } from './NativeInbox';
+import type { NativeInboxProps } from './NativeInbox';
 import { MenuButton } from './MenuButton';
 import type { MenuEntry } from './MenuButton';
 import { Timeline } from './Timeline';
@@ -45,6 +47,8 @@ interface ListViewProps {
   selectedIds: ReadonlySet<string>;
   onToggleSelection: (cardId: string) => void;
   highlightedCardId: string | null;
+  /** 原生待确认收件（工具授权 / Agent 提问 / 计划审批） */
+  nativeInbox: NativeInboxProps;
 }
 
 const COLUMN_TONE: Record<ColumnId, string> = {
@@ -70,6 +74,7 @@ export function ListView({
   selectedIds,
   onToggleSelection,
   highlightedCardId,
+  nativeInbox,
 }: ListViewProps) {
   const { t } = useI18n();
   const [doneVisible, setDoneVisible] = useState(DONE_LIST_LIMIT);
@@ -105,6 +110,12 @@ export function ListView({
         <span className="kb-list__count">{t('app.cardCount', { count: cards.length })}</span>
       </div>
 
+      {groupBy !== 'status' && nativeInbox.entries.length ? (
+        <div className="kb-list__inbox">
+          <NativeInbox {...nativeInbox} />
+        </div>
+      ) : null}
+
       {groups.map((group) => {
         const isDoneStatus = groupBy === 'status' && group.key === 'status:done';
         const collapsed = isDoneStatus && !doneOpen;
@@ -139,43 +150,52 @@ export function ListView({
               ) : null}
             </header>
 
-            {collapsed ? null : group.count === 0 ? (
-              <div className="kb-list__empty">
-                {filtering ? (
-                  <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={onClearFilters}>
-                    {t('empty.filtered')} · {t('app.clearFilters')}
-                  </button>
-                ) : (
-                  t('column.empty')
-                )}
-              </div>
-            ) : (
+            {collapsed ? null : (
               <>
-                <ul className="kb-list__items">
-                  {visible.map((card) => (
-                    <ListRow
-                      key={card.id}
-                      card={card}
-                      shared={shared}
-                      actions={actions}
-                      selectionMode={selectionMode}
-                      selectionSelected={selectedIds.has(card.id)}
-                      onToggleSelection={onToggleSelection}
-                      highlighted={highlightedCardId === card.id}
-                    />
-                  ))}
-                </ul>
-                {isDoneStatus && hidden > 0 ? (
-                  <div className="kb-list__more">
-                    <button
-                      type="button"
-                      className="kb-btn kb-btn--sm kb-btn--ghost"
-                      onClick={() => setDoneVisible((current) => current + DONE_LIST_LIMIT)}
-                    >
-                      {t('list.loadMoreCount', { count: hidden })}
-                    </button>
+                {groupBy === 'status' && group.key === 'status:needs_you' ? (
+                  <div className="kb-list__inbox">
+                    <NativeInbox {...nativeInbox} />
                   </div>
                 ) : null}
+                {group.count === 0 ? (
+                  <div className="kb-list__empty">
+                    {filtering ? (
+                      <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={onClearFilters}>
+                        {t('empty.filtered')} · {t('app.clearFilters')}
+                      </button>
+                    ) : (
+                      t('column.empty')
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <ul className="kb-list__items">
+                      {visible.map((card) => (
+                        <ListRow
+                          key={card.id}
+                          card={card}
+                          shared={shared}
+                          actions={actions}
+                          selectionMode={selectionMode}
+                          selectionSelected={selectedIds.has(card.id)}
+                          onToggleSelection={onToggleSelection}
+                          highlighted={highlightedCardId === card.id}
+                        />
+                      ))}
+                    </ul>
+                    {isDoneStatus && hidden > 0 ? (
+                      <div className="kb-list__more">
+                        <button
+                          type="button"
+                          className="kb-btn kb-btn--sm kb-btn--ghost"
+                          onClick={() => setDoneVisible((current) => current + DONE_LIST_LIMIT)}
+                        >
+                          {t('list.loadMoreCount', { count: hidden })}
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </>
             )}
           </section>

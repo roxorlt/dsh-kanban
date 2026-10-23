@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.10.0 — 2026-10-23
+
+### 新增：原生待确认收件箱合并（M2「审批收件箱合并」）
+
+- 目标：把 DSH 原生的**工具授权**（沙箱越权 / 工具 `ask`）、**Agent 提问**（`ask_user_question`）与**计划审批**（`exit_plan_mode` 的 plan-review）合并进看板「待你确认」列，与业务审批卡片同屏，区分**来源**与**风险等级**，并可在看板内直接作答。
+- 数据来源：客户端插件注入宿主公开服务 `uiSession`，只读 `sessionStatus.pendingInteraction` 投影（每会话最高优先级一项）；不抢占 `approval/request` waterfall，不复制状态、不新增审计路径。
+- 客户端桥（契约 04）：新增 `kanban:pending` 全量快照推送（attach / `kanban:ready` 各推一次，`uiSession` 变化与提问倒计时 250ms 节流），新增 `pending.answerApproval` / `pending.answerQuestion` / `pending.dismiss` 三个白名单方法；作答直接调用宿主 pending 对象的 `answer()/dismiss()`，与原生 composer 共用同一条决定与审计，先答先得。
+- Web：`lib/nativeInbox.ts` 纯函数负责风险三档（`danger-full-access`→高、`workspace-write`→中、变更/执行类工具→中、其余→低；提问=低（信息确认）、计划审批=中（批准后执行））、宿主 `displayReason` 多语言解析、计划审批派生（对齐宿主 `planReviewOf` 条件）、会话↔卡片关联与排序；`NativeInbox` 渲染来源徽标 / 风险 chip（悬浮显示分级依据）/ 工具名 / 申请原因 / 会话名 / 关联卡片 / 倒计时 / 允许一次·拒绝·回答·审阅计划·打开会话；`NativeAnswerModal` 支持多题（单选、多选、自定义文本、逐题跳过）与计划审批（同意执行 / 要求修改）。
+- 「待你确认」列与列表视图接入收件区；列计数仍为卡片数、收件区单独计数，工具栏「待你确认」总数包含原生项；收件区不参与卡片拖拽 / 多选 / 批量操作。
+- 降级：旧版宿主没有 `uiSession` 服务时父页面不推送、收件区不渲染、业务审批不受影响；独立预览模式不渲染。
+- 已知限制：每会话只镜像宿主投影的最高优先级一项（与原生 composer 一致）；提问草稿以原生 composer 为准；看板作答不冻结宿主倒计时；未命名提问不提供「取消请求」入口；原生持久策略（always allow）不在看板提供。
+
+### 验证
+
+- 单元/集成：根 `npm test` 85/85（新增 `test/client-pending.test.mjs` 14 例，用真实 `lib/client.js` + 假宿主验证推送/过滤/排序/作答/陈旧项/错误码）；Web vitest 17 文件 / 137 测试（新增 `nativeInbox.test.ts` 27 例）；`tsc` 0 error；`vite build` 成功；令牌 lint 9 文件 0 error / 0 warning。
+- Mock 宿主（真实 web 构建 + 真实 postMessage 协议）：4 项（高风险工具授权 / 中风险工具授权 / 两题 Agent 提问 / 计划审批）按风险→来源排序渲染；允许一次后项消失；未作答提交给出校验提示；多题作答提交后项消失；窄屏 390px 与暗色主题可用；Tab 焦点可到「允许一次」；console 0 error。截图 `design/screens/native-inbox-*.png`。
+- **真实宿主 DSH 0.2.1-rc.2 端到端**（隔离 profile + 真实模型 deepseek-flash，Playwright 驱动 GUI）：
+  - 工具授权：让 agent 以 `sandbox_permissions: danger-full-access` 调 bash → 看板收件区出现「工具授权 / 高风险 / 会话：执行看板审批端到端验证 / 申请原因」；点「允许一次」→ 宿主 `approval/decided: allowed-once`（asked 后 0.7s）→ bash 正常执行并返回标记（会话日志 `tool/result` 非错误）→ 收件项消失。截图 `native-inbox-real-host.png`、`native-inbox-real-allowed.png`。
+  - Agent 提问：agent 调 `ask_user_question`（单选「继续/停止」）→ 看板出现「Agent 提问 / 低风险」；在收件区点「回答」→ 选择「继续」→ 提交后收件项消失；会话日志 `tool/result` 为 `{"answers":[{"id":"continue_verify","selected":["继续"]}]}`（答案经宿主正确送达）。截图 `native-inbox-real-question*.png`。
+  - 原生 composer 作答：在同一真实宿主里从原生审批框点「允许一次」→ 会话日志 `approval/decided: allowed-once` 且工具成功；看板项随同一 `uiSession` 投影消失（该项所在会话在本轮后被清理，收件区归零的对照见 `native-inbox-real-allowed.png`）。
+  - 期间修复：跳过按钮在弹窗里被拉伸成整行（`align-self:flex-start`）；`kb-column__body` 内卡片列表补 `role=list` 语义容器。
+- 复跑：`docs/contracts/04-native-inbox.md` §8 给出验收对照；证据截图同步到 `docs/assets/screens/`。
+
 ## v0.8.0 — 2026-10-23
 
 ### 新增：handoff 交接摘要字段（M2）

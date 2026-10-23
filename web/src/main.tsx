@@ -10,6 +10,7 @@ import './styles/board.css';
 import './styles/list.css';
 import './styles/drawer.css';
 import './styles/modal.css';
+import './styles/inbox.css';
 import './styles/responsive.css';
 
 bridge.start();

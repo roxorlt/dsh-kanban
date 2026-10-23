@@ -128,6 +128,14 @@
   padding: 0 10px 4px;
 }
 
+/* 列体内部的卡片列表（与原生收件区并列，保持 role=list 语义） */
+.kb-column__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
 .kb-column__empty {
   display: flex;
   flex-direction: column;
