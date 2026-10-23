@@ -117,6 +117,17 @@
 | headless Chrome | 线上看板 24/25（1 项因线上无待审批卡跳过），隔离种子数据审批面板 10/10；console 0 error |
 | 设计 | docs/03 §2.3、§7.4、§7.8 同步触发区域与快捷键 |
 
+## 1.9 v0.7.0（新建卡片建议 + 会话关联 + 进行中自动处理）
+
+| 项 | 结果 |
+| --- | --- |
+| 建议数据 | 真实宿主 `workspaces.list` 返回 1 个工作区（title/path）；新建表单显示工作区、cwd 推荐、项目建议（当前工作区 > 历史卡片）、已有会话列表（推荐/运行中/目录） |
+| 进行中新建 | 1440px：选工作区自动回填 cwd + project，默认「新建会话」；创建后卡片 `status=running`、`workspaceId/cwd/project` 写入、`sessionIds` 自动绑定；toast「卡片已创建，会话已启动」；会话内 agent 实际开始处理并回写 currentAction/工具数 |
+| 详情补建 | 无会话的进行中卡：抽屉显示「进行中但未关联会话」；点「新建会话」出现工作区/cwd 建议表单；选择工作区后创建 → 新 sessionId 绑定 + 启动提示 → agent 开始处理；console 0 error |
+| 表单 CTA | 进行中 + 新建 →「创建并启动」；进行中 + 已有会话 →「创建并绑定」；其他列 →「创建」 |
+| 自测 | 服务端 67/67；Web 14 文件 / 86 测试；tsc/build/令牌 lint 全绿 |
+| 截图 | `newcard-suggest.png`、`newcard-suggest-design.png`、`newcard-created-running.png`、`newcard-session-agent.png`、`drawer-create-session.png`、`drawer-create-session-design.png` |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

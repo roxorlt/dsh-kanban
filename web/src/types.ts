@@ -175,6 +175,17 @@ export interface SessionRow {
   running: boolean;
   updatedAt: number;
   workspaceId?: string;
+  /** DSH 会话工作目录；用于新建卡片/建会话时的建议与回填。 */
+  cwd?: string;
+}
+
+/** DSH 左侧工作区（一个目录 + 该目录下的会话）。 */
+export interface WorkspaceRow {
+  workspaceId: string;
+  title: string;
+  path: string;
+  sessionIds: string[];
+  updatedAt?: number;
 }
 
 export interface HostInfo {

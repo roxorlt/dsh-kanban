@@ -1,12 +1,22 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { Card, ColumnId, Priority, Status } from '../types';
+import type { Card, ColumnId, Priority, SessionRow, Status, WorkspaceRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { COLUMNS, COLUMN_OF_STATUS, STATUS_OF_COLUMN } from '../lib/status';
+import {
+  pathBasename,
+  recommendedSession,
+  suggestCwds,
+  suggestProjects,
+  suggestSessions,
+  workspaceDefaults,
+} from '../lib/suggestions';
+import type { NewCardSessionKind } from '../lib/createCardSession';
+import { validateNewCardSession } from '../lib/createCardSession';
 import { ConfirmDialog } from './ConfirmDialog';
 import { Modal } from './Modal';
-import { IconChevronDown } from './Icons';
+import { SuggestionChips } from './SuggestionChips';
 
 export interface CardFormValues {
   title: string;
@@ -15,7 +25,10 @@ export interface CardFormValues {
   labels: string[];
   priority: Priority;
   status: Status;
+  workspaceId: string;
   cwd: string;
+  /** 新建卡片时的会话选择（编辑模式忽略） */
+  session: { kind: NewCardSessionKind; sessionId?: string };
 }
 
 interface CardFormModalProps {
@@ -24,6 +37,10 @@ interface CardFormModalProps {
   defaultColumn?: ColumnId;
   projects: string[];
   labels: string[];
+  workspaces: WorkspaceRow[];
+  sessions: SessionRow[];
+  cards: Card[];
+  embedded: boolean;
   busy: boolean;
   error: string | null;
   onSubmit: (values: CardFormValues) => void;
@@ -40,13 +57,21 @@ function parseLabels(input: string): string[] {
     .slice(0, 12);
 }
 
-/** 新建 / 编辑卡片表单；cwd 收在「更多」里，脏草稿关闭需二次确认。 */
+/**
+ * 新建 / 编辑卡片表单。
+ * 新建时主表单含：工作区（自动回填 cwd/project）、执行目录（带可干预建议 chips）、项目建议、会话选择；
+ * 进行中卡片必须新建或选择会话（独立预览降级为只建卡）。
+ */
 export function CardFormModal({
   mode,
   initial,
   defaultColumn = 'backlog',
   projects,
   labels,
+  workspaces,
+  sessions,
+  cards,
+  embedded,
   busy,
   error,
   onSubmit,
@@ -60,10 +85,17 @@ export function CardFormModal({
   const [labelsInput, setLabelsInput] = useState(initial?.labels.join(', ') ?? '');
   const [priority, setPriority] = useState<Priority>(initial?.priority ?? 'none');
   const [column, setColumn] = useState<ColumnId>(initialColumn);
+  const [workspaceId, setWorkspaceId] = useState(initial?.workspaceId ?? '');
   const [cwd, setCwd] = useState(initial?.cwd ?? '');
-  const [moreOpen, setMoreOpen] = useState(Boolean(initial?.cwd));
+  const [sessionKind, setSessionKind] = useState<NewCardSessionKind>(
+    mode === 'create' && initialColumn === 'running' ? 'new' : 'none',
+  );
+  const [sessionId, setSessionId] = useState('');
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [discardOpen, setDiscardOpen] = useState(false);
+
+  const running = statusOfColumn(column) === 'running';
 
   const baseline = {
     title: initial?.title ?? '',
@@ -72,7 +104,10 @@ export function CardFormModal({
     labels: initial?.labels.join(', ') ?? '',
     priority: initial?.priority ?? 'none',
     column: initialColumn,
+    workspaceId: initial?.workspaceId ?? '',
     cwd: initial?.cwd ?? '',
+    sessionKind: mode === 'create' && initialColumn === 'running' ? 'new' : 'none',
+    sessionId: '',
   };
   const dirty =
     title !== baseline.title ||
@@ -81,12 +116,57 @@ export function CardFormModal({
     labelsInput !== baseline.labels ||
     priority !== baseline.priority ||
     column !== baseline.column ||
-    cwd !== baseline.cwd;
+    workspaceId !== baseline.workspaceId ||
+    cwd !== baseline.cwd ||
+    sessionKind !== baseline.sessionKind ||
+    sessionId !== baseline.sessionId;
+
+  const projectSuggestions = useMemo(
+    () =>
+      suggestProjects({
+        workspaces,
+        sessions,
+        cards,
+        selectedWorkspaceId: workspaceId || null,
+      }),
+    [cards, sessions, workspaceId, workspaces],
+  );
+  const cwdSuggestions = useMemo(
+    () =>
+      suggestCwds({
+        workspaces,
+        sessions,
+        cards,
+        selectedWorkspaceId: workspaceId || null,
+      }),
+    [cards, sessions, workspaceId, workspaces],
+  );
+  const sessionSuggestions = useMemo(
+    () => suggestSessions({ sessions, cwd, workspaceId, project, title }),
+    [cwd, project, sessions, title, workspaceId],
+  );
+  const topSession = recommendedSession(sessionSuggestions);
 
   const requestClose = () => {
     if (busy) return;
     if (dirty) setDiscardOpen(true);
     else onClose();
+  };
+
+  const handleWorkspaceChange = (nextId: string) => {
+    setWorkspaceId(nextId);
+    const workspace = workspaces.find((item) => item.workspaceId === nextId);
+    const defaults = workspaceDefaults(workspace);
+    if (defaults.cwd) setCwd(defaults.cwd);
+    if (!project.trim() && defaults.project) setProject(defaults.project);
+  };
+
+  const handleColumnChange = (nextColumn: ColumnId) => {
+    setColumn(nextColumn);
+    setSessionError(null);
+    if (statusOfColumn(nextColumn) === 'running') {
+      setSessionKind((current) => (current === 'none' ? 'new' : current));
+    }
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -96,16 +176,46 @@ export function CardFormModal({
       return;
     }
     setTitleError(null);
+    if (mode === 'create') {
+      const validation = validateNewCardSession({ running, kind: sessionKind, embedded });
+      if (validation === 'running-needs-session') {
+        setSessionError(t('modal.sessionNeedChoice'));
+        return;
+      }
+      if (embedded && sessionKind === 'existing' && !sessionId) {
+        setSessionError(t('modal.sessionExistingEmpty'));
+        return;
+      }
+    }
+    setSessionError(null);
     onSubmit({
       title: title.trim(),
       summary: summary.trim(),
       project: project.trim(),
       labels: parseLabels(labelsInput),
       priority,
-      status: STATUS_OF_COLUMN[column],
+      status: statusOfColumn(column),
+      workspaceId: workspaceId.trim(),
       cwd: cwd.trim(),
+      session: embedded && mode === 'create' ? { kind: sessionKind, ...(sessionId ? { sessionId } : {}) } : { kind: 'none' },
     });
   };
+
+  const orderedSessions = useMemo(() => {
+    const seen = new Set<string>();
+    const ordered: SessionRow[] = [];
+    for (const item of sessionSuggestions) {
+      if (seen.has(item.session.id)) continue;
+      seen.add(item.session.id);
+      ordered.push(item.session);
+    }
+    for (const session of sessions) {
+      if (seen.has(session.id)) continue;
+      seen.add(session.id);
+      ordered.push(session);
+    }
+    return ordered;
+  }, [sessionSuggestions, sessions]);
 
   return (
     <>
@@ -120,7 +230,15 @@ export function CardFormModal({
               {t('modal.cancel')}
             </button>
             <button type="submit" form="kb-card-form" className="kb-btn kb-btn--primary" disabled={busy}>
-              {busy ? t('modal.saving') : mode === 'create' ? t('modal.create') : t('modal.save')}
+              {busy
+                ? t('modal.saving')
+                : mode === 'edit'
+                  ? t('modal.save')
+                  : running
+                    ? sessionKind === 'existing'
+                      ? t('modal.createAndBind')
+                      : t('modal.createAndStart')
+                    : t('modal.create')}
             </button>
           </>
         }
@@ -159,6 +277,43 @@ export function CardFormModal({
 
           <div className="kb-form__row">
             <label className="kb-field">
+              <span className="kb-field__label">{t('modal.workspaceLabel')}</span>
+              <select
+                className="kb-select"
+                value={workspaceId}
+                onChange={(event) => handleWorkspaceChange(event.target.value)}
+              >
+                <option value="">{t('modal.workspaceNone')}</option>
+                {workspaces.map((workspace) => (
+                  <option key={workspace.workspaceId} value={workspace.workspaceId}>
+                    {workspace.title}
+                    {workspace.path ? ` · ${workspace.path}` : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="kb-field__note">{t('modal.workspaceHint')}</span>
+            </label>
+
+            <label className="kb-field">
+              <span className="kb-field__label">{t('modal.cwdLabel')}</span>
+              <input
+                className="kb-input"
+                value={cwd}
+                placeholder={t('modal.cwdPlaceholder')}
+                onChange={(event) => setCwd(event.target.value)}
+              />
+              <SuggestionChips
+                id="kb-cwd-suggestions"
+                label={t('modal.cwdSuggestions')}
+                items={cwdSuggestions}
+                value={cwd}
+                onPick={(value) => setCwd(value)}
+              />
+            </label>
+          </div>
+
+          <div className="kb-form__row">
+            <label className="kb-field">
               <span className="kb-field__label">{t('modal.projectLabel')}</span>
               <input
                 className="kb-input"
@@ -169,10 +324,22 @@ export function CardFormModal({
                 onChange={(event) => setProject(event.target.value)}
               />
               <datalist id="kb-project-options">
-                {projects.map((item) => (
-                  <option key={item} value={item} />
+                {projectSuggestions.map((item) => (
+                  <option key={item.value} value={item.value} />
                 ))}
+                {[...new Set(projects.filter((item) => !projectSuggestions.some((entry) => entry.value === item)))].map(
+                  (item) => (
+                    <option key={item} value={item} />
+                  ),
+                )}
               </datalist>
+              <SuggestionChips
+                id="kb-project-suggestions"
+                label={t('modal.projectSuggestions')}
+                items={projectSuggestions}
+                value={project}
+                onPick={(value) => setProject(value)}
+              />
               <span className="kb-field__note">{t('modal.projectHint')}</span>
             </label>
             <label className="kb-field">
@@ -194,7 +361,11 @@ export function CardFormModal({
           <div className="kb-form__row">
             <label className="kb-field">
               <span className="kb-field__label">{t('modal.columnLabel')}</span>
-              <select className="kb-select" value={column} onChange={(event) => setColumn(event.target.value as ColumnId)}>
+              <select
+                className="kb-select"
+                value={column}
+                onChange={(event) => handleColumnChange(event.target.value as ColumnId)}
+              >
                 {COLUMNS.map((item) => (
                   <option key={item} value={item}>
                     {t(`column.${item}` as I18nKey)}
@@ -219,31 +390,99 @@ export function CardFormModal({
             </label>
           </div>
 
-          <div className="kb-form__more">
-            <button
-              type="button"
-              className="kb-form__more-toggle"
-              aria-expanded={moreOpen}
-              onClick={() => setMoreOpen((current) => !current)}
-            >
-              <span className="kb-icon kb-form__more-caret" aria-hidden="true">
-                <IconChevronDown />
-              </span>
-              {t('modal.more')}
-            </button>
-            {moreOpen ? (
-              <label className="kb-field">
-                <span className="kb-field__label">{t('modal.cwdLabel')}</span>
-                <input
-                  className="kb-input"
-                  value={cwd}
-                  placeholder={t('modal.cwdPlaceholder')}
-                  onChange={(event) => setCwd(event.target.value)}
-                />
-                <span className="kb-field__note">{t('modal.cwdHint')}</span>
-              </label>
-            ) : null}
-          </div>
+          {mode === 'create' ? (
+            <fieldset className="kb-field kb-field--full kb-session-choice">
+              <legend className="kb-field__label">{t('modal.sessionLabel')}</legend>
+              {!embedded ? (
+                <p className="kb-field__note">{t('modal.sessionStandaloneHint')}</p>
+              ) : (
+                <>
+                  <div className="kb-choice-row">
+                    <label className={`kb-choice${sessionKind === 'none' ? ' kb-choice--on' : ''}`}>
+                      <input
+                        type="radio"
+                        name="kb-session-kind"
+                        checked={sessionKind === 'none'}
+                        disabled={running}
+                        onChange={() => {
+                          setSessionKind('none');
+                          setSessionError(null);
+                        }}
+                      />
+                      <span>{t('modal.sessionNone')}</span>
+                    </label>
+                    <label className={`kb-choice${sessionKind === 'new' ? ' kb-choice--on' : ''}`}>
+                      <input
+                        type="radio"
+                        name="kb-session-kind"
+                        checked={sessionKind === 'new'}
+                        onChange={() => {
+                          setSessionKind('new');
+                          setSessionError(null);
+                        }}
+                      />
+                      <span>{t('modal.sessionNew')}</span>
+                    </label>
+                    <label className={`kb-choice${sessionKind === 'existing' ? ' kb-choice--on' : ''}`}>
+                      <input
+                        type="radio"
+                        name="kb-session-kind"
+                        checked={sessionKind === 'existing'}
+                        onChange={() => {
+                          setSessionKind('existing');
+                          setSessionError(null);
+                          if (!sessionId) {
+                            const first = topSession?.session.id ?? '';
+                            setSessionId(first);
+                          }
+                        }}
+                      />
+                      <span>{t('modal.sessionExisting')}</span>
+                    </label>
+                  </div>
+                  {running ? <p className="kb-field__note">{t('modal.sessionRunningHint')}</p> : null}
+                  {sessionKind === 'existing' ? (
+                    <div className="kb-session-choice__existing">
+                      <select
+                        className="kb-select"
+                        value={sessionId}
+                        aria-label={t('modal.sessionExisting')}
+                        onChange={(event) => setSessionId(event.target.value)}
+                      >
+                        <option value="" disabled>
+                          {orderedSessions.length ? t('drawer.selectSession') : t('modal.sessionExistingEmpty')}
+                        </option>
+                        {orderedSessions.map((session) => {
+                          const recommended = topSession?.session.id === session.id;
+                          const meta = [pathBasename(session.cwd), session.running ? t('modal.sessionRunningTag') : '']
+                            .filter(Boolean)
+                            .join(' · ');
+                          return (
+                            <option key={session.id} value={session.id}>
+                              {session.title}
+                              {meta ? ` · ${meta}` : ''}
+                              {recommended ? ` · ${t('modal.recommended')}` : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      {topSession ? (
+                        <span className="kb-field__note">
+                          <span className="kb-suggest__badge">{t('modal.recommended')}</span>{' '}
+                          {topSession.session.title}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {sessionError ? (
+                    <span className="kb-field__hint" role="alert">
+                      {sessionError}
+                    </span>
+                  ) : null}
+                </>
+              )}
+            </fieldset>
+          ) : null}
 
           {error ? (
             <p className="kb-form__error" role="alert">
@@ -268,4 +507,8 @@ export function CardFormModal({
       ) : null}
     </>
   );
+}
+
+function statusOfColumn(column: ColumnId): Status {
+  return STATUS_OF_COLUMN[column];
 }

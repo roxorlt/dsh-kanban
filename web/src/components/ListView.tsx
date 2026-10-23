@@ -333,6 +333,11 @@ function ListRow({
             </span>
             {card.metadata.toolCalls}
           </span>
+          {card.status === 'running' && !card.sessionIds.length ? (
+            <span className="kb-list__session-warn" title={t('drawer.runningNoSessionWarn')}>
+              {t('card.noSessionWarn')}
+            </span>
+          ) : null}
           {pendingApproval ? <span className="kb-pill kb-pill--warn">{t('card.pendingApproval')}</span> : null}
           {!selectionMode ? (
             <>

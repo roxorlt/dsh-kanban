@@ -559,3 +559,44 @@
   flex: none;
   color: var(--dsw-alias-label-caption);
 }
+
+
+/* ------------------------------------------------- 进行中未绑定/内联新建会话（v1.2） */
+.kb-session__warn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-session__warn .kb-icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.kb-session-create {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kb-session-create__title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-session-create__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}

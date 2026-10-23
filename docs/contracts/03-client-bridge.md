@@ -30,7 +30,8 @@ type ParentResponse =
 | method | params | data | 说明 |
 | --- | --- | --- | --- |
 | `app.info` | – | `{locale:'zh'|'en', themeMode:'light'|'dark', dshVersion?:string, panelVisible:boolean}` | 启动握手后调用 |
-| `sessions.list` | – | `{sessions: SessionRow[], current: string|null}` | 供卡片绑定会话选择器 |
+| `sessions.list` | – | `{sessions: SessionRow[], current: string|null}` | 供卡片绑定会话选择器；`SessionRow` 含 `cwd`（v0.7） |
+| `workspaces.list` | – | `{workspaces: WorkspaceRow[]}` | v0.7：DSH 左侧工作区（`workspaceId/title/path/sessionIds`），用于新建卡片的项目/cwd/会话建议与回填 |
 | `sessions.refresh` | – | `{sessions, current}` | 手动刷新 |
 | `session.open` | `{sessionId}` | `{ok:true}` | 选中会话并切到对话面板（父页面调 `ctx.layout.selectPanel(null)`） |
 | `session.create` | `{cwd?, workspaceId?, title?}` | `{sessionId}` | 新建会话（不自动打开） |
@@ -40,7 +41,9 @@ type ParentResponse =
 | `panel.select` | `{panel:'kanban'|'conversation'}` | `{ok:true}` | 切换主面板 |
 | `toast` | `{text, tone?:'info'|'success'|'error'}` | `{ok:true}` | 可选：让父页面用 DSH 风格提示；MVP 允许 iframe 自绘 |
 
-`SessionRow`：`{ id: string; title: string; running: boolean; updatedAt: number; workspaceId?: string }`。
+`SessionRow`：`{ id: string; title: string; running: boolean; updatedAt: number; workspaceId?: string; cwd?: string }`。
+
+`WorkspaceRow`：`{ workspaceId: string; title: string; path: string; sessionIds: string[]; updatedAt?: number }`。
 
 ## 3. 父页面 → iframe
 

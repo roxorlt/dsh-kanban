@@ -373,6 +373,11 @@ export function KanbanCard({
           <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
           {t(statusKey)}
           {elapsed > 0 ? <span className="kb-foot-elapsed"> · {formatDuration(elapsed, lang)}</span> : null}
+          {card.status === 'running' && !card.sessionIds.length ? (
+            <span className="kb-foot-warn" title={t('drawer.runningNoSessionWarn')}>
+              {t('card.noSessionWarn')}
+            </span>
+          ) : null}
         </span>
         {canStart && !selectionMode ? (
           <button

@@ -1,11 +1,22 @@
-import { useId } from 'react';
-import type { Card, SessionRow } from '../types';
+import { useId, useMemo, useState } from 'react';
+import type { Card, SessionRow, WorkspaceRow } from '../types';
 import { useI18n } from '../i18n';
-import { IconOpen, IconPlus, IconSession } from './Icons';
+import { suggestCwds } from '../lib/suggestions';
+import { SuggestionChips } from './SuggestionChips';
+import { IconAlert, IconOpen, IconPlus, IconSession } from './Icons';
+
+export interface CreateSessionOptions {
+  workspaceId?: string;
+  cwd: string;
+  start: boolean;
+}
 
 interface SessionSectionProps {
   card: Card;
   sessions: SessionRow[];
+  workspaces: WorkspaceRow[];
+  /** 用于 cwd 建议的看板卡片 */
+  cards: Card[];
   embedded: boolean;
   busy?: boolean;
   /** 回复/审批的目标会话（默认主会话） */
@@ -15,16 +26,19 @@ interface SessionSectionProps {
   onBind: (sessionId: string) => void;
   onUnbind: (sessionId: string) => void;
   onSetPrimary: (sessionId: string) => void;
-  onCreateSession: () => void;
+  onCreateSession: (card: Card, options: CreateSessionOptions) => void;
 }
 
 /**
  * 多会话绑定：列出卡片会话、主会话徽标、设为主会话、解绑、打开；
  * >1 个会话时提供「回复与审批同步到」目标选择。
+ * 无会话进行中卡片显示警示；「新建会话」先展开内联表单选工作区/目录。
  */
 export function SessionSection({
   card,
   sessions,
+  workspaces,
+  cards,
   embedded,
   busy,
   targetSessionId,
@@ -38,9 +52,22 @@ export function SessionSection({
   const { t } = useI18n();
   const selectId = useId();
   const targetGroup = useId();
+  const workspaceSelectId = useId();
+  const cwdInputId = useId();
   const byId = new Map(sessions.map((session) => [session.id, session]));
   const bound = card.sessionIds.map((id) => ({ id, session: byId.get(id) }));
   const available = sessions.filter((session) => !card.sessionIds.includes(session.id));
+  const runningWithoutSession = card.status === 'running' && bound.length === 0;
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [workspaceId, setWorkspaceId] = useState(card.workspaceId ?? '');
+  const [cwd, setCwd] = useState(card.cwd ?? '');
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const cwdSuggestions = useMemo(
+    () => suggestCwds({ workspaces, sessions, cards, selectedWorkspaceId: workspaceId || null }),
+    [cards, sessions, workspaceId, workspaces],
+  );
 
   if (!bound.length && !embedded) {
     return (
@@ -51,8 +78,39 @@ export function SessionSection({
     );
   }
 
+  const openCreateForm = () => {
+    const selected = workspaces.find((workspace) => workspace.workspaceId === workspaceId) ?? workspaces[0];
+    setWorkspaceId(selected?.workspaceId ?? '');
+    setCwd((current) => current || card.cwd || selected?.path || '');
+    setCreateError(null);
+    setCreateOpen(true);
+  };
+
+  const submitCreate = () => {
+    if (!cwd.trim() && !workspaceId) {
+      setCreateError(t('drawer.createSessionNeedCwd'));
+      return;
+    }
+    setCreateError(null);
+    setCreateOpen(false);
+    onCreateSession(card, {
+      ...(workspaceId ? { workspaceId } : {}),
+      cwd: cwd.trim(),
+      start: card.status === 'running',
+    });
+  };
+
   return (
     <div className="kb-session">
+      {runningWithoutSession ? (
+        <p className="kb-session__warn" role="status">
+          <span className="kb-icon" aria-hidden="true">
+            <IconAlert />
+          </span>
+          {t('drawer.runningNoSessionWarn')}
+        </p>
+      ) : null}
+
       {bound.length ? (
         <>
           <p className="kb-session__summary">
@@ -172,12 +230,74 @@ export function SessionSection({
               type="button"
               className="kb-btn kb-btn--sm kb-btn--outline kb-session__create"
               disabled={busy}
-              onClick={onCreateSession}
+              onClick={() => (createOpen ? setCreateOpen(false) : openCreateForm())}
+              aria-expanded={createOpen}
             >
               <span className="kb-icon" aria-hidden="true">
                 <IconPlus />
               </span>
-              {t('drawer.createSession')}
+              {createOpen ? t('drawer.createSessionCancel') : t('drawer.createSession')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {embedded && createOpen ? (
+        <div className="kb-session-create" role="group" aria-label={t('drawer.createSessionFormTitle')}>
+          <h4 className="kb-session-create__title">{t('drawer.createSessionFormTitle')}</h4>
+          <div className="kb-form__row">
+            <label className="kb-field">
+              <span className="kb-field__label">{t('drawer.createSessionWorkspace')}</span>
+              <select
+                id={workspaceSelectId}
+                className="kb-select"
+                value={workspaceId}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setWorkspaceId(next);
+                  const workspace = workspaces.find((item) => item.workspaceId === next);
+                  if (workspace?.path) setCwd(workspace.path);
+                }}
+              >
+                <option value="">{t('modal.workspaceNone')}</option>
+                {workspaces.map((workspace) => (
+                  <option key={workspace.workspaceId} value={workspace.workspaceId}>
+                    {workspace.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="kb-field">
+              <span className="kb-field__label">{t('drawer.createSessionCwd')}</span>
+              <input
+                id={cwdInputId}
+                className="kb-input"
+                value={cwd}
+                placeholder={t('drawer.createSessionCwdPlaceholder')}
+                onChange={(event) => setCwd(event.target.value)}
+              />
+              <SuggestionChips
+                id="kb-session-cwd-suggestions"
+                label={t('modal.cwdSuggestions')}
+                items={cwdSuggestions}
+                value={cwd}
+                onPick={(value) => setCwd(value)}
+              />
+            </label>
+          </div>
+          {createError ? (
+            <p className="kb-field__hint" role="alert">
+              {createError}
+            </p>
+          ) : null}
+          <div className="kb-session-create__actions">
+            <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => setCreateOpen(false)}>
+              {t('drawer.createSessionCancel')}
+            </button>
+            <button type="button" className="kb-btn kb-btn--sm kb-btn--primary" disabled={busy} onClick={submitCreate}>
+              {card.status === 'running'
+                ? t('drawer.createSessionAndStart')
+                : t('drawer.createSessionAndBind')}
             </button>
           </div>
         </div>

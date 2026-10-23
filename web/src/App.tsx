@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
-import type { Approval, Board, BoardSummary, Card, ColumnId, SessionRow } from './types';
+import type { Approval, Board, BoardSummary, Card, ColumnId, SessionRow, WorkspaceRow } from './types';
 import { KanbanApiError, api } from './api';
 import { bridge, nextThemePreference, useBridgeState } from './bridge';
 import { batchCards } from './api';
@@ -17,7 +17,8 @@ import {
 import type { SelectionState } from './lib/selection';
 import { SelectionBar } from './components/SelectionBar';
 import { formatApprovalSessionText } from './lib/approvalQuestions';
-import { shouldPromptStartAfterReply, startCardFlow } from './lib/startCard';
+import { buildStartPrompt, shouldPromptStartAfterReply, startCardFlow } from './lib/startCard';
+import { setupNewCardSession } from './lib/createCardSession';
 import type { HostInfo } from './types';
 import { I18nContext, readStoredLang, resolveLang, storeLang, translate } from './i18n';
 import type { I18nKey, Lang, TranslateVars } from './i18n';
@@ -272,8 +273,22 @@ export function App() {
 
   // ------------------------------------------------------------------ 会话 / 宿主
   const [fallbackSessions, setFallbackSessions] = useState<SessionRow[]>([]);
-  useEffect(() => {
+  const [workspaces, setWorkspaces] = useState<WorkspaceRow[]>([]);
+  const refreshWorkspaces = useCallback(async () => {
     if (!embedded) return;
+    try {
+      const data = await bridge.request('workspaces.list');
+      setWorkspaces(data.workspaces ?? []);
+    } catch {
+      /* 宿主不支持 workspaces.list 时保持空建议 */
+    }
+  }, [embedded]);
+
+  useEffect(() => {
+    if (!embedded) {
+      setWorkspaces([]);
+      return;
+    }
     let cancelled = false;
     bridge
       .request('app.info')
@@ -287,10 +302,11 @@ export function App() {
         if (!cancelled) setFallbackSessions(data.sessions ?? []);
       })
       .catch(() => undefined);
+    void refreshWorkspaces();
     return () => {
       cancelled = true;
     };
-  }, [embedded]);
+  }, [embedded, refreshWorkspaces]);
 
   const sessions = bridgeState.sessions.length ? bridgeState.sessions : fallbackSessions;
 
@@ -768,22 +784,34 @@ export function App() {
     [notifyToast, t],
   );
 
+  /** 详情内补建会话：先选工作区/目录；进行中会话创建后发启动提示。 */
   const handleCreateSession = useCallback(
-    async (card: Card) => {
+    async (card: Card, options: { workspaceId?: string; cwd: string; start: boolean }) => {
+      if (!embedded) {
+        notifyToast(t('drawer.createSessionStandalone'), 'info');
+        return;
+      }
       try {
         const created = await bridge.request('session.create', {
-          ...(card.cwd ? { cwd: card.cwd } : {}),
-          ...(card.workspaceId ? { workspaceId: card.workspaceId } : {}),
+          ...(options.cwd.trim() ? { cwd: options.cwd.trim() } : {}),
+          ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
           title: card.title,
         });
         await api.bindSession(card.id, created.sessionId);
-        notifyToast(t('toast.sessionBound'), 'success');
+        if (options.start) {
+          await bridge.request('session.prompt', { sessionId: created.sessionId, text: buildStartPrompt(card) });
+        }
+        notifyToast(
+          options.start ? t('toast.sessionAutoStarted') : t('toast.sessionCreatedBound'),
+          'success',
+        );
+        await refreshWorkspaces();
         await refresh({ silent: true });
       } catch (error) {
-        notifyToast(error instanceof Error ? error.message : t('toast.sessionFailed'), 'error');
+        notifyToast(error instanceof Error ? error.message : t('drawer.createSessionFailed'), 'error');
       }
     },
-    [notifyToast, refresh, t],
+    [embedded, notifyToast, refresh, refreshWorkspaces, t],
   );
 
   const handleRestart = useCallback(
@@ -842,7 +870,7 @@ export function App() {
             }
           }
         } else if (snapshot.board) {
-          await api.createCard({
+          const { card } = await api.createCard({
             boardId: snapshot.board.id,
             title: values.title,
             summary: values.summary || undefined,
@@ -850,10 +878,46 @@ export function App() {
             priority: values.priority,
             labels: values.labels,
             project: values.project || undefined,
+            workspaceId: values.workspaceId || undefined,
             cwd: values.cwd || undefined,
+            ...(values.session.kind === 'existing' && values.session.sessionId
+              ? { sessionId: values.session.sessionId }
+              : {}),
           });
           notifyToast(t('toast.created'), 'success');
           announce(t('toast.created'));
+          if (values.status === 'running' && !embedded) {
+            // 独立预览：只建卡，不建会话
+            notifyToast(t('toast.cardCreatedNoSession'), 'info');
+          } else if (embedded && values.session.kind !== 'none') {
+            const plan = {
+              kind: values.session.kind,
+              ...(values.session.sessionId ? { sessionId: values.session.sessionId } : {}),
+              ...(card.workspaceId ? { workspaceId: card.workspaceId } : {}),
+              ...(card.cwd ? { cwd: card.cwd } : {}),
+              title: card.title,
+              start: values.status === 'running',
+              prompt: buildStartPrompt(card),
+            };
+            const result = await setupNewCardSession(plan, {
+              createSession: (input) => bridge.request('session.create', input),
+              ensureSession: (input) => bridge.request('session.ensure', input),
+              promptSession: async (sessionId, text) => {
+                await bridge.request('session.prompt', { sessionId, text });
+              },
+              bindSession: async (sessionId) => {
+                await api.bindSession(card.id, sessionId);
+              },
+            });
+            if (result.status === 'failed') {
+              notifyToast(t('toast.cardCreatedSessionFailed'), 'error');
+            } else if (values.status === 'running') {
+              notifyToast(t('toast.sessionAutoStarted'), 'success');
+            } else if (values.session.kind === 'new') {
+              notifyToast(t('toast.sessionCreatedBound'), 'success');
+            }
+            void refreshWorkspaces();
+          }
         }
         setFormState(null);
         await refresh({ silent: true });
@@ -1281,6 +1345,8 @@ export function App() {
             feed={feeds[activeCard.id]}
             onLoadEarlier={() => loadEarlier(activeCard.id)}
             sessions={sessions}
+            workspaces={workspaces}
+            allCards={snapshot.cards}
             embedded={embedded}
             now={now}
             resolvingApprovalId={resolvingApprovalId}
@@ -1295,7 +1361,7 @@ export function App() {
             onUnbindSession={(card, sessionId) => void handleUnbindSession(card, sessionId)}
             onOpenSession={(sessionId) => void handleOpenSession(sessionId)}
             onSetPrimary={(card, sessionId) => void handleSetPrimary(card, sessionId)}
-            onCreateSession={(card) => void handleCreateSession(card)}
+            onCreateSession={(card, options) => void handleCreateSession(card, options)}
           />
         ) : null}
 
@@ -1306,6 +1372,10 @@ export function App() {
             {...(formState.mode === 'create' ? { defaultColumn: formState.column } : {})}
             projects={projects}
             labels={labels}
+            workspaces={workspaces}
+            sessions={sessions}
+            cards={snapshot.cards}
+            embedded={embedded}
             busy={formBusy}
             error={formError}
             onSubmit={(values) => void handleSubmitForm(values)}

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import type { Approval, Card, SessionRow } from '../types';
+import type { Approval, Card, SessionRow, WorkspaceRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { STATUS_TONE, isWarningStatus } from '../lib/status';
@@ -12,6 +12,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { SessionSection } from './SessionSection';
 import { Timeline, TimelineLoadMore } from './Timeline';
 import type { CardActionHandlers } from './types';
+import type { CreateSessionOptions } from './SessionSection';
 import { pushOverlay } from '../lib/overlayStack';
 import {
   IconArchive,
@@ -30,6 +31,9 @@ interface DetailDrawerProps {
   feed: ActivityFeed | undefined;
   onLoadEarlier: () => void;
   sessions: SessionRow[];
+  workspaces: WorkspaceRow[];
+  /** 用于 cwd 建议的全量卡片 */
+  allCards: Card[];
   embedded: boolean;
   now: number;
   resolvingApprovalId: string | null;
@@ -49,7 +53,7 @@ interface DetailDrawerProps {
   onUnbindSession: (card: Card, sessionId: string) => void;
   onOpenSession: (sessionId: string) => void;
   onSetPrimary: (card: Card, sessionId: string) => void;
-  onCreateSession: (card: Card) => void;
+  onCreateSession: (card: Card, options: CreateSessionOptions) => void;
 }
 
 const FOCUSABLE =
@@ -77,6 +81,8 @@ export function DetailDrawer({
   feed,
   onLoadEarlier,
   sessions,
+  workspaces,
+  allCards,
   embedded,
   now,
   resolvingApprovalId,
@@ -433,6 +439,8 @@ export function DetailDrawer({
             <SessionSection
               card={card}
               sessions={sessions}
+              workspaces={workspaces}
+              cards={allCards}
               embedded={embedded}
               busy={false}
               targetSessionId={targetSessionId}
@@ -441,7 +449,7 @@ export function DetailDrawer({
               onBind={(sessionId) => onBindSession(card, sessionId)}
               onUnbind={(sessionId) => onUnbindSession(card, sessionId)}
               onSetPrimary={(sessionId) => onSetPrimary(card, sessionId)}
-              onCreateSession={() => onCreateSession(card)}
+              onCreateSession={onCreateSession}
             />
           </section>
 

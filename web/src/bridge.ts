@@ -4,11 +4,12 @@
  * 不掺 HTTP API 逻辑（那在 api.ts）。
  */
 import { useEffect, useState } from 'react';
-import type { HostInfo, SessionRow } from './types';
+import type { HostInfo, SessionRow, WorkspaceRow } from './types';
 
 export type BridgeMethod =
   | 'app.info'
   | 'sessions.list'
+  | 'workspaces.list'
   | 'sessions.refresh'
   | 'session.open'
   | 'session.create'
@@ -22,6 +23,7 @@ export type BridgeMethod =
 export interface BridgeParamsMap {
   'app.info': undefined;
   'sessions.list': undefined;
+  'workspaces.list': undefined;
   'sessions.refresh': undefined;
   'session.open': { sessionId: string };
   'session.create': { cwd?: string; workspaceId?: string; title?: string };
@@ -36,6 +38,7 @@ export interface BridgeParamsMap {
 export interface BridgeDataMap {
   'app.info': HostInfo;
   'sessions.list': { sessions: SessionRow[]; current: string | null };
+  'workspaces.list': { workspaces: WorkspaceRow[] };
   'sessions.refresh': { sessions: SessionRow[]; current: string | null };
   'session.open': { ok: true };
   'session.create': { sessionId: string };

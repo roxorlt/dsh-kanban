@@ -1743,6 +1743,56 @@
   [data-layout="narrow"] .card-start .start-label-short { display: inline; }
   [data-layout="narrow"] .card-start .start-label { display: none; }
 
+
+  /* v1.2 建议字段：工作区/目录 + 关联会话 */
+  .modal--new { width: min(680px, 100%); }
+  .modal--new .field { margin-bottom: 10px; }
+  .modal--new .modal-desc { margin-bottom: 10px; }
+  .new-section { margin: 2px 0 10px; padding-top: 12px; border-top: 0.5px solid var(--dsw-alias-border-l1); }
+  .section-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .section-head h3 { color: var(--dsw-alias-label-primary); font: var(--dsw-font-xxs-strong-12); }
+  .section-head span { flex: 1; min-width: 0; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); text-align: right; }
+  .dir-suggest { display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 8px; flex-wrap: wrap; }
+  .dir-suggest > span { flex: none; padding-top: 4px; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+  .dir-chips { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+  .dir-chip { height: 22px; padding: 0 7px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-11); cursor: pointer; }
+  .dir-chip:hover { border-color: var(--dsw-alias-border-l3); color: var(--dsw-alias-label-primary); }
+  .dir-chip.is-active { border-color: var(--dsw-alias-state-business-primary); background: var(--dsw-alias-state-business-tertiary); color: var(--dsw-alias-state-business-primary); }
+  .session-choices { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+  .session-choice { display: flex; align-items: flex-start; gap: 7px; padding: 7px 8px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-layer-2); cursor: pointer; }
+  .session-choice:hover { border-color: var(--dsw-alias-border-l3); }
+  .session-choice.is-selected { border-color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 5%, var(--dsw-alias-bg-layer-1)); }
+  .session-choice input { width: 14px; height: 14px; margin: 2px 0 0; flex: none; accent-color: var(--dsw-alias-state-business-primary); }
+  .choice-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .choice-title { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; color: var(--dsw-alias-label-primary); font: var(--dsw-font-xxs-strong-12); }
+  .choice-badge { height: 16px; display: inline-flex; align-items: center; padding: 0 5px; border-radius: 4px; font: var(--dsw-font-xxxs-strong-11); }
+  .choice-badge.is-rec { background: var(--dsw-alias-state-business-tertiary); color: var(--dsw-alias-state-business-primary); }
+  .choice-badge.is-default { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
+  .choice-badge.is-running { background: var(--dsw-alias-state-warn-tertiary); color: var(--dsw-alias-state-warn-label); }
+  .choice-meta { display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); text-overflow: ellipsis; white-space: nowrap; }
+  .choice-meta .ic { flex: none; width: 10px; height: 10px; }
+  .choice-empty { margin: 0; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+  .new-hint { margin: 2px 0 0; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); line-height: 15px; }
+  .metric-muted { color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+
+  /* v1.2 无会话：详情补建 */
+  .drawer-section-label { margin: 8px 0 6px; color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-strong-11); letter-spacing: 0.02em; }
+  .no-session { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; }
+  .no-session-warn { display: flex; align-items: flex-start; gap: 7px; padding: 8px 9px; border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 24%, var(--dsw-alias-border-l2)); border-radius: 8px; background: var(--dsw-alias-state-warn-tertiary); }
+  .no-session-warn > .ic { flex: none; width: 14px; height: 14px; margin-top: 1px; color: var(--dsw-alias-state-warn-primary); }
+  .no-session-warn strong { display: block; color: var(--dsw-alias-label-primary); font: var(--dsw-font-xxs-strong-12); }
+  .no-session-warn p { margin: 2px 0 0; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxxs-11); line-height: 16px; }
+  .session-create { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 10px; background: var(--dsw-alias-bg-layer-2); }
+  .session-create-head { display: flex; align-items: baseline; gap: 8px; }
+  .session-create-head h3 { color: var(--dsw-alias-label-primary); font: var(--dsw-font-s-strong-14); }
+  .session-create-head span { margin-left: auto; color: var(--dsw-alias-label-caption); font: var(--dsw-font-xxxs-11); }
+  .session-create .field { margin-bottom: 0; }
+  .session-create .dir-suggest { margin: 0; }
+  .session-create-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .session-create-foot .new-hint { flex: 1; min-width: 180px; margin: 0; }
+
+  [data-layout="narrow"] .modal--new .field-row,
+  [data-layout="narrow"] .session-create .field-row { flex-direction: column; gap: 8px; }
   /* ===== v2 响应式增补 ===== */
   [data-layout="narrow"] .board-title { flex: 1; min-width: 0; }
   [data-layout="narrow"] .board-metas { gap: 6px; }
@@ -1966,6 +2016,59 @@
   };
   const PRIORITY_LABEL = { P0: '紧急', P1: '高', P2: '常规' };
   const PROJECTS = ['内核', '看板', '插件市场', '运营', '文档', 'CRM'];
+  const WORKSPACES = [
+    {
+      id: 'ws-kanban', name: '看板 · dsh kanban', project: '看板',
+      cwd: '/Users/roxor/Desktop/dsh/dsh kanban', branch: 'main',
+      dirs: [
+        { label: '仓库根目录', path: '/Users/roxor/Desktop/dsh/dsh kanban' },
+        { label: 'web/', path: '/Users/roxor/Desktop/dsh/dsh kanban/web' },
+        { label: 'docs/', path: '/Users/roxor/Desktop/dsh/dsh kanban/docs' },
+        { label: 'lib/', path: '/Users/roxor/Desktop/dsh/dsh kanban/lib' }
+      ],
+      sessions: [
+        { id: 'dsh-7f3a', title: '拖拽排序重构', cwd: '/Users/roxor/Desktop/dsh/dsh kanban', running: true, recommended: true },
+        { id: 'dsh-2c9e', title: '列表分组与筛选', cwd: '/Users/roxor/Desktop/dsh/dsh kanban/web/src', running: false }
+      ]
+    },
+    {
+      id: 'ws-core', name: '内核 · runtime', project: '内核',
+      cwd: '/Users/roxor/Desktop/dsh/core', branch: 'feat/runner',
+      dirs: [
+        { label: 'runtime/', path: '/Users/roxor/Desktop/dsh/core/runtime' },
+        { label: 'tests/', path: '/Users/roxor/Desktop/dsh/core/tests' },
+        { label: 'docs/', path: '/Users/roxor/Desktop/dsh/core/docs' }
+      ],
+      sessions: [
+        { id: 'dsh-9d02', title: 'SSE 广播与同源校验', cwd: '/Users/roxor/Desktop/dsh/core/runtime', running: true, recommended: true },
+        { id: 'dsh-4b1c', title: '迁移脚本演练', cwd: '/Users/roxor/Desktop/dsh/core/migrations', running: false }
+      ]
+    },
+    {
+      id: 'ws-ops', name: '运营 · 数据', project: '运营',
+      cwd: '/Users/roxor/Desktop/dsh/ops', branch: 'weekly',
+      dirs: [
+        { label: 'weekly/', path: '/Users/roxor/Desktop/dsh/ops/weekly' },
+        { label: 'reports/', path: '/Users/roxor/Desktop/dsh/ops/reports' }
+      ],
+      sessions: [
+        { id: 'dsh-2c9e', title: '周报结论汇总', cwd: '/Users/roxor/Desktop/dsh/ops/weekly', running: false, recommended: true }
+      ]
+    },
+    {
+      id: 'ws-plugin', name: '插件市场', project: '插件市场',
+      cwd: '/Users/roxor/Desktop/dsh/plugin-market', branch: 'main',
+      dirs: [
+        { label: 'src/', path: '/Users/roxor/Desktop/dsh/plugin-market/src' },
+        { label: 'docs/', path: '/Users/roxor/Desktop/dsh/plugin-market/docs' }
+      ],
+      sessions: [
+        { id: 'dsh-96b2', title: '暗色主题令牌修复', cwd: '/Users/roxor/Desktop/dsh/plugin-market', running: true, recommended: true },
+        { id: 'dsh-5e18', title: '插件详情页', cwd: '/Users/roxor/Desktop/dsh/plugin-market/src', running: false }
+      ]
+    }
+  ];
+  const EMPTY_SESSION = { id: '', title: '未绑定会话', running: false, primary: true };
   const FIXED = { view: 'board', theme: 'light', layout: 'wide' };
 
   /* ------------------------------------------------------------------ data */
@@ -2335,13 +2438,79 @@
   const unarchived = () => cards.filter((c) => !c.archived);
 
   /* 会话：运行中的实体；Agent 只作为时间线 actor / 会话内发言者 */
+  function hasSession(card) {
+    return !card.noSession && Boolean((card.sessions && card.sessions.length) || card.session);
+  }
   function sessionList(card) {
+    if (!hasSession(card)) return [];
     if (card.sessions && card.sessions.length) return card.sessions;
     return [{ id: card.session, title: '主会话', running: card.status === 'running', primary: true }];
   }
   function primarySession(card) {
     const list = sessionList(card);
-    return list.find((s) => s.primary) || list[0];
+    return list.find((s) => s.primary) || list[0] || EMPTY_SESSION;
+  }
+  function workspaceById(id) {
+    return WORKSPACES.find((w) => w.id === id) || WORKSPACES[0];
+  }
+  function projectOptionsFor(ws) {
+    const first = [ws.project].concat(PROJECTS.filter((p) => p !== ws.project));
+    return first;
+  }
+  function projectSuggestionsHTML(ws, selected) {
+    return projectOptionsFor(ws).map((p, i) => {
+      const label = p === ws.project ? p + '（当前工作区）' : i <= 2 ? p + '（最近）' : p;
+      return '<option value="' + esc(p) + '"' + (p === selected ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('');
+  }
+  function dirChipsHTML(ws, current) {
+    return ws.dirs.map((d) => '<button type="button" class="dir-chip' + (d.path === current ? ' is-active' : '') + '" data-dir-chip="' + esc(d.path) + '" title="' + esc(d.path) + '">' + esc(d.label) + '</button>').join('');
+  }
+  function sessionSuggestionsHTML(ws, targetCol) {
+    const list = ws.sessions || [];
+    const newSelected = targetCol === 'running' ? ' checked' : '';
+    const items = [];
+    items.push('<label class="session-choice is-new' + (newSelected ? ' is-selected' : '') + '">' +
+      '<input type="radio" name="sessionChoice" value="new"' + newSelected + '>' +
+      '<span class="choice-body"><span class="choice-title">新建会话' +
+        (targetCol === 'running' ? '<span class="choice-badge is-default">默认</span>' : '') +
+        '</span><span class="choice-meta">' + icon('play') + (targetCol === 'running' ? '创建后立即启动 · ' : '创建后等待领取 · ') + esc(ws.cwd) + '</span></span>' +
+      '</label>');
+    list.forEach(function (x) {
+      const checked = targetCol !== 'running' && x.recommended ? ' checked' : '';
+      items.push('<label class="session-choice' + (checked ? ' is-selected' : '') + '">' +
+        '<input type="radio" name="sessionChoice" value="' + esc(x.id) + '"' + checked + '>' +
+        '<span class="choice-body"><span class="choice-title">' + esc(x.title) +
+          (x.recommended ? '<span class="choice-badge is-rec">推荐</span>' : '') +
+          (x.running ? '<span class="choice-badge is-running">运行中</span>' : '') +
+        '</span><span class="choice-meta">' + icon('folder') + esc(x.cwd) + '</span></span>' +
+      '</label>');
+    });
+    if (!list.length) items.push('<p class="choice-empty">没有可关联的会话；默认新建，创建后可绑定。</p>');
+    return items.join('');
+  }
+  function sessionCreateFormHTML(card) {
+    const ws = WORKSPACES[0];
+    const isRunning = card.status === 'running';
+    return '<section class="no-session" aria-label="未绑定会话">' +
+      '<div class="no-session-warn">' + icon('alert') +
+        '<div><strong>' + (isRunning ? '卡片正在进行中，但没有绑定会话' : '这张卡片还没有绑定会话') + '</strong>' +
+        '<p>' + (isRunning ? '状态和消息暂时无法回写；先选择工作区/目录，再创建会话。' : '先选择工作区/目录，再创建会话；创建后才会开始执行。') + '</p></div>' +
+      '</div>' +
+      '<form class="session-create" data-create-session-form data-card-id="' + card.id + '">' +
+        '<div class="session-create-head"><h3>新建会话</h3><span>先选目录，再创建</span></div>' +
+        '<div class="field-row">' +
+          '<label class="field"><span>工作区</span><select name="workspace" data-session-workspace>' + WORKSPACES.map((w) => '<option value="' + w.id + '"' + (w.id === ws.id ? ' selected' : '') + '>' + esc(w.name) + '</option>').join('') + '</select></label>' +
+          '<label class="field"><span>执行目录</span><input name="cwd" data-session-cwd value="' + esc(ws.cwd) + '" autocomplete="off"></label>' +
+        '</div>' +
+        '<div class="dir-suggest"><span>推荐目录</span><div class="dir-chips" data-session-dir-chips>' + dirChipsHTML(ws, ws.cwd) + '</div></div>' +
+        '<p class="form-inherit">' + icon('session') + '项目建议：' + esc(ws.project) + ' · 创建后写入卡片绑定，可在详情中更换</p>' +
+        '<div class="session-create-foot">' +
+          '<span class="new-hint">独立预览模式：会模拟创建会话，不调用宿主</span>' +
+          '<button type="submit" class="btn btn-primary">' + (isRunning ? '创建并开始处理' : '创建并绑定') + '</button>' +
+        '</div>' +
+      '</form>' +
+    '</section>';
   }
   function sessionTitle(card, id) {
     const s = sessionList(card).find((x) => x.id === id);
@@ -2440,7 +2609,9 @@
       '<span class="metric" title="工具调用 ' + card.tools + ' 次">' + icon('tool') + card.tools + '</span>' +
       '<span class="metric" title="搜索 ' + card.searches + ' 次">' + icon('search') + card.searches + '</span>' +
       '<span class="divider-v" aria-hidden="true"></span>' +
-      '<button type="button" class="metric metric-link" data-action="session" data-id="' + card.id + '" aria-label="打开会话：' + esc(primarySession(card).title) + '" title="会话：' + esc(primarySession(card).title) + '">' + icon('link') + '</button>' +
+      (hasSession(card)
+        ? '<button type="button" class="metric metric-link" data-action="session" data-id="' + card.id + '" aria-label="打开会话：' + esc(primarySession(card).title) + '" title="会话：' + esc(primarySession(card).title) + '">' + icon('link') + '</button>'
+        : '<span class="metric metric-muted" title="未绑定会话">未绑定</span>') +
       '</span>';
   }
   function decisionHTML(card) {
@@ -3162,6 +3333,11 @@
     const card = findCard(id);
     const value = (text || '').trim();
     if (!card || !value) return;
+    if (!hasSession(card)) {
+      toast('先创建会话再回复', { icon: 'alert' });
+      openDrawer(card.id, 'nodes');
+      return;
+    }
     const targetId = state.replyTarget[id] || primarySession(card).id;
     const targetTitle = sessionTitle(card, targetId);
     card.thread.push({ from: 'you', text: value, time: '刚刚', sessionId: targetId });
@@ -3399,6 +3575,7 @@
   }
   function sessionSectionHTML(card) {
     const list = sessionList(card);
+    if (!list.length) return '';
     return '<ul class="session-list" aria-label="会话绑定">' + list.map(function (x) {
       return '<li class="session-row' + (x.primary ? ' is-primary' : '') + '">' +
         icon('session') +
@@ -3414,6 +3591,7 @@
     }).join('') + '</ul>';
   }
   function threadHTML(card) {
+    if (!hasSession(card)) return sessionCreateFormHTML(card);
     const target = state.replyTarget[card.id] || primarySession(card).id;
     const sessions = sessionList(card);
     const select = '<label class="reply-target">回复目标' +
@@ -3452,6 +3630,7 @@
     const isApproval = card.approval && card.status === 'needs';
     const multiApproval = isApproval && isMultiQuestionCard(card);
     const tab = state.drawerTab;
+    const noSession = !hasSession(card);
     const primary = primarySession(card);
     drawer.innerHTML = '<div class="drawer-grabber" aria-hidden="true"></div>' +
       '<header class="drawer-head">' + dot(s.dot) +
@@ -3462,19 +3641,23 @@
         (state.editing ? editFormHTML(card) : '<div class="drawer-title-row"><h2 class="drawer-title" id="drawerTitle" tabindex="-1">' + esc(card.title) + '</h2>' +
           '<button type="button" class="icon-btn" data-action="edit" aria-label="编辑卡片">' + icon('edit') + '</button></div>' +
           '<p class="drawer-summary">' + esc(card.summary) + '</p>' +
-          '<div class="drawer-sub">' + dot(s.dot, true) + '<span>' + esc(s.label) + '</span><span aria-hidden="true">·</span><span>' + esc(primary.title) + '</span><span aria-hidden="true">·</span><span>更新于 ' + esc(card.updated) + '</span></div>' +
-          '<div class="drawer-actions">' +
-            '<button type="button" class="btn btn-secondary" data-action="session-tab">' + icon('message') + '会话' + (sessionList(card).length > 1 ? '（' + sessionList(card).length + '）' : '') + '</button>' +
-            '<button type="button" class="btn btn-ghost" data-action="open-dsh">' + icon('link') + '在 DSH 中打开</button>' +
-            (isApproval && !isMultiQuestionCard(card) ? '<button type="button" class="btn btn-ghost" data-action="edit-approval" data-id="' + card.id + '">编辑确认请求</button>' : '') +
-          '</div>' +
+          '<div class="drawer-sub">' + dot(s.dot, true) + '<span>' + esc(s.label) + '</span><span aria-hidden="true">·</span><span>' + (noSession ? '未绑定会话' : esc(primary.title)) + '</span><span aria-hidden="true">·</span><span>更新于 ' + esc(card.updated) + '</span></div>' +
+          (noSession
+            ? sessionCreateFormHTML(card)
+            : '<div class="drawer-actions">' +
+                '<button type="button" class="btn btn-secondary" data-action="session-tab">' + icon('message') + '会话' + (sessionList(card).length > 1 ? '（' + sessionList(card).length + '）' : '') + '</button>' +
+                '<button type="button" class="btn btn-ghost" data-action="open-dsh">' + icon('link') + '在 DSH 中打开</button>' +
+                (isApproval && !isMultiQuestionCard(card) ? '<button type="button" class="btn btn-ghost" data-action="edit-approval" data-id="' + card.id + '">编辑确认请求</button>' : '') +
+              '</div>') +
           attrHTML(card) +
           (multiApproval ? '<div class="drawer-approval">' + decisionHTML(card) + '</div>' : '') +
-          '<div class="drawer-tabs" role="tablist" aria-label="详情分区">' +
-            '<button type="button" class="seg-btn' + (tab === 'nodes' ? ' is-active' : '') + '" role="tab" aria-selected="' + (tab === 'nodes') + '" data-action="drawer-tab" data-tab="nodes">重要节点<span class="drawer-tab-count">' + card.nodes.length + '</span></button>' +
-            '<button type="button" class="seg-btn' + (tab === 'thread' ? ' is-active' : '') + '" role="tab" aria-selected="' + (tab === 'thread') + '" data-action="drawer-tab" data-tab="thread">' + icon('message') + '会话<span class="drawer-tab-count">' + card.thread.length + '</span></button>' +
-          '</div>' +
-          '<div class="drawer-body">' + (tab === 'nodes' ? timelineHTML(card) : threadHTML(card)) + '</div>') +
+          (noSession
+            ? '<div class="drawer-section-label">重要节点</div><div class="drawer-body">' + timelineHTML(card) + '</div>'
+            : '<div class="drawer-tabs" role="tablist" aria-label="详情分区">' +
+                '<button type="button" class="seg-btn' + (tab === 'nodes' ? ' is-active' : '') + '" role="tab" aria-selected="' + (tab === 'nodes') + '" data-action="drawer-tab" data-tab="nodes">重要节点<span class="drawer-tab-count">' + card.nodes.length + '</span></button>' +
+                '<button type="button" class="seg-btn' + (tab === 'thread' ? ' is-active' : '') + '" role="tab" aria-selected="' + (tab === 'thread') + '" data-action="drawer-tab" data-tab="thread">' + icon('message') + '会话<span class="drawer-tab-count">' + card.thread.length + '</span></button>' +
+              '</div>' +
+              '<div class="drawer-body">' + (tab === 'nodes' ? timelineHTML(card) : threadHTML(card)) + '</div>')) +
       '</div>' +
       '<footer class="drawer-foot">' +
         (isApproval && !multiApproval ? decisionHTML(card) : '') +
@@ -3503,6 +3686,12 @@
         const close = drawer.querySelector('[data-action="close-drawer"]');
         if (close) close.focus({ preventScroll: true });
       });
+    }
+    if (!hasSession(card)) {
+      setTimeout(function () {
+        const form = drawer.querySelector('[data-create-session-form]');
+        if (form) form.scrollIntoView({ block: 'center' });
+      }, motionMs(220));
     }
     announce('已打开' + card.title + '的详情');
   }
@@ -3560,37 +3749,112 @@
     return { session: 'dsh-7f3a', workspace: '看板', cwd: '/Users/roxor/Desktop/dsh/dsh kanban' };
   }
   function newCardFormHTML(presetCol) {
-    const ws = currentWorkspace();
+    const ws = WORKSPACES[0];
+    const targetCol = presetCol || 'backlog';
     return '<div class="modal-head"><h2 id="modalTitle">新建卡片</h2><button type="button" class="icon-btn" data-action="close-modal" aria-label="关闭">' + icon('x') + '</button></div>' +
-      '<p class="modal-desc">创建后写入看板；会话领取后自动移动列。只有授权、方案选择、讨论时才需要你。</p>' +
+      '<p class="modal-desc">先选工作区/目录，再决定是新建会话还是关联已有会话；进行中默认新建并启动。</p>' +
       '<form data-new-form>' +
         '<label class="field"><span>标题</span><input name="title" required maxlength="60" placeholder="给会话一个明确的任务" autocomplete="off"></label>' +
         '<label class="field"><span>一句话摘要</span><textarea name="summary" rows="2" maxlength="160" placeholder="目标、边界与验收方式…"></textarea></label>' +
-        '<div class="form-explain">' +
-          '<span><strong>项目</strong> 逻辑分组：看板按项目筛选与分组。</span>' +
-          '<span><strong>标签</strong> 自由筛选关键词，不影响执行。</span>' +
-          '<span><strong>执行目录</strong> workspaceId / cwd 决定会话在哪个工作区执行；默认继承当前会话与工作区。</span>' +
-        '</div>' +
+        '<section class="new-section">' +
+          '<div class="section-head"><h3>工作区与目录</h3><span>选择工作区自动回填 cwd 与项目建议</span></div>' +
+          '<div class="field-row">' +
+            '<label class="field"><span>工作区</span><select name="workspace" data-new-workspace>' +
+              WORKSPACES.map((w) => '<option value="' + w.id + '"' + (w.id === ws.id ? ' selected' : '') + '>' + esc(w.name) + ' · ' + esc(w.branch) + '</option>').join('') +
+            '</select></label>' +
+            '<label class="field"><span>执行目录 cwd</span><input name="cwd" data-new-cwd value="' + esc(ws.cwd) + '" autocomplete="off" spellcheck="false"></label>' +
+          '</div>' +
+          '<div class="dir-suggest"><span>推荐目录</span><div class="dir-chips" data-new-dirs>' + dirChipsHTML(ws, ws.cwd) + '</div></div>' +
+          '<p class="form-inherit" data-new-workdir-hint>' + icon('folder') + '项目建议已按「当前工作区 → 最近使用 → 名称」排序</p>' +
+        '</section>' +
+        '<section class="new-section">' +
+          '<div class="section-head"><h3>关联会话</h3><span>推荐优先；进行中默认新建并启动</span></div>' +
+          '<div class="session-choices" data-new-sessions>' + sessionSuggestionsHTML(ws, targetCol) + '</div>' +
+          '<p class="new-hint" data-new-session-hint>推荐 = 与工作区/项目匹配且最近使用；也可以新建会话。</p>' +
+        '</section>' +
         '<div class="field-row">' +
-          '<label class="field"><span>放入列</span><select name="col">' + COLUMNS.map((c) => '<option value="' + c.id + '"' + (presetCol === c.id ? ' selected' : '') + '>' + c.name + '</option>').join('') + '</select></label>' +
+          '<label class="field"><span>放入列</span><select name="col" data-new-col>' + COLUMNS.map((c) => '<option value="' + c.id + '"' + (presetCol === c.id ? ' selected' : '') + '>' + c.name + '</option>').join('') + '</select></label>' +
           '<label class="field"><span>优先级</span><select name="priority"><option value="P2" selected>P2 · 常规</option><option value="P1">P1 · 高</option><option value="P0">P0 · 紧急</option></select></label>' +
         '</div>' +
         '<div class="field-row">' +
-          '<label class="field"><span>所属项目</span><select name="project">' + PROJECTS.map((p) => '<option>' + esc(p) + '</option>').join('') + '</select></label>' +
+          '<label class="field"><span>所属项目（建议）</span><select name="project" data-new-project>' + projectSuggestionsHTML(ws, ws.project) + '</select></label>' +
           '<label class="field"><span>标签（逗号分隔）</span><input name="tags" placeholder="如：前端，空态" autocomplete="off"></label>' +
         '</div>' +
-        '<label class="field"><span>执行目录（继承当前工作区）</span><input name="cwd" value="' + esc(ws.cwd) + '" readonly></label>' +
-        '<p class="form-inherit">' + icon('session') + '当前会话 ' + esc(ws.session) + ' · 工作区 ' + esc(ws.workspace) + ' · 可在详情中更换</p>' +
+        '<p class="form-inherit">' + icon('session') + '独立预览模式：不会创建真实会话；提交后模拟创建并写入时间线。</p>' +
         '<p class="form-error" data-new-error hidden>请填写标题。</p>' +
-        '<div class="modal-foot"><span class="modal-hint">Enter 创建 · Esc 取消</span><button type="button" class="btn btn-secondary" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">创建卡片</button></div>' +
+        '<div class="modal-foot"><span class="modal-hint">Enter 创建 · Esc 取消</span><button type="button" class="btn btn-secondary" data-action="close-modal">取消</button><button type="submit" class="btn btn-primary">' + (targetCol === 'running' ? '创建并启动' : '创建卡片') + '</button></div>' +
       '</form>';
   }
+  function fillNewWorkspaceFields(form, ws) {
+    if (!form || !ws) return;
+    const cwd = form.querySelector('[data-new-cwd]');
+    if (cwd) cwd.value = ws.cwd;
+    const project = form.querySelector('[data-new-project]');
+    if (project) {
+      project.innerHTML = projectSuggestionsHTML(ws, ws.project);
+      project.value = ws.project;
+    }
+    const dirs = form.querySelector('[data-new-dirs]');
+    if (dirs) dirs.innerHTML = dirChipsHTML(ws, ws.cwd);
+    const sessions = form.querySelector('[data-new-sessions]');
+    const col = form.querySelector('[data-new-col]');
+    if (sessions) sessions.innerHTML = sessionSuggestionsHTML(ws, col ? col.value : 'backlog');
+    updateNewFormCTA(form);
+  }
+  function updateNewFormCTA(form) {
+    const col = form.querySelector('[data-new-col]');
+    const choice = form.querySelector('[name="sessionChoice"]:checked');
+    const btn = form.querySelector('[data-new-form] .modal-foot [type="submit"]') || form.querySelector('.modal-foot [type="submit"]');
+    const target = col ? col.value : 'backlog';
+    if (btn) {
+      if (target === 'running' && choice && choice.value === 'new') btn.textContent = '创建并启动';
+      else if (choice && choice.value !== 'new') btn.textContent = '创建卡片并绑定';
+      else btn.textContent = '创建卡片';
+    }
+    const hint = form.querySelector('[data-new-session-hint]');
+    if (hint) {
+      hint.textContent = target === 'running'
+        ? '目标列是进行中：默认新建会话并立即启动；选择已有会话则创建后绑定。'
+        : '推荐 = 与工作区/项目匹配且最近使用；也可以新建会话。';
+    }
+    form.querySelectorAll('.session-choice').forEach(function (label) {
+      const input = label.querySelector('input');
+      label.classList.toggle('is-selected', Boolean(input && input.checked));
+    });
+  }
+  function bindNewForm(form) {
+    if (!form) return;
+    form.addEventListener('change', function (e) {
+      const t = e.target;
+      if (t.matches('[data-new-workspace]')) {
+        fillNewWorkspaceFields(form, workspaceById(t.value));
+        return;
+      }
+      if (t.matches('[data-new-col]')) {
+        const ws = workspaceById(form.querySelector('[data-new-workspace]').value);
+        const sessions = form.querySelector('[data-new-sessions]');
+        if (sessions) sessions.innerHTML = sessionSuggestionsHTML(ws, t.value);
+        updateNewFormCTA(form);
+        return;
+      }
+      if (t.matches('[name="sessionChoice"]')) updateNewFormCTA(form);
+    });
+    form.addEventListener('click', function (e) {
+      const chip = e.target.closest('[data-dir-chip]');
+      if (!chip) return;
+      const cwd = form.querySelector('[data-new-cwd]');
+      if (cwd) cwd.value = chip.dataset.dirChip;
+      form.querySelectorAll('[data-dir-chip]').forEach((x) => x.classList.toggle('is-active', x === chip));
+    });
+  }
   function openNewModal(presetCol) {
-    modalLayer.innerHTML = '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">' + newCardFormHTML(presetCol || 'backlog') + '</div>';
+    modalLayer.innerHTML = '<div class="modal modal--new" role="dialog" aria-modal="true" aria-labelledby="modalTitle">' + newCardFormHTML(presetCol) + '</div>';
     modalLayer.hidden = false;
     closePopover();
     state.approvalEditorId = null;
     const form = $('[data-new-form]', modalLayer);
+    bindNewForm(form);
+    updateNewFormCTA(form);
     state.formInitial = serializeForm(form);
     requestAnimationFrame(function () {
       modalLayer.classList.add('is-open');
@@ -3678,6 +3942,40 @@
     closeConfirm();
     if (c && c.onConfirm) c.onConfirm();
   }
+  function createSessionForCard(form) {
+    const card = findCard(form.dataset.cardId);
+    if (!card) return;
+    const data = new FormData(form);
+    const ws = workspaceById(String(data.get('workspace') || ''));
+    const cwd = String(data.get('cwd') || ws.cwd).trim();
+    if (!cwd) {
+      const input = form.querySelector('[data-session-cwd]');
+      if (input) input.focus();
+      toast('先选择执行目录', { icon: 'alert' });
+      return;
+    }
+    const isRunning = card.status === 'running';
+    const session = {
+      id: 'dsh-' + Math.floor(1000 + Math.random() * 9000),
+      title: card.title.slice(0, 12) + ' · 主会话',
+      running: isRunning,
+      primary: true,
+      cwd: cwd
+    };
+    card.sessions = [session];
+    card.session = session.id;
+    card.noSession = false;
+    card.workspace = ws.name;
+    card.cwd = cwd;
+    card.updated = '刚刚';
+    card.action = isRunning ? '已创建会话 · 正在读取上下文' : '已创建会话并绑定';
+    card.nodes.push({ ago: '刚刚', text: isRunning ? '已创建会话并开始处理' : '已创建会话并绑定', state: isRunning ? 'current' : 'done', source: 'session' });
+    renderAll({ focus: card.id });
+    renderDrawer();
+    toast(isRunning ? '已创建会话并开始处理（预览模式）' : '已创建会话并绑定（预览模式）', { icon: 'play' });
+    announce(isRunning ? '已创建会话并开始处理' : '已创建会话并绑定');
+  }
+
   function createCard(form) {
     const data = new FormData(form);
     const title = String(data.get('title') || '').trim();
@@ -3690,20 +3988,41 @@
     }
     const colId = String(data.get('col') || 'backlog');
     const col = colById(colId);
-    const ws = currentWorkspace();
+    const ws = workspaceById(String(data.get('workspace') || ''));
+    const cwdValue = String(data.get('cwd') || '').trim();
+    if (!cwdValue) {
+      const cwdInput = form.querySelector('[data-new-cwd]');
+      if (cwdInput) cwdInput.focus();
+      toast('先选择执行目录', { icon: 'alert' });
+      return;
+    }
+    const cwd = cwdValue;
+    const project = String(data.get('project') || ws.project);
+    const choice = String(data.get('sessionChoice') || 'new');
+    const picked = choice === 'new' ? null : (ws.sessions || []).find((x) => x.id === choice);
+    const session = picked
+      ? { id: picked.id, title: picked.title, running: Boolean(picked.running) || colId === 'running', primary: true, cwd: picked.cwd || cwd }
+      : { id: 'dsh-' + Math.floor(1000 + Math.random() * 9000), title: title.slice(0, 12) + ' · 主会话', running: colId === 'running', primary: true, cwd: cwd };
     const card = {
       id: 'c-' + Math.floor(500 + Math.random() * 400),
       col: colId,
       title: title,
       status: col.defaultStatus,
       priority: String(data.get('priority') || 'P2'),
-      project: String(data.get('project') || PROJECTS[0]),
+      project: project,
       tags: String(data.get('tags') || '').split(/[,，、]/).map((s) => s.trim()).filter(Boolean).slice(0, 3),
       summary: String(data.get('summary') || '').trim() || '（未填写摘要）',
-      action: col.defaultStatus === 'todo' ? '等待会话领取' : col.defaultStatus === 'needs' ? '等待你确认' : '已创建 · 等待开始',
+      action: colId === 'running'
+        ? (picked ? '已关联会话 · 等待开始' : '已创建并启动会话')
+        : col.defaultStatus === 'todo' ? '等待会话领取' : col.defaultStatus === 'needs' ? '等待你确认' : '已创建 · 等待开始',
       tools: 0, searches: 0, elapsed: '—', updated: '刚刚', agent: '待分配',
-      session: ws.session, workspace: ws.workspace, cwd: String(data.get('cwd') || ws.cwd),
-      nodes: [{ ago: '刚刚', text: '由你在看板创建卡片', state: 'done' }, { ago: '—', text: '等待会话领取', state: 'pending' }],
+      session: session.id, sessions: [session], workspace: ws.name, cwd: cwd,
+      nodes: [
+        { ago: '刚刚', text: '由你在看板创建卡片', state: 'done' },
+        { ago: '刚刚', text: '工作区「' + ws.name + '」· 目录 ' + cwd, state: 'done' },
+        { ago: '刚刚', text: picked ? '关联已有会话「' + picked.title + '」' : '新建会话' + (colId === 'running' ? '并启动' : ''), state: picked ? 'done' : 'current' },
+        { ago: '—', text: picked ? '等待会话开始处理' : (colId === 'running' ? '正在读取上下文' : '等待会话领取'), state: 'pending' }
+      ],
       thread: []
     };
     if (colId === 'needs') card.approval = defaultApproval(card);
@@ -3714,8 +4033,8 @@
     if (state.layout === 'narrow') state.activeCol = colId;
     closeModal(true);
     renderAll({ focus: card.id });
-    toast('卡片已创建', { icon: 'check' });
-    announce('已创建卡片' + title);
+    toast(colId === 'running' && !picked ? '卡片已创建 · 会话已启动' : (picked ? '卡片已创建 · 已关联会话' : '卡片已创建'), { icon: 'check' });
+    announce('已创建卡片' + title + '，工作区' + ws.name);
     if (colId === 'needs') setTimeout(function () { openApprovalEditor(card.id); }, motionMs(160));
   }
   function saveApprovalEditor(form) {
@@ -3895,6 +4214,16 @@
   }, true);
 
   document.addEventListener('click', function (e) {
+    const dirChip = e.target.closest('[data-dir-chip]');
+    if (dirChip) {
+      const form = dirChip.closest('form');
+      const cwd = form && form.querySelector('[data-session-cwd], [data-new-cwd]');
+      if (cwd) cwd.value = dirChip.dataset.dirChip;
+      const scope = dirChip.closest('.dir-chips');
+      if (scope) scope.querySelectorAll('.dir-chip').forEach((x) => x.classList.toggle('is-active', x === dirChip));
+      e.preventDefault();
+      return;
+    }
     if (handleAction(e)) return;
     // 点击卡片 / 列表行：展开 / 收起（不含内部按钮、输入、链接）
     if (e.target.closest('button, a, input, textarea, select, label')) return;
@@ -3961,6 +4290,8 @@
       sendReply(state.drawerId, input ? input.value : '');
       return;
     }
+    const createSessionForm = e.target.closest('[data-create-session-form]');
+    if (createSessionForm) { e.preventDefault(); createSessionForCard(createSessionForm); return; }
     const newForm = e.target.closest('[data-new-form]');
     if (newForm) { e.preventDefault(); createCard(newForm); return; }
     const approvalForm = e.target.closest('[data-approval-form]');
@@ -3976,6 +4307,18 @@
     state.approvalNotes[note.dataset.approvalNote] = note.value;
   });
   document.addEventListener('change', function (e) {
+    const sessionWorkspace = e.target.closest('[data-session-workspace]');
+    if (sessionWorkspace) {
+      const form = sessionWorkspace.closest('[data-create-session-form]');
+      const ws = workspaceById(sessionWorkspace.value);
+      const cwd = form && form.querySelector('[data-session-cwd]');
+      if (cwd) cwd.value = ws.cwd;
+      const dirs = form && form.querySelector('[data-session-dir-chips]');
+      if (dirs) dirs.innerHTML = dirChipsHTML(ws, ws.cwd);
+      const hint = form && form.querySelector('.form-inherit');
+      if (hint) hint.innerHTML = icon('session') + '项目建议：' + esc(ws.project) + ' · 创建后写入卡片绑定，可在详情中更换';
+      return;
+    }
     const select = e.target.closest('[data-select-card]');
     if (select) { toggleSelect(select.dataset.selectCard); return; }
     const opt = e.target.closest('[data-approval-option]');
@@ -4206,15 +4549,30 @@
     state.listActions = params.get('listActions') === 'right' ? 'right' : 'left';
     if (params.get('syncError') === '1') state.syncError = true;
     if (params.get('col')) state.activeCol = params.get('col');
+    if (params.get('drawer') === 'no-session') {
+      const noSessionCard = findCard('c-201');
+      if (noSessionCard) {
+        noSessionCard.noSession = true;
+        noSessionCard.session = '';
+        noSessionCard.sessions = [];
+        noSessionCard.cwd = WORKSPACES[0].cwd;
+        noSessionCard.workspace = WORKSPACES[0].name;
+      }
+    }
     if (params.get('selection') === '1') { state.selectionMode = true; state.expanded.clear(); }
     if (params.get('picked')) {
       params.get('picked').split(',').forEach(function (id) { if (findCard(id)) state.selected.add(id); });
     }
     renderAll();
-    if (params.get('drawer')) {
+    if (params.get('drawer') === 'no-session') {
+      openDrawer('c-201', 'nodes');
+    } else if (params.get('drawer')) {
       openDrawer(params.get('drawer'), params.get('tab') || 'nodes');
     } else if (params.get('sessions') === '1') {
       openDrawer('c-201', 'thread');
+    }
+    if (params.get('newcard') === '1') {
+      setTimeout(function () { openNewModal('running'); }, motionMs(180));
     }
     const firstExpanded = params.get('multi') === '1' || params.get('approval') || params.get('start') === '1' || params.get('expanded') ? Array.from(state.expanded)[0] : null;
     if (firstExpanded) {

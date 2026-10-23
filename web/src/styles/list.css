@@ -335,3 +335,11 @@
     background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, transparent);
   }
 }
+
+
+.kb-list__session-warn {
+  flex: none;
+  color: var(--dsw-alias-state-warn-label);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}

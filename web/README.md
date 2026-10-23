@@ -64,6 +64,12 @@ web/
 - **实时**：`EventSource /api/kanban/events`，revision 变化后 150ms 拉 `/state`；断线 1s→30s 退避；
   `document.hidden` 或父页面 `kanban:visibility=false` 时断开，恢复后重连。
 - **乐观移动**：拖拽/菜单/键盘换列先本地改 `status + cardOrder`，失败整体回滚并 toast。
+- **新建卡片（v0.7）**：工作区/执行目录提到主表单；选工作区自动回填 cwd 与空 project；
+  项目、cwd、会话建议来自 `workspaces.list` / 会话 cwd / 历史卡片，按「选中工作区 > 近期会话 > 频次」排序，
+  以可点击 chips + 推荐徽标 + 来源标注呈现（非只读 datalist）。进行中卡片必须新建或选择会话：
+  已有会话走 `session.prompt` 发 buildStartPrompt，新建走 `session.ensure` 后绑定；失败保留卡片并提示
+  「卡片已创建，但会话未启动，可在详情补建」。详情抽屉无会话时警告并内联「新建会话」（先选工作区/目录，
+  按状态创建并绑定/开始处理）；独立预览只建卡并给中性提示，看板/列表对进行中未绑定会话显示弱警示。
 - **审批**：兼容单题与 v0.3 多问题（`questions[]`）。单题沿用 radio/复选框 + `optionIds[]`；多问题逐题渲染
   fieldset（header 小标题、序号、问题、单选/多选徽标、全部选项与说明），统一备注 +「提交全部回答」，提交前
   逐题校验并高亮/聚焦缺题，提交 `answers:[{questionId, optionIds[]}]`。卡片内 questions 限高滚动、详情内展开。
