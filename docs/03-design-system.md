@@ -416,10 +416,13 @@ flowchart LR
   1. 会话是从看板通过「打开会话」跳转进来的（`session.open` 由看板桥触发）；
   2. 当前会话就是被打开的那个会话；
   3. 左侧栏处于**收起/rail** 状态（展开时侧栏已有「看板」入口，不再重复）。
-- 气泡位置：`conversation.input.dock`（Composer 上方右侧），胶囊形，board 图标 +「返回看板」；`border-radius:999px` + `corner-shape:round`、layer-2 底 + elevation-soft；不遮挡输入区，不改变 Composer 布局高度（dock 自带内边距）。
+- 气泡位置：`conversation.input.dock`（Composer 上方），胶囊形，board 图标 +「返回看板」；**水平右边缘与输入框（`--dsh-composer-card-max-width` 卡片）右边缘对齐**，竖直方向保留 8px 间距。容器按 `max-width: calc(var(--dsh-composer-card-max-width) + 2 * var(--dsh-composer-side-clearance))` 居中、左右 padding = `--dsh-composer-side-clearance`，从而在不同窗口宽度下都不偏移。
+- 样式：`border-radius:999px` + `corner-shape:round`、layer-2 底 + elevation-soft；不遮挡输入区，不改变 Composer 布局高度（dock 自带内边距）。
 - 点击：回到看板面板，保留上次看板视图/筛选；气泡消失。切回看板或手动选择其他会话后自动清理状态。
+- **来源高亮**：点击气泡时把 sessionId 写入 `sessionStorage`；看板挂载后按 session 找到对应卡片，滚动到可见区域并高亮 **1.8s**（business 蓝描边 + 背景淡闪，结束后自动清除）。`prefers-reduced-motion` 下改为静态描边、不做闪烁；列表视图对行使用同一语义。
 - 从看板内启动「开始推进」但未打开会话时不出现；standalone 或宿主无面板桥时不出现。
 - 键盘可达（focus-visible 与现有按钮一致）；不做常驻头部按钮，避免每个会话都多一个无关入口。
+- 验收：1280/1440/1920 三档宽度下，气泡右边缘与输入框右边缘误差 ≤1px；返回后高亮卡片必须是来源卡；1.8s 后高亮消失；reduced-motion 下无动画。
 
 ### 7.14 待办回复语义
 

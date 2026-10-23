@@ -23,6 +23,7 @@ import { I18nContext, readStoredLang, resolveLang, storeLang, translate } from '
 import type { I18nKey, Lang, TranslateVars } from './i18n';
 import { copyText } from './lib/clipboard';
 import { hasActiveFilters, EMPTY_FILTERS, extractLabels, extractProjects, filterCards } from './lib/filter';
+import { cardIdForSession, consumeHighlightSession } from './lib/highlight';
 import type { CardFilters } from './lib/filter';
 import { countByColumn, groupCardsByColumn } from './lib/grouping';
 import type { ColumnGroups } from './lib/grouping';
@@ -139,6 +140,9 @@ export function App() {
   const bridgeState = useBridgeState();
   const embedded = bridgeState.mode === 'embedded';
   const mobile = useMediaQuery('(max-width: 719px)');
+  // 从会话页「返回看板」气泡回来时，短暂高亮来源卡片。
+  const [highlightCardId, setHighlightCardId] = useState<string | null>(null);
+  const [highlightSession, setHighlightSession] = useState<string | null>(() => consumeHighlightSession());
 
   // ------------------------------------------------------------------ i18n
   const [lang, setLangState] = useState<Lang>(() => resolveLang(undefined, readStoredLang()));
@@ -316,6 +320,24 @@ export function App() {
     setViewState(next);
     storeView(next);
   }, []);
+
+  useEffect(() => {
+    if (!highlightSession || snapshot.cards.length === 0) return;
+    const cardId = cardIdForSession(snapshot.cards, highlightSession);
+    setHighlightSession(null);
+    if (!cardId) return;
+    setHighlightCardId(cardId);
+    const frame = requestAnimationFrame(() => {
+      document.querySelector(`[data-card-id="${cardId}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [highlightSession, snapshot.cards]);
+
+  useEffect(() => {
+    if (!highlightCardId) return;
+    const timer = window.setTimeout(() => setHighlightCardId(null), 1800);
+    return () => window.clearTimeout(timer);
+  }, [highlightCardId]);
 
   const filteredCards = useMemo(() => filterCards(snapshot.cards, filters), [snapshot.cards, filters]);
   const groups = useMemo(
@@ -1125,6 +1147,7 @@ export function App() {
           selectionMode={selectionMode}
           selectedIds={selectedIds}
           onToggleSelection={handleToggleSelect}
+          highlightedCardId={highlightCardId}
         />
       );
     }
@@ -1150,6 +1173,7 @@ export function App() {
         selectionMode={selectionMode}
         selectedIds={selectedIds}
         onToggleSelection={handleToggleSelect}
+        highlightedCardId={highlightCardId}
       />
     );
   })();

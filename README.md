@@ -3,7 +3,7 @@
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里的原生看板插件。
 **卡片是控制面，DSH 会话是执行面**：你在看板里管理"要做什么、到哪了、需要你决定什么"，agent 在会话里执行，并通过原生工具把进展写回卡片。卡片内回复会直接进入绑定的 DSH 会话，会话里的决定也会回到卡片。
 
-> 状态：v0.5.0，已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写）。数据存本机 `~/.dsh-kanban/data.json`。
+> 状态：v0.6.0，已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写）。数据存本机 `~/.dsh-kanban/data.json`。
 > 仓库：[github.com/roxorlt/dsh-kanban](https://github.com/roxorlt/dsh-kanban)
 
 ![看板视图（真实 DSH 内）](docs/assets/screens/embedded-board-light.png)
@@ -29,7 +29,7 @@
 
 ## 已验证
 
-- 服务端 `node --test`：**67/67 通过**；Web `tsc` + Vite 构建通过，vitest 67/67，令牌 lint 0 error / 0 warning。
+- 服务端 `node --test`：**67/67 通过**；Web `tsc` + Vite 构建通过，vitest 69/69，令牌 lint 0 error / 0 warning。
 - 在**独立 DSH profile** 中真实安装并加载：侧栏入口、`main` 全屏面板、iframe 桥就绪、49 个主题令牌同步、明暗主题、console 0 error。
 - 会话桥：`session.create → refresh → open → binding → prompt` 实测 `accepted: true`。
 - agent 工具：真实 agent 调用 `kanban_create_card` 创建卡片，SSE 实时出现在看板。
@@ -170,6 +170,7 @@ docs/             # 分析、契约、设计、架构、验证
 - [验证记录（含 0.2.1 宿主）](docs/06-verification.md)
 - [Deep link 提案（已搁置，应用内打开会话已实现）](docs/08-deeplink-proposal.md)
 - [OpenDesign 设计/动效 skill 调研](docs/09-design-motion-skills.md)
+- [视觉审计（进行中）](docs/10-visual-audit.md)
 
 ## 已知限制
 

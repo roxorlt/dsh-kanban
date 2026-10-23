@@ -44,6 +44,7 @@ interface ListViewProps {
   selectionMode: boolean;
   selectedIds: ReadonlySet<string>;
   onToggleSelection: (cardId: string) => void;
+  highlightedCardId: string | null;
 }
 
 const COLUMN_TONE: Record<ColumnId, string> = {
@@ -68,6 +69,7 @@ export function ListView({
   selectionMode,
   selectedIds,
   onToggleSelection,
+  highlightedCardId,
 }: ListViewProps) {
   const { t } = useI18n();
   const [doneVisible, setDoneVisible] = useState(DONE_LIST_LIMIT);
@@ -159,6 +161,7 @@ export function ListView({
                       selectionMode={selectionMode}
                       selectionSelected={selectedIds.has(card.id)}
                       onToggleSelection={onToggleSelection}
+                      highlighted={highlightedCardId === card.id}
                     />
                   ))}
                 </ul>
@@ -189,6 +192,7 @@ function ListRow({
   selectionMode,
   selectionSelected,
   onToggleSelection,
+  highlighted = false,
 }: {
   card: Card;
   shared: CardViewShared;
@@ -196,6 +200,7 @@ function ListRow({
   selectionMode: boolean;
   selectionSelected: boolean;
   onToggleSelection: (cardId: string) => void;
+  highlighted?: boolean;
 }) {
   const { t, lang } = useI18n();
   const expanded = shared.expandedIds.has(card.id);
@@ -239,7 +244,8 @@ function ListRow({
     <li
       className={`kb-list__item${expanded ? ' kb-list__item--expanded' : ''}${
         selectionMode ? ' kb-list__item--selectable' : ''
-      }${selectionSelected ? ' kb-list__item--selected' : ''}`}
+      }${selectionSelected ? ' kb-list__item--selected' : ''}${highlighted ? ' kb-list__item--highlight' : ''}`}
+      data-card-id={card.id}
     >
       <div
         className="kb-list__row"

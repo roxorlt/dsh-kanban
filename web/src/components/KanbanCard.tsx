@@ -44,6 +44,7 @@ interface KanbanCardProps {
   resolvingApprovalId: string | null;
   selectionMode: boolean;
   selectionSelected: boolean;
+  highlighted?: boolean;
   onToggleSelection: (cardId: string) => void;
   onToggleExpanded: (cardId: string) => void;
   onOpenDetail: (cardId: string) => void;
@@ -87,6 +88,7 @@ export function KanbanCard({
   resolvingApprovalId,
   selectionMode,
   selectionSelected,
+  highlighted = false,
   onToggleSelection,
   onToggleExpanded,
   onOpenDetail,
@@ -234,7 +236,7 @@ export function KanbanCard({
         warning ? ' kb-card--warning' : ''
       }${dragging ? ' kb-card--dragging' : ''}${selectionMode ? ' kb-card--selectable' : ''}${
         selectionSelected ? ' kb-card--picked' : ''
-      }`}
+      }${highlighted ? ' kb-card--highlight' : ''}`}
       data-status={card.status}
       data-card-id={card.id}
       tabIndex={0}

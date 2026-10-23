@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.6.0 — 2026-10-23
+
+### 调整：返回看板气泡右对齐 + 来源卡片高亮
+
+- 气泡容器按 DSH Composer 宽度令牌（`--dsh-composer-card-max-width` / `--dsh-composer-side-clearance`）居中并右对齐，气泡右边缘与输入框右边缘一致（1440px 实测 1203 = 1203，误差 0）。
+- 点击「返回看板」时把被打开的 sessionId 写入 `sessionStorage`；看板挂载后映射到对应卡片，滚动到可见区域并高亮 1.8s（business 蓝描边 + 背景淡闪），自动清除。
+- 列表视图行使用同一高亮语义；`prefers-reduced-motion` 下退化为静态描边。
+- 修复高亮计时器被列表刷新 cleanup 取消的问题（拆成独立 effect）。
+
+### 动效 skill 补装
+
+- 安装 `ui-animation`（录屏动效复刻/分析，需要 FFmpeg/Python 时再启用）；连同 animate、review-animations、motion-lab 构成完整动效工具链。
+- 视觉/动效已拆分为 7 张看板卡（视觉 V1–V4、动效 M1–M3），V1 视觉审计已启动。
+
+
 ## v0.5.1 — 2026-10-22
 
 ### 调整：会话页返回看板入口改为条件气泡

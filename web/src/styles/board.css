@@ -1225,3 +1225,36 @@
   font: var(--dsw-font-xxs-12);
   text-align: center;
 }
+
+
+/* 从会话页「返回看板」回来后，高亮来源卡片 1.8s（用户 2026-10-23 反馈）。
+   用 border/box-shadow/背景做短促闪烁，不改变布局；reduced-motion 下退化为静态描边。 */
+@keyframes kb-card-highlight {
+  0% {
+    border-color: var(--dsw-alias-state-business-primary);
+    box-shadow: inset 0 0 0 2px var(--dsw-alias-state-business-primary);
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, var(--kb-surface-card));
+  }
+  65% {
+    border-color: var(--dsw-alias-state-business-primary);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, transparent);
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 4%, var(--kb-surface-card));
+  }
+  100% {
+    border-color: var(--dsw-alias-border-l2);
+    box-shadow: inset 0 0 0 2px transparent;
+    background: var(--kb-surface-card);
+  }
+}
+
+.kb-card--highlight {
+  animation: kb-card-highlight 1.8s var(--kb-ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kb-card--highlight {
+    animation: none;
+    border-color: var(--dsw-alias-state-business-primary);
+    box-shadow: inset 0 0 0 2px var(--dsw-alias-state-business-primary);
+  }
+}

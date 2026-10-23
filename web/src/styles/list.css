@@ -313,3 +313,23 @@
     min-width: 96px;
   }
 }
+
+
+/* 列表行：从会话返回时短暂高亮来源卡片（与看板卡片同一反馈语义）。 */
+@keyframes kb-list-item-highlight {
+  0% { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 9%, transparent); }
+  65% { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 4%, transparent); }
+  100% { background: transparent; }
+}
+
+.kb-list__item--highlight {
+  animation: kb-list-item-highlight 1.8s var(--kb-ease-out) both;
+  box-shadow: inset 2px 0 0 var(--dsw-alias-state-business-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kb-list__item--highlight {
+    animation: none;
+    background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, transparent);
+  }
+}

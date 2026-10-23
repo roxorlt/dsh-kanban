@@ -95,6 +95,15 @@
 | 截图 | `docs/assets/screens/return-bubble.png`、`return-bubble-expanded.png` |
 | 设计 | docs/03 §7.13 与 D-35 已更新为条件气泡规范 |
 
+## 1.8 v0.6.0（返回气泡右对齐 + 来源卡片高亮）
+
+| 项 | 结果 |
+| --- | --- |
+| DSH 0.2.1-rc.2 宿主 | 打开会话 → 收起侧栏 → 气泡右边缘 1203px，输入框卡片右边缘 1203px（误差 0）；点击返回 → 看板挂载并高亮来源卡 `card-2171aaa8`，1.8s 后 class 清除；console 0 error |
+| 自测 | web tsc 0 error；vitest 12 文件 / 69 测试；build / lint 0/0；服务端 67/67 |
+| 截图 | `docs/assets/screens/return-bubble-aligned.png`、`return-highlight.png` |
+| 设计 | docs/03 §7.13 增加对齐/HIGHLIGHT/reduced-motion/验收标准 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

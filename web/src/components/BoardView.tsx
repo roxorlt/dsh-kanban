@@ -23,6 +23,7 @@ interface BoardViewProps {
   selectionMode: boolean;
   selectedIds: ReadonlySet<string>;
   onToggleSelection: (cardId: string) => void;
+  highlightedCardId: string | null;
   activeColumn: ColumnId;
   onActiveColumnChange: (column: ColumnId) => void;
   onCreateInColumn: (column: ColumnId) => void;
@@ -65,6 +66,7 @@ export function BoardView({
   selectionMode,
   selectedIds,
   onToggleSelection,
+  highlightedCardId,
   activeColumn,
   onActiveColumnChange,
   onCreateInColumn,
@@ -242,6 +244,7 @@ export function BoardView({
                     resolvingApprovalId={shared.resolvingApprovalId}
                     selectionMode={selectionMode}
                     selectionSelected={selectedIds.has(card.id)}
+                    highlighted={highlightedCardId === card.id}
                     onToggleSelection={onToggleSelection}
                     onToggleExpanded={actions.onToggleExpanded}
                     onOpenDetail={actions.onOpenDetail}
