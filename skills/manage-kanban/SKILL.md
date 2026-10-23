@@ -104,3 +104,10 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 - 当用户从看板卡片内回复，或点击「开始推进」时，**先 `kanban_move_card` 把卡片移到 `running`，并用 `kanban_update_card` 写一句 `currentAction`**，再开始实际工作；不要等做完才改状态。
 - 如果卡片已经是 `running`，只更新 `currentAction`；如果用户在待办卡片里只是提问、没有启动意图，可以保持 `backlog` 并直接回答。
 - 完成时用 `kanban_complete_card` 写 `result`；需要用户决策时用 `kanban_request_approval`，不要替用户做选择。
+
+## 交接摘要（handoff）
+
+- 会话即将归档/暂停、或要把卡片交给另一个会话前，用 `kanban_update_card` 写 `handoff`：
+  `{ summary: "当前进度/已完成/关键决策", nextSteps: "下一步与验收标准", sessionId: "可选来源会话" }`。summary ≤400、nextSteps ≤600。
+- 接手一张有 `handoff` 的卡片时，先读 `kanban_card` 的 handoff，按摘要与 nextSteps 续接；不要从头重做。
+- handoff 是覆盖写；`handoff: null` 清除。写入会追加 `handoff` 活动，不改变卡片状态。

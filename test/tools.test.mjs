@@ -265,3 +265,41 @@ test('工具尊重 exec.signal 取消：已取消时不执行、直接抛出', a
   const ok = parse(await byName.get('kanban_boards').execute({}, { ...EXEC, signal: liveController.signal }))
   assert.equal(ok.ok, true)
 })
+
+test('kanban_update_card / kanban_card / kanban_cards 支持 handoff（含 null 清除与校验）', async t => {
+  const { byName } = await setup(t)
+  const updateTool = byName.get('kanban_update_card')
+  assert.ok(updateTool.parameters.properties.handoff)
+  assert.equal(updateTool.parameters.properties.handoff.oneOf.length, 2)
+  assert.match(updateTool.description, /handoff/)
+
+  const created = parse(await byName.get('kanban_create_card').execute({ title: 'handoff 工具卡' }, EXEC))
+  const cardId = created.card.id
+  const updated = parse(await updateTool.execute({
+    cardId,
+    handoff: { summary: '暂停在写测试', nextSteps: '继续跑冒烟', sessionId: 's-1' },
+  }, EXEC))
+  assert.equal(updated.ok, true)
+  assert.equal(updated.card.handoff.summary, '暂停在写测试')
+  assert.equal(updated.card.handoff.nextSteps, '继续跑冒烟')
+  assert.equal(updated.card.handoff.sessionId, 's-1')
+  assert.ok(updated.card.handoff.at > 0)
+  assert.match(updated.card.handoff.by.name, /DSH Agent/)
+
+  // kanban_card 详情与 kanban_cards 摘要都含 handoff
+  const detail = parse(await byName.get('kanban_card').execute({ cardId }, EXEC))
+  assert.equal(detail.card.handoff.summary, '暂停在写测试')
+  const list = parse(await byName.get('kanban_cards').execute({ q: 'handoff 工具卡' }, EXEC))
+  assert.equal(list.cards.find(card => card.id === cardId).handoff.summary, '暂停在写测试')
+  const timeline = parse(await byName.get('kanban_card').execute({ cardId }, EXEC))
+  assert.ok(timeline.activities.some(item => item.type === 'handoff' && item.text === '更新了交接摘要'))
+
+  // null 清除
+  const cleared = parse(await updateTool.execute({ cardId, handoff: null }, EXEC))
+  assert.equal(cleared.ok, true)
+  assert.equal(cleared.card.handoff, undefined)
+  // 空 summary → 错误 JSON
+  const invalid = parse(await updateTool.execute({ cardId, handoff: { summary: '  ' } }, EXEC))
+  assert.equal(invalid.ok, false)
+  assert.equal(invalid.error.code, 'BAD_REQUEST')
+})

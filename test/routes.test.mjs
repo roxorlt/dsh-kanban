@@ -678,3 +678,59 @@ test('POST /cards/batch：批量归档/移动、跳过不存在/已归档、上�
   assert.equal(missingOnly.json.cards.length, 0)
   assert.equal(missingOnly.json.skipped.length, 200)
 })
+
+test('PATCH handoff：写入返回 + /state 含 handoff + handoff 活动 + 覆盖/清除/非法', async t => {
+  const { server } = await setup(t)
+  const card = await createCard(server, { title: '交接摘要 HTTP' })
+  const patched = await api(server, `/api/kanban/cards/${card.id}`, {
+    method: 'PATCH',
+    body: { version: 1, changes: { handoff: { summary: '当前做到 SSE 广播', nextSteps: '补测试', sessionId: 's-1' } } },
+  })
+  assert.equal(patched.status, 200)
+  assert.equal(patched.json.card.handoff.summary, '当前做到 SSE 广播')
+  assert.equal(patched.json.card.handoff.nextSteps, '补测试')
+  assert.ok(patched.json.card.handoff.at > 0)
+  assert.match(patched.json.card.handoff.by.name, /你/)
+  assert.equal(patched.json.card.version, 2)
+  assert.equal(patched.json.card.status, 'backlog') // 不改变状态
+
+  const state = await api(server, '/api/kanban/state')
+  const fromState = state.json.cards.find(item => item.id === card.id)
+  assert.equal(fromState.handoff.summary, '当前做到 SSE 广播')
+
+  const timeline = await api(server, `/api/kanban/cards/${card.id}/activities`)
+  const handoffEvent = timeline.json.activities.find(item => item.type === 'handoff')
+  assert.equal(handoffEvent.text, '更新了交接摘要')
+
+  // 覆盖写
+  const overwritten = await api(server, `/api/kanban/cards/${card.id}`, {
+    method: 'PATCH',
+    body: { version: 2, changes: { handoff: { summary: '换了个摘要' } } },
+  })
+  assert.equal(overwritten.status, 200)
+  assert.equal(overwritten.json.card.handoff.summary, '换了个摘要')
+  assert.equal(overwritten.json.card.handoff.nextSteps, undefined)
+  assert.ok(overwritten.json.card.handoff.at >= patched.json.card.handoff.at)
+
+  // null 清除
+  const cleared = await api(server, `/api/kanban/cards/${card.id}`, {
+    method: 'PATCH', body: { version: 3, changes: { handoff: null } },
+  })
+  assert.equal(cleared.status, 200)
+  assert.equal(cleared.json.card.handoff, undefined)
+  const clearedTimeline = await api(server, `/api/kanban/cards/${card.id}/activities`)
+  assert.ok(clearedTimeline.json.activities.some(item => item.type === 'handoff' && item.text === '清除了交接摘要'))
+
+  // 非法：空 summary / 非对象 → 400，且不落库
+  const emptySummary = await api(server, `/api/kanban/cards/${card.id}`, {
+    method: 'PATCH', body: { version: 4, changes: { handoff: { summary: '  ' } } },
+  })
+  assert.equal(emptySummary.status, 400)
+  assert.equal(emptySummary.json.error.code, 'BAD_REQUEST')
+  const badType = await api(server, `/api/kanban/cards/${card.id}`, {
+    method: 'PATCH', body: { version: 4, changes: { handoff: 'nope' } },
+  })
+  assert.equal(badType.status, 400)
+  const finalState = await api(server, '/api/kanban/state')
+  assert.equal(finalState.json.cards.find(item => item.id === card.id).handoff, undefined)
+})

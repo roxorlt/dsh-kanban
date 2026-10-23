@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.8.0 — 2026-10-23
+
+### 新增：handoff 交接摘要字段（M2）
+
+- Card 新增 `handoff {summary, nextSteps?, sessionId?, at, by?}`；`summary` ≤400 必填、`nextSteps` ≤600，服务端写入 at/by。
+- `PATCH /cards/:id` / `kanban_update_card` 支持 `handoff`：对象覆盖写、`null` 清除；写入追加 `handoff` 活动「更新了交接摘要」，不改变卡片状态。
+- Web：详情抽屉只读「交接摘要」区块 + 复制；看板/列表「交接」徽标；时间线渲染 handoff 活动。
+- 续接：所有从卡片启动/补建新会话的启动提示统一追加 `【交接摘要】` + 后续；开始推进 / 进行中建卡 / 详情补建会话共用 helper。
+- Agent skill 增补：暂停/归档/交接前写 handoff，接手时先读 handoff 续接。
+
+### 验证
+
+- 服务端 71/71；Web vitest 16 文件 / 110 测试；tsc 0 error；build；令牌 lint 0/0。
+- 真实 DSH 0.2.1-rc.2：PATCH handoff 后卡片徽标/详情区块/时间线可见；点击开始推进后会话文本逐字包含 `【交接摘要】` + summary + `后续：nextSteps`；agent 据此继续处理；console 0 error。
+- 设计：docs/03 §7.18 新增交接摘要规范；截图 handoff-badge/handoff-drawer/handoff-prompt。
+
+
 ## v0.7.3 — 2026-10-23
 
 ### 修复：「已完成」列内拖动松手后卡片消失进「查看全部」

@@ -485,6 +485,14 @@ flowchart LR
 - 首次加载骨架卡；SSE 断连错误条；空列/空分组说明“这里会出现什么”并给下一步；筛选无结果提供清除筛选。
 - 受阻/失败在待你确认列显示原因和重试；禁止只靠颜色表达状态。
 
+### 7.18 交接摘要（handoff，v0.8）
+
+- **入口/展示**：卡片详情抽屉在「会话」之后显示只读「交接摘要」区块（summary、后续/nextSteps、写入时间、来源会话、写入者），右上角「复制交接摘要」；看板卡片属性行与列表行元数据出现轻量「交接」徽标（title/aria 带日期），不挤压布局。
+- **写入**：agent 在会话暂停/归档/交接前通过 `kanban_update_card` 的 `handoff` 写入（summary ≤400 必填、nextSteps ≤600、sessionId 可选）；服务端补 at/by；`handoff: null` 清除，均追加 `handoff` 活动，不改变卡片状态。
+- **续接**：从卡片启动/续接新会话时，启动提示在原有内容后追加 `【交接摘要】\n{summary}` 与 `后续：{nextSteps}`；无 handoff 不追加。开始推进、新建进行中卡自动会话、详情补建会话共用同一 helper。
+- **不做**：v0.8 不自动捕获会话归档事件（由 agent 主动写）；用户不可在 UI 直接编辑 handoff（可让 agent 更新）。
+- **验收**：卡片有 handoff 时详情/徽标可见、复制内容完整；启动新会话说会话文本包含 `【交接摘要】` 与 nextSteps；无 handoff 时提示不出现空段；暗色/窄屏不溢出。
+
 ## 8. 无障碍与国际化
 
 - 文案全部走 locale 字典（含 `aria-label`、placeholder、Toast、空态、计数标签）；建议 key：`kanban.header.unarchived`、`kanban.header.needsCount`、`kanban.session.runningCount`、`kanban.approval.*`、`kanban.approval.submitAll`、`kanban.approval.questionIndex`、`kanban.session.primary`、`kanban.list.groupBy.*`、`kanban.done.showAll`、`kanban.dirty.confirm`、`kanban.theme.follow|light|dark`、`kanban.action.details`。

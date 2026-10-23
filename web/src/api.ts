@@ -67,6 +67,17 @@ export function normalizeCard(raw: Partial<Card> & { id: string }): Card {
     createdAt: raw.createdAt ?? 0,
     updatedAt: raw.updatedAt ?? raw.createdAt ?? 0,
     boardId: raw.boardId ?? 'board-default',
+    ...(raw.handoff
+      ? {
+          handoff: {
+            summary: raw.handoff.summary ?? '',
+            ...(raw.handoff.nextSteps ? { nextSteps: raw.handoff.nextSteps } : {}),
+            ...(raw.handoff.sessionId ? { sessionId: raw.handoff.sessionId } : {}),
+            at: raw.handoff.at ?? 0,
+            ...(raw.handoff.by ? { by: raw.handoff.by } : {}),
+          },
+        }
+      : {}),
   } as Card;
 }
 
@@ -181,6 +192,7 @@ export type CardChanges = Partial<
     | 'artifacts'
     | 'metadata'
     | 'order'
+    | 'handoff'
   >
 >;
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-kanban",
-  "version": "0.7.3",
+  "version": "0.8.0",
   "description": "DSH 看板：以卡片为控制面、以 DSH 会话为执行面的任务看板插件。",
   "license": "MIT",
   "author": "roxorlt",

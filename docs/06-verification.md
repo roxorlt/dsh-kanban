@@ -190,6 +190,16 @@
 | 自测 | Web vitest 15 文件 / 107 测试（新增 `planCardDrop` 8 例）；tsc 0 error；令牌 lint 8 CSS 0/0；build 成功；服务端 71/71 |
 | 截图 | `design/screens/board-drag-done-cross-drop-top.png`（跨列拖进已完成：落点线在首张卡片前）、`board-drag-done-same-no-drop-line.png`（同列拖回空白：不画落点线） |
 
+## 1.10 v0.8.0（handoff 交接摘要）
+
+| 项 | 结果 |
+| --- | --- |
+| 服务端 | `node --test` 71/71：normalize 截断/服务端 at/by、PATCH 写入/覆盖/null 清除/非法、活动、存储 roundtrip、工具 schema |
+| Web | vitest 16 文件 / 110 测试；tsc/build/令牌 lint 全绿 |
+| 真实宿主 | 给卡片写 handoff 后：看板徽标「交接」出现、详情「交接摘要」含 summary/后续/写入时间/来源会话/写入者；点「开始推进」创建的会话文本逐字包含 `【交接摘要】` + summary + `后续：nextSteps`，agent 继续处理；console 0 error |
+| 清除 | `handoff:null` 清除并追加「清除了交接摘要」活动，卡片状态不变 |
+| 截图 | `handoff-badge.png`、`handoff-detail.png`、`handoff-drawer.png`、`handoff-prompt.png` |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

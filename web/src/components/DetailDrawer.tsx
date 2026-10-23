@@ -14,10 +14,13 @@ import { Timeline, TimelineLoadMore } from './Timeline';
 import type { CardActionHandlers } from './types';
 import type { CreateSessionOptions } from './SessionSection';
 import { pushOverlay } from '../lib/overlayStack';
+import { copyText } from '../lib/clipboard';
+import { formatHandoffCopy } from '../lib/handoff';
 import {
   IconArchive,
   IconClose,
   IconCommit,
+  IconCopy,
   IconEdit,
   IconFile,
   IconImage,
@@ -104,6 +107,19 @@ export function DetailDrawer({
   const [targetSessionId, setTargetSessionId] = useState<string | null>(card.sessionIds[0] ?? null);
   const [composerDirty, setComposerDirty] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
+  const [handoffCopied, setHandoffCopied] = useState(false);
+  useEffect(() => {
+    setHandoffCopied(false);
+  }, [card.id]);
+
+  const copyHandoff = async () => {
+    if (!card.handoff) return;
+    if (await copyText(formatHandoffCopy(card.handoff))) {
+      setHandoffCopied(true);
+      window.setTimeout(() => setHandoffCopied(false), 1600);
+    }
+  };
+
   const tone = STATUS_TONE[card.status];
   const statusKey = `status.${card.status}` as I18nKey;
   const activities = feed?.items ?? [];
@@ -434,6 +450,52 @@ export function DetailDrawer({
                   })}
                 </ul>
               ) : null}
+            </section>
+          ) : null}
+
+          {card.handoff ? (
+            <section className="kb-drawer__section kb-drawer__section--handoff" aria-label={t('handoff.title')}>
+              <div className="kb-drawer__section-head">
+                <h3 className="kb-drawer__section-title">{t('handoff.title')}</h3>
+                <button
+                  type="button"
+                  className="kb-btn kb-btn--sm kb-btn--ghost kb-handoff__copy"
+                  onClick={() => void copyHandoff()}
+                >
+                  <span className="kb-icon" aria-hidden="true">
+                    <IconCopy />
+                  </span>
+                  {handoffCopied ? t('handoff.copied') : t('handoff.copy')}
+                </button>
+              </div>
+              <p className="kb-handoff__summary">{card.handoff.summary}</p>
+              {card.handoff.nextSteps ? (
+                <div className="kb-handoff__next">
+                  <span className="kb-handoff__label">{t('handoff.nextSteps')}</span>
+                  <p>{card.handoff.nextSteps}</p>
+                </div>
+              ) : null}
+              <dl className="kb-handoff__meta">
+                <div>
+                  <dt>{t('handoff.writtenAt')}</dt>
+                  <dd>{formatDateTime(card.handoff.at, lang)}</dd>
+                </div>
+                <div>
+                  <dt>{t('handoff.sourceSession')}</dt>
+                  <dd>
+                    {card.handoff.sessionId
+                      ? sessions.find((session) => session.id === card.handoff?.sessionId)?.title ??
+                        card.handoff.sessionId
+                      : t('common.none')}
+                  </dd>
+                </div>
+                {card.handoff.by ? (
+                  <div>
+                    <dt>{t('handoff.by')}</dt>
+                    <dd>{card.handoff.by.name}</dd>
+                  </div>
+                ) : null}
+              </dl>
             </section>
           ) : null}
 

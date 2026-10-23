@@ -4,7 +4,7 @@ import type { Approval, Card, ColumnId, Priority, SessionRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { COLUMN_OF_STATUS, COLUMNS, STATUS_OF_COLUMN, STATUS_TONE, isWarningStatus } from '../lib/status';
-import { elapsedMs, formatDuration } from '../lib/time';
+import { elapsedMs, formatDateTime, formatDuration } from '../lib/time';
 import { CARD_TIMELINE_PREVIEW, CARD_TIMELINE_STEP, visibleActivities } from '../lib/activities';
 import type { ActivityFeed } from '../lib/activities';
 import { ApprovalPanel } from './ApprovalPanel';
@@ -335,6 +335,15 @@ export function KanbanCard({
           </span>
         ))}
         {extraLabels > 0 ? <span className="kb-tag">+{extraLabels}</span> : null}
+        {card.handoff ? (
+          <span
+            className="kb-tag kb-tag--handoff"
+            title={t('handoff.badgeAria', { date: formatDateTime(card.handoff.at, lang) })}
+            aria-label={t('handoff.badgeAria', { date: formatDateTime(card.handoff.at, lang) })}
+          >
+            {t('handoff.badge')}
+          </span>
+        ) : null}
       </div>
 
       {mediaCount ? (

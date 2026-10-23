@@ -4,7 +4,7 @@ import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import type { Board } from '../types';
 import { COLUMNS } from '../lib/status';
-import { elapsedMs, formatDuration } from '../lib/time';
+import { elapsedMs, formatDuration, formatDateTime } from '../lib/time';
 import {
   DONE_LIST_LIMIT,
   LIST_GROUP_BY_OPTIONS,
@@ -333,6 +333,15 @@ function ListRow({
             </span>
             {card.metadata.toolCalls}
           </span>
+          {card.handoff ? (
+            <span
+              className="kb-tag kb-tag--handoff"
+              title={t('handoff.badgeAria', { date: formatDateTime(card.handoff.at, lang) })}
+              aria-label={t('handoff.badgeAria', { date: formatDateTime(card.handoff.at, lang) })}
+            >
+              {t('handoff.badge')}
+            </span>
+          ) : null}
           {card.status === 'running' && !card.sessionIds.length ? (
             <span className="kb-list__session-warn" title={t('drawer.runningNoSessionWarn')}>
               {t('card.noSessionWarn')}

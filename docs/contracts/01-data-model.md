@@ -79,6 +79,7 @@ interface Card {
   version: number;               // 乐观锁，每次服务端写 +1
   archived?: boolean;
   archivedAt?: number;           // 归档时间；自动/手动归档都会写
+  handoff?: Handoff;             // v0.8：交接摘要；新会话启动时拼入提示
   createdAt: number;
   updatedAt: number;
   startedAt?: number;
@@ -135,13 +136,21 @@ interface ApprovalOption {
   tone?: 'primary' | 'danger' | 'ghost';  // 渲染建议
 }
 
+interface Handoff {
+  summary: string;               // 交接摘要，≤400 字；会话归档/暂停/交接时写入
+  nextSteps?: string;            // 后续动作，≤600 字
+  sessionId?: string;            // 来源会话（可选）
+  at: number;                    // 服务端写入时间
+  by?: Actor;                    // 写入者（agent/user）
+}
+
 interface Activity {
   id: string;                    // "ev-" + 8 hex
   cardId: string;
   type:
     | 'created' | 'status' | 'progress' | 'comment' | 'approval_requested'
     | 'approval_resolved' | 'session_linked' | 'checklist' | 'artifact'
-    | 'result' | 'error' | 'ack' | 'archived';
+    | 'result' | 'error' | 'ack' | 'archived' | 'handoff';
   actor: Actor;
   text: string;                  // 展示文本，≤ 400 字
   at: number;
@@ -190,6 +199,15 @@ interface StoreFile {
 - 写入 `archived: true`、`archivedAt`、`updatedAt`，追加 `type: 'archived'` 活动（actor=`system`，文本「自动归档：已完成超过 N 天」）；
 - 不删除数据，可通过归档查询恢复；启动时立即执行一次，之后每小时执行一次；
 - 手动归档（单卡/批量）同样写 `archivedAt` 与 `archived` 活动。
+
+## 3.y 交接摘要（handoff，v0.8）
+
+- 写入：`PATCH /api/kanban/cards/:id` 的 `changes.handoff`（工具 `kanban_update_card` 同名字段）：
+  `{ summary: string（≤400，必填）, nextSteps?: string（≤600）, sessionId?: string（≤160） }`。
+- 服务端补 `at`（epoch ms）与 `by`（actor）；`handoff: null` 清除；写入时追加 `type:'handoff'` 活动「更新了交接摘要」。
+- 用途：会话归档/暂停或 agent 交接时记录上下文；卡片详情展示；从卡片启动/续接新会话时，启动提示拼接：
+  `【交接摘要】\n{summary}\n后续：{nextSteps}`。
+- 限制：不改变卡片状态；不自动清空；每次覆盖写（保留活动历史）。
 
 约束：
 - `cards[].version` 单调递增；PATCH/DELETE/move 必须带 `version`（UI）或强制 `force:true`（工具可省略）。

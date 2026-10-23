@@ -21,7 +21,8 @@ export type ActivityType =
   | 'result'
   | 'error'
   | 'ack'
-  | 'archived';
+  | 'archived'
+  | 'handoff';
 export type ArtifactKind = 'file' | 'link' | 'report' | 'commit' | 'image';
 
 export interface Actor {
@@ -68,6 +69,19 @@ export interface ApprovalResolution {
   /** 兼容更旧服务端返回的 {optionId,label} 形态（normalizeApproval 会转换） */
   optionId?: string;
   label?: string;
+}
+
+export interface Handoff {
+  /** 交接摘要，≤400 字 */
+  summary: string;
+  /** 后续动作，≤600 字 */
+  nextSteps?: string;
+  /** 来源会话（可选） */
+  sessionId?: string;
+  /** 服务端写入时间 */
+  at: number;
+  /** 写入者 */
+  by?: Actor;
 }
 
 export interface Approval {
@@ -138,6 +152,8 @@ export interface Card {
   archived?: boolean;
   /** 归档时间（v1.1 batch archive 写入） */
   archivedAt?: number;
+  /** v0.8 交接摘要：新会话启动提示会拼接 */
+  handoff?: Handoff;
   createdAt: number;
   updatedAt: number;
   startedAt?: number;

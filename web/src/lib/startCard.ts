@@ -1,4 +1,5 @@
 import type { Card, Status } from '../types';
+import { formatHandoffPrompt } from './handoff';
 
 /** 只有待办卡可以「开始推进」。 */
 export function canStartCard(card: Pick<Card, 'status' | 'archived'>): boolean {
@@ -12,14 +13,17 @@ export function shouldPromptStartAfterReply(status: Status): boolean {
 
 /** 启动提示全文（发送到主会话）。 */
 export function buildStartPrompt(
-  card: Pick<Card, 'title' | 'summary' | 'currentAction'>,
+  card: Pick<Card, 'title' | 'summary' | 'currentAction' | 'handoff'>,
 ): string {
   const body = card.summary.trim() || card.currentAction?.trim() || '';
-  return [
+  const parts = [
     `【看板·开始推进】「${card.title}」`,
     body,
     '请用 kanban_* 工具推进这张卡片（如有 manage-kanban 技能，按技能流程执行）：先确认目标与验收标准，按里程碑更新卡片进展；需要决策时用 kanban_request_approval。',
-  ].join('\n');
+  ];
+  const handoff = formatHandoffPrompt(card.handoff);
+  if (handoff) parts.push(handoff);
+  return parts.join('\n');
 }
 
 export interface StartCardDeps {

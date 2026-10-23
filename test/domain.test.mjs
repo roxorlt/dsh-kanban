@@ -6,7 +6,7 @@ import {
   ackCard, applySeedMode, archiveCard, autoArchiveCandidates, autoArchiveCompleted, batchArchive, batchMove,
   cardsOfBoard, cleanText, completeCard, countsFor, createCard,
   createSeed, isValidId, linkSession, moveCard, newActivityId, newApprovalId, newArtifactId, newBoardId, newQuestionId,
-  newCardId, newChecklistId, normalizeStore, patchCard, requestApproval, requireCard, resolveApproval,
+  newCardId, newChecklistId, normalizeHandoff, normalizeStore, patchCard, requestApproval, requireCard, resolveApproval,
   sortColumnCards, unlinkSession,
 } from '../lib/domain.js'
 
@@ -654,4 +654,92 @@ test('autoArchiveCompleted：仅 done/canceled 且超过 days；29/30/31 天边�
   oldCard.completedAt = FIXED_NOW - 500 * DAY
   assert.equal(autoArchiveCompleted(draft2, { days: 0, now: FIXED_NOW }), 0)
   assert.equal(oldCard.archived, undefined)
+})
+
+test('handoff：normalizeHandoff 校验/截断/服务端 at·by，patchCard 覆盖写与清除', () => {
+  assert.ok(ACTIVITY_TYPES.includes('handoff'))
+  assert.equal(LIMITS.handoffSummary, 400)
+  assert.equal(LIMITS.handoffNextSteps, 600)
+  const actor = { kind: 'agent', name: 'DSH Agent' }
+  const handoff = normalizeHandoff({
+    summary: '  正在实现 handoff  ',
+    nextSteps: '接着补测试',
+    sessionId: 'session-1',
+    at: 1,
+    by: { kind: 'user', name: '你' },
+  }, { now: FIXED_NOW, actor, at: FIXED_NOW })
+  assert.equal(handoff.summary, '正在实现 handoff')
+  assert.equal(handoff.nextSteps, '接着补测试')
+  assert.equal(handoff.sessionId, 'session-1')
+  assert.equal(handoff.at, FIXED_NOW) // 服务端时间覆盖客户端
+  assert.equal(handoff.by.name, 'DSH Agent') // 服务端 actor 覆盖客户端 by
+
+  // 截断而非报错
+  const long = normalizeHandoff({ summary: 's'.repeat(999), nextSteps: 'n'.repeat(999), sessionId: 'x'.repeat(999) }, { now: FIXED_NOW, actor })
+  assert.equal(long.summary.length, LIMITS.handoffSummary)
+  assert.equal(long.nextSteps.length, LIMITS.handoffNextSteps)
+  assert.equal(long.sessionId.length, LIMITS.handoffSessionId)
+  // 可选项为空时不落字段
+  const minimal = normalizeHandoff({ summary: '只有摘要' }, { now: FIXED_NOW, actor })
+  assert.equal(minimal.nextSteps, undefined)
+  assert.equal(minimal.sessionId, undefined)
+  assert.throws(() => normalizeHandoff({ summary: '   ' }, { now: FIXED_NOW, actor }), error => error.code === 'BAD_REQUEST')
+  assert.throws(() => normalizeHandoff({}, { now: FIXED_NOW, actor }), error => error.code === 'BAD_REQUEST')
+  assert.throws(() => normalizeHandoff('oops', { now: FIXED_NOW, actor }), error => error.code === 'BAD_REQUEST')
+
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'running')
+  const originalStatus = card.status
+  const originalVersion = card.version
+  const first = patchCard(draft, card.id, {
+    handoff: { summary: '当前做到 SSE 广播', nextSteps: '补测试并跑冒烟', sessionId: 's-1' },
+  }, { actor, now: FIXED_NOW + 1 })
+  assert.equal(first.card.handoff.summary, '当前做到 SSE 广播')
+  assert.equal(first.card.handoff.at, FIXED_NOW + 1)
+  assert.equal(first.card.handoff.by.kind, 'agent')
+  assert.equal(first.card.status, originalStatus) // 不改变状态
+  assert.equal(first.card.version, originalVersion + 1)
+  assert.equal(first.activities.length, 1)
+  assert.equal(first.activities[0].type, 'handoff')
+  assert.equal(first.activities[0].text, '更新了交接摘要')
+  assert.equal(first.activities[0].data.sessionId, 's-1')
+
+  // 覆盖写：替换字段并刷新 at/by，不保留旧 nextSteps
+  const second = patchCard(draft, card.id, { handoff: { summary: '换了摘要' } }, { actor: { kind: 'user', name: '你' }, now: FIXED_NOW + 2 })
+  assert.equal(second.card.handoff.summary, '换了摘要')
+  assert.equal(second.card.handoff.nextSteps, undefined)
+  assert.equal(second.card.handoff.at, FIXED_NOW + 2)
+  assert.equal(second.card.handoff.by.kind, 'user')
+
+  // null 清除 + handoff 活动
+  const cleared = patchCard(draft, card.id, { handoff: null }, { now: FIXED_NOW + 3 })
+  assert.equal(cleared.card.handoff, undefined)
+  assert.equal(cleared.card.status, originalStatus)
+  assert.equal(cleared.activities.length, 1)
+  assert.equal(cleared.activities[0].type, 'handoff')
+  assert.equal(cleared.activities[0].text, '清除了交接摘要')
+  // 再次 clear 无副作用（不产生空活动）
+  const again = patchCard(draft, card.id, { handoff: null }, { now: FIXED_NOW + 4 })
+  assert.equal(again.activities.length, 0)
+  // 非法 handoff 不落盘
+  assert.throws(() => patchCard(draft, card.id, { handoff: { summary: ' ' } }), error => error.code === 'BAD_REQUEST')
+  assert.throws(() => patchCard(draft, card.id, { handoff: 42 }), error => error.code === 'BAD_REQUEST')
+  assert.equal(draft.cards.find(item => item.id === card.id).handoff, undefined)
+})
+
+test('handoff：normalizeStore 读取保留合法 handoff，坏数据丢弃不损坏整份存储', () => {
+  const seed = JSON.parse(JSON.stringify(createSeed('demo', FIXED_NOW)))
+  const target = seed.cards[0]
+  target.handoff = { summary: '  交接摘要  ', nextSteps: '后续', sessionId: 's-1', at: FIXED_NOW - 100, by: { kind: 'agent', name: 'DSH Agent' } }
+  seed.cards[1].handoff = { summary: '   ' } // 非法：读取时丢弃
+  seed.cards[2].handoff = 'bad'
+  const data = normalizeStore(seed, FIXED_NOW)
+  const kept = data.cards.find(card => card.id === target.id).handoff
+  assert.equal(kept.summary, '交接摘要')
+  assert.equal(kept.nextSteps, '后续')
+  assert.equal(kept.sessionId, 's-1')
+  assert.equal(kept.at, FIXED_NOW - 100)
+  assert.equal(kept.by.name, 'DSH Agent')
+  assert.equal(data.cards.find(card => card.id === seed.cards[1].id).handoff, undefined)
+  assert.equal(data.cards.find(card => card.id === seed.cards[2].id).handoff, undefined)
 })

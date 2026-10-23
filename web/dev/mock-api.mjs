@@ -121,6 +121,13 @@ const cardRunning = makeCard({
   cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
   sessionIds: ['session-7f3a91', 'session-91c2d3'],
   agent: { name: 'DSH Agent' },
+  handoff: {
+    summary: '已完成卡片主流程与多会话绑定，剩余无会话时的新建与失败降级。',
+    nextSteps: '补齐 cwd 建议与失败回滚单测，再跑一轮 Playwright。',
+    sessionId: 'session-7f3a91',
+    at: minutesAgo(25),
+    by: AGENT,
+  },
   progress: { step: 2, total: 4, percent: 50, text: '桥接层' },
   checklists: [
     checklistItem('读契约 03-client-bridge', true),
@@ -136,6 +143,7 @@ const cardRunning = makeCard({
 });
 cards.push(cardRunning);
 activity(cardRunning.id, 'created', '创建卡片', minutesAgo(40));
+activity(cardRunning.id, 'handoff', '更新了交接摘要', minutesAgo(25));
 activity(cardRunning.id, 'status', '把卡片移到「进行中」', minutesAgo(38), { status: 'running' });
 for (let i = 0; i < 24; i += 1) {
   activity(
@@ -370,11 +378,18 @@ const cardBacklog = makeCard({
   project: 'design-system',
   metadata: { toolCalls: 0, searches: 0, elapsedMs: 0 },
   order: 1,
+  handoff: {
+    summary: '已完成列表视图批量选择与批量归档/移动，剩全选范围与刷新兼容。',
+    nextSteps: '验证切视图后选择保留、刷新后失效 id 清理。',
+    at: minutesAgo(20),
+    by: AGENT,
+  },
   createdAt: minutesAgo(80),
   updatedAt: minutesAgo(78),
 });
 cards.push(cardBacklog);
 activity(cardBacklog.id, 'created', '创建卡片', minutesAgo(80));
+activity(cardBacklog.id, 'handoff', '更新了交接摘要', minutesAgo(20));
 
 const cardDocs = makeCard({
   id: 'card-6f7a8b9d',
@@ -928,6 +943,24 @@ const server = http.createServer(async (req, res) => {
         const changes = body.changes ?? {};
         for (const key of ['title', 'summary', 'currentAction', 'result', 'status', 'priority', 'labels', 'project', 'workspaceId', 'cwd', 'agent', 'progress', 'checklists', 'artifacts', 'metadata', 'order']) {
           if (changes[key] !== undefined) card[key] = changes[key];
+        }
+        if (changes.handoff !== undefined) {
+          if (changes.handoff === null) {
+            delete card.handoff;
+            activity(card.id, 'handoff', '清除了交接摘要', NOW());
+          } else {
+            const summary = String(changes.handoff.summary ?? '').trim().slice(0, 400);
+            if (summary) {
+              card.handoff = {
+                summary,
+                ...(changes.handoff.nextSteps ? { nextSteps: String(changes.handoff.nextSteps).trim().slice(0, 600) } : {}),
+                ...(changes.handoff.sessionId ? { sessionId: String(changes.handoff.sessionId) } : {}),
+                at: NOW(),
+                by: body.actor ?? { kind: 'agent', name: 'DSH Agent' },
+              };
+              activity(card.id, 'handoff', '更新了交接摘要', NOW(), { summary });
+            }
+          }
         }
         if (changes.status) {
           activity(card.id, 'status', `状态改为 ${changes.status}`, NOW(), { status: changes.status });

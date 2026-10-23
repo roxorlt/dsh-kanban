@@ -925,3 +925,11 @@ ul {
     display: none;
   }
 }
+
+
+.kb-tag--handoff {
+  flex: none;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+  font: var(--dsw-font-xxxs-strong-11);
+}

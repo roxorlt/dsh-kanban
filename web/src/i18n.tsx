@@ -399,6 +399,16 @@ const zh = {
   'selection.empty': '当前视图没有可选卡片',
   'selection.none': '请先选择卡片',
   'activity.archived': '归档卡片',
+  'handoff.badge': '交接',
+  'handoff.badgeAria': '有交接摘要 · {date}',
+  'handoff.title': '交接摘要',
+  'handoff.nextSteps': '后续',
+  'handoff.writtenAt': '写入时间',
+  'handoff.sourceSession': '来源会话',
+  'handoff.by': '写入者',
+  'handoff.copy': '复制交接摘要',
+  'handoff.copied': '已复制',
+  'activity.handoff': '更新了交接摘要',
 } as const;
 
 export type I18nKey = keyof typeof zh;
@@ -793,6 +803,16 @@ const en: Record<I18nKey, string> = {
   'selection.empty': 'No selectable cards in this view',
   'selection.none': 'Select some cards first',
   'activity.archived': 'Card archived',
+  'handoff.badge': 'Handoff',
+  'handoff.badgeAria': 'Handoff summary · {date}',
+  'handoff.title': 'Handoff summary',
+  'handoff.nextSteps': 'Next steps',
+  'handoff.writtenAt': 'Written at',
+  'handoff.sourceSession': 'Source session',
+  'handoff.by': 'Written by',
+  'handoff.copy': 'Copy handoff summary',
+  'handoff.copied': 'Copied',
+  'activity.handoff': 'Updated the handoff summary',
 };
 
 const dictionaries: Record<Lang, Record<I18nKey, string>> = { zh, en };

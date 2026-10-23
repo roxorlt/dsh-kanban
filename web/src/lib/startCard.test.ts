@@ -76,6 +76,34 @@ describe('开始推进：适用条件与提示文本', () => {
     );
   });
 
+  it('带交接摘要时在启动提示末尾追加摘要与后续', () => {
+    const withHandoff = backlogCard({
+      handoff: {
+        summary: '已完成表单主流程，剩余会话建议排序。',
+        nextSteps: '补单测并跑 Playwright。',
+        sessionId: 'session-old',
+        at: 123,
+        by: AGENT,
+      },
+    });
+    const prompt = buildStartPrompt(withHandoff);
+    expect(prompt).toContain('\n【交接摘要】\n已完成表单主流程，剩余会话建议排序。\n后续：补单测并跑 Playwright。');
+    expect(prompt.indexOf('【交接摘要】')).toBeGreaterThan(prompt.indexOf('kanban_request_approval'));
+    // 无 handoff 不出现摘要块
+    expect(buildStartPrompt(backlogCard())).not.toContain('【交接摘要】');
+    // 只有 summary 时没有「后续」
+    expect(
+      buildStartPrompt(backlogCard({ handoff: { summary: '仅摘要', at: 1 } })),
+    ).toContain('\n【交接摘要】\n仅摘要');
+    expect(
+      buildStartPrompt(backlogCard({ handoff: { summary: '仅摘要', at: 1 } })),
+    ).not.toContain('后续：');
+    // blank summary 不追加
+    expect(
+      buildStartPrompt(backlogCard({ handoff: { summary: '   ', at: 1 } })),
+    ).not.toContain('【交接摘要】');
+  });
+
   it('待办卡回复后提示开始推进，其他状态不提示', () => {
     expect(shouldPromptStartAfterReply('backlog')).toBe(true);
     expect(shouldPromptStartAfterReply('running')).toBe(false);
