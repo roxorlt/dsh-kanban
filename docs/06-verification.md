@@ -365,6 +365,25 @@
 | 生效方式 | 含服务端改动（`lib/domain.js` / `lib/routes.js` / `lib/tools.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板后前端生效（旧服务端仍能工作，只是不写 `session_primary` 且响应无新字段） |
 | 提交 | 合并 `feat/m2-session-target`（ad30d2a）→ 主线；真实宿主复验见 §1.25 |
 
+## 1.25 v0.12.0 合并主线与真实宿主复验（2026-10-27）
+
+| 项 | 结果 |
+|---|---|
+| 合并 | `feat/m2-session-target`（ad30d2a）→ 主线合并提交 **`547f46c`**。解决 9 处冲突：`CHANGELOG` / `README` / `docs/04` / `docs/06` / `docs/contracts/01` 版本头与条目（v0.12.0 置顶、保留 v0.10/v0.11 条目）、`lib/domain.js` 的 `ACTIVITY_TYPES`（`session_primary` 与 `session_archived` / `session_unarchived` 共存）、`SessionSection`（保留归档/待确认徽标并把会话行改为两行 + 完整 session id）、`web/dist`（删旧产物后重建，不再保留分支构建）。版本号 `package.json` / `web/package.json` → **0.12.0** |
+| 自动测试（合并后） | 服务端 `node --test` **150/150**（v0.12 多会话用例与 v0.10/v0.11 用例共存）；Web `tsc --noEmit` 0 error、`vite build` 通过、`vitest` **24 文件 / 225 测试**、令牌 lint 9 个 CSS 0 error / 0 warning |
+| 服务端功能自检（合并后 `scripts/dev-server.mjs` + HTTP 脚本，11 项全过） | `health.version=0.12.0`；新绑定写 `session_linked`（已有主会话时文案「关联了 DSH 会话「X」，设为主会话」+ `previousSessionId`）；设为主会话写 `session_primary`「主会话切换为「讨论会话」」+ `previousSessionId=beta`；再次设置已是主会话 → 幂等（`activity:null`、时间线节点数不变、`sessionIds` 不变）；`sessionIds` 主会话置顶；v0.11 `/sessions/archive`、v0.10 `/decisions/meta`、comment 路由均正常（合并未破坏旧接口） |
+| 合并后 UI 冒烟（Chromium，standalone dev-server） | 会话行按合并后的两行结构渲染（`.kb-session__main` 2 行、`.kb-session__id` 显示完整 id、主会话徽标 1 个），console 0 error |
+| **真实 DSH 宿主 E2E（隔离 web 宿主 0.1.5-rc.2 + 真实插件 + Playwright/Chromium，4/4 验收 PASS）** | 环境：`DSH_HOME=/tmp/dsh-kanban-m2-host`、profile `kanban-dev`、`dsh plugin add` 链接本仓库、端口 5599、插件 `seed:empty` + `dataDir` 指向 `/tmp`；3 个**真实 DSH 会话**由详情「新建会话」经宿主桥创建（`session.create`），宿主桥握手 `embedded`/`ready=true`、49 主题令牌 |
+| ↳ ① 设为主会话 → 时间线 + 服务端活动 + 幂等 | **PASS**：点「设为主会话」后服务端新增 `{"type":"session_primary","text":"主会话切换为「m2-b」","data":{"sessionId":"session-63a651b1-…","action":"primary","previousSessionId":"session-6f614821-…"}}`（节点数 2→3），抽屉时间线同步渲染该文案 + Toast「已设为主会话」，该行升到首位并带「主会话」徽标（主会话行不再渲染「设为主会话」）。对已是主会话的会话再绑定 → `{primaryChanged:false, activity:null, linked:false}`，`session_primary` 节点数 4→4 不变 |
+| ↳ ② 目标下拉默认主会话 / 跟随 / 手动保持 | **PASS**：默认值 = `sessionIds[0]`（选项文案「m2-c · 主会话」，3 个选项覆盖全部绑定会话）；设 `m2-b` 为主会话后默认值自动变为 `session-63a651b1`（「m2-b · 主会话」）；先手动选 `session-521261a8` 再改主会话 → 默认值保持手动选择不被抢走；回复发出后下拉保持所选会话 |
+| ↳ ③ 回复 / 审批决定发到下拉选中会话 | **PASS**：拦截 iframe→宿主 `kanban:request`：回复为 `method=session.ensure`、`params.sessionId=session-521261a8-…`（选中会话），审批为 `session.ensure`、`params.sessionId=session-63a651b1-…`，宿主均回 `ok:true`；服务端审批 `ap-9fe9458c` → `approved`、卡片回 `running`。独立旁证：解压隔离宿主会话存档（`session.v3.jsonl.zstd`），回复文本落在 C 会话、审批文本落在 B 会话，主会话 A（m2-c）没有这些文本。审批区块「决定会发送到「X」」随下拉逐项切换（3/3 命中） |
+| ↳ ④ 390×844 弹层满宽 / 无横向溢出 / 下拉可见 | **PASS**：窗口 390×844 时 DSH 侧栏仍占 56px，看板面板区 334×844；抽屉 `left=0, right=334, width=334`（=面板区满宽，圆角 16px，高 776），`documentElement/body scrollWidth==clientWidth`、`overflowX=0`；目标下拉 `left=91, right=318`（完整可见）；关闭抽屉后看板同样无横向溢出 |
+| 真实宿主统计 | console error **0**、4xx **0**；断言 phase3 15 PASS（其中 R3c 首轮为测试脚本期望写错——把会话 C 的标题写成 m2-c 且当时审批已结算导致 hint 为 null，已用新建审批在 phase5 复跑 **PASS**，产品行为正确）；phase4 390 5 项全过 |
+| 真实宿主证据 | `design/screens/m2-merged-host-01-session1.png` … `13-390-approval-hint.png`（13 张：两行会话行、目标默认/跟随/保持、设为主会话时间线节点、回复/审批路由、审批目标提示、390 抽屉与看板）；机器可读结果 `/tmp/dsh-kanban-m2-host/results.json`、`results2.json`、`results3.json`；复跑命令见 §6 |
+| 桌面 DSH 重启后真实宿主 | 待重启后复验（合并与隔离宿主验证已完成；桌面宿主 `58243` 仍在旧服务端 v0.11.0） |
+| 生效方式 | v0.12.0 含服务端改动（`lib/domain.js` / `lib/routes.js` / `lib/tools.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端（旧服务端不写 `session_primary`，前端仍可工作） |
+| 已知口径 | 390「满宽」按**看板面板区**计（334px，DSH 侧栏在 390 宽仍占 56px 且「收起侧栏」按钮未渲染）；真机 390 满宽与桌面 App 内 390 弹层待重启后复核 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
@@ -505,4 +524,18 @@ DSH_HOST_MODULES=/tmp/dsh021/dsh/node_modules node scripts/verify-session-sync.m
 
 # 构建前端
 npm --prefix web run build
+
+# v0.12 隔离真实 DSH 宿主 E2E（真实插件 + 真实会话 + Playwright；0.1.5-rc.2）
+export DSH_HOME=/tmp/dsh-kanban-m2-host
+mkdir -p "$DSH_HOME" && cp ~/.dsh/.credentials.yaml "$DSH_HOME/"
+dsh --profile kanban-dev --from-default-profile web --dump-default-config > /dev/null
+dsh plugin --profile kanban-dev add "$(pwd)"
+# $DSH_HOME/cordis.patch.yml 覆盖 dataDir 到 $DSH_HOME/data、seed: empty
+dsh --profile kanban-dev --port 5599 --no-open        # 记下首行 token URL
+node /tmp/dsh-kanban-m2-host/scripts/login.mjs         # 存 auth.json（反复用 token 换 cookie 会被宿主鉴权节流）
+# 建一张 backlog 卡并逐段复验（脚本保留在 /tmp/dsh-kanban-m2-host/scripts/）
+node /tmp/dsh-kanban-m2-host/scripts/phase3.mjs        # ① 设为主会话时间线/幂等 ② 目标下拉 ③ 回复路由
+node /tmp/dsh-kanban-m2-host/scripts/phase4.mjs        # ④ 390 面板区满宽/无溢出
+node /tmp/dsh-kanban-m2-host/scripts/phase5.mjs        # ③ 审批目标提示与路由
 ```
+> 说明：v0.12 的隔离宿主脚本（phase1–5、login、结果 JSON）放在 `/tmp/dsh-kanban-m2-host/`，属一次性验证资产，未纳入仓库；产品变更与断言结论见 §1.25。

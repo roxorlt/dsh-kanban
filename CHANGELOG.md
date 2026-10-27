@@ -13,7 +13,8 @@
 - 兼容：`data.json` 不变；新增活动类型只影响白名单（旧数据照常读取）；旧服务端仍可工作，只是不写 `session_primary`、响应无新字段（前端不依赖新字段）。
 - 验证：分支上服务端 95/95；并入主线（与 v0.10 决策日志、v0.11 会话归档/失败同步合并）后服务端 `node --test` **150/150**、Web **vitest 24 文件 / 225 测试**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 9 个 CSS 0/0；隔离 dev-server + 宿主桥替身 harness + Chrome 1440×900 DPR2 / 390×844 共 **24 项断言全过、console 0 error、0 个 4xx**（含：设为主会话后时间线出现「主会话切换为「讨论会话」」、Toast、下拉默认值跟随、服务端 `sessionIds` 顺序与 `session_primary` 活动落库、回复与审批决定均发到选定目标、旧单选 `.kb-session__target` 为 0、390 弹层满宽无横向溢出）。
 - 生效方式：含服务端改动（`lib/domain.js` / `lib/routes.js` / `lib/tools.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。
-- 证据：`design/screens/m2-multi-session-drawer-1440.png`、`m2-reply-target-switch-1440.png`、`m2-primary-switched-1440.png`、`m2-multi-session-sheet-390.png`；验证记录 `docs/06-verification.md` §1.24（合并结果）与 §1.25（真实宿主）；分支 `feat/m2-session-target`（ad30d2a）。
+- 合并与真实宿主：并入主线（合并提交 `547f46c`）后服务端 150/150、Web 24 文件 / 225 测试、tsc/build/令牌 lint 通过；在**隔离真实 DSH 宿主**（0.1.5-rc.2 + 真实插件 + 3 个真实会话，Playwright）中 4/4 验收全过、console 0 error、0 个 4xx（设为主会话写 `session_primary` 时间线并幂等、目标下拉默认/跟随/手动保持、回复与审批经 `session.ensure` 发到选中会话、390 面板区满宽无溢出）。
+- 证据：`design/screens/m2-multi-session-drawer-1440.png`、`m2-reply-target-switch-1440.png`、`m2-primary-switched-1440.png`、`m2-multi-session-sheet-390.png`（分支上），合并后真实宿主截图 `design/screens/m2-merged-host-01…13-*.png`；验证记录 `docs/06-verification.md` §1.24（分支）与 §1.25（合并 + 真实宿主）；分支 `feat/m2-session-target`（ad30d2a）。
 
 
 ## v0.11.0 — 2026-10-23

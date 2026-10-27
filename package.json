@@ -20,6 +20,7 @@
     "lib/decisions.js",
     "lib/static.js",
     "lib/client.js",
+    "lib/session-archive.js",
     "lib/session-sync.js",
     "web/dist",
     "skills",
