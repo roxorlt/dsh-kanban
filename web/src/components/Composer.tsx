@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
-import type { SessionRow } from '../types';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { copyText } from '../lib/clipboard';
+import type { ReplyTargetOption } from '../lib/replyTarget';
 import { IconCopy, IconReply } from './Icons';
 
 interface ComposerProps {
   embedded: boolean;
-  sessions: SessionRow[];
+  /** 卡片绑定的会话，主会话排第一位；>1 时提供「回复/审批目标」下拉 */
+  targets: ReplyTargetOption[];
   targetSessionId: string | null;
+  onTargetChange?: (sessionId: string) => void;
   onSubmit: (text: string, sessionId: string | null) => Promise<{ ok: boolean; error?: string }>;
   autoFocus?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
@@ -15,17 +17,20 @@ interface ComposerProps {
 
 /**
  * 卡片内回复（唯一的同步文案出口）：先写时间线，再经桥发到选定会话；
+ * 多会话时在输入框上方切换「回复/审批目标」（设计规范 §2.6 / §7.5）；
  * 独立模式 / 桥不可用时降级复制文本。
  */
 export function Composer({
   embedded,
-  sessions,
+  targets,
   targetSessionId,
+  onTargetChange,
   onSubmit,
   autoFocus,
   onDirtyChange,
 }: ComposerProps) {
   const { t } = useI18n();
+  const selectId = useId();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,8 +43,9 @@ export function Composer({
     onDirtyChange?.(text.trim().length > 0);
   }, [text, onDirtyChange]);
 
-  const target = sessions.find((session) => session.id === targetSessionId);
-  const targetLabel = target?.title ?? targetSessionId ?? t('card.noSession');
+  const target = targets.find((option) => option.id === targetSessionId) ?? targets[0];
+  const targetLabel = target?.title ?? t('card.noSession');
+  const selectable = Boolean(embedded && targets.length > 1 && onTargetChange);
 
   const handleCopy = async () => {
     const ok = await copyText(text);
@@ -71,13 +77,38 @@ export function Composer({
   return (
     <section className="kb-composer" aria-label={t('card.reply')}>
       <div className="kb-composer__target">
-        <span className="kb-composer__target-label">{t('drawer.replyTarget')}</span>
-        <span className="kb-composer__target-value" title={targetLabel}>
-          {targetLabel}
-        </span>
-        {sessions.length > 1 ? (
-          <span className="kb-composer__target-hint">{t('drawer.sessionCount', { count: sessions.length })}</span>
-        ) : null}
+        {selectable ? (
+          <>
+            <label className="kb-composer__target-label" htmlFor={selectId}>
+              {t('drawer.replyTarget')}
+            </label>
+            <select
+              id={selectId}
+              className="kb-select kb-composer__target-select"
+              value={target?.id ?? ''}
+              title={t('drawer.replyTargetHint')}
+              onChange={(event) => onTargetChange?.(event.target.value)}
+            >
+              {targets.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.title}
+                  {option.primary ? ` · ${t('drawer.primarySession')}` : ''}
+                  {option.running ? ` · ${t('drawer.running')}` : ''}
+                </option>
+              ))}
+            </select>
+          </>
+        ) : (
+          <>
+            <span className="kb-composer__target-label">{t('drawer.replyTarget')}</span>
+            <span className="kb-composer__target-value" title={targetLabel}>
+              {targetLabel}
+            </span>
+            {targets.length > 1 ? (
+              <span className="kb-composer__target-hint">{t('drawer.sessionCount', { count: targets.length })}</span>
+            ) : null}
+          </>
+        )}
       </div>
       <textarea
         ref={textareaRef}

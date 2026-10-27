@@ -26,9 +26,8 @@ interface SessionSectionProps {
   cards: Card[];
   embedded: boolean;
   busy?: boolean;
-  /** 回复/审批的目标会话（默认主会话） */
+  /** 回复/审批的目标会话（默认主会话），用于高亮当前目标行 */
   targetSessionId: string | null;
-  onTargetChange: (sessionId: string) => void;
   onOpenSession: (sessionId: string) => void;
   onBind: (sessionId: string) => void;
   onUnbind: (sessionId: string) => void;
@@ -45,8 +44,8 @@ interface SessionSectionProps {
 }
 
 /**
- * 多会话绑定：列出卡片会话、主会话徽标、设为主会话、解绑、打开；
- * >1 个会话时提供「回复与审批同步到」目标选择。
+ * 多会话绑定：列出卡片会话（标题、session id、主会话徽标、运行状态）、
+ * 设为主会话、解绑、打开；回复/审批目标在 Composer 里的下拉选择。
  * 无会话进行中卡片显示警示；「新建会话」先展开内联表单选工作区/目录。
  */
 export function SessionSection({
@@ -57,7 +56,6 @@ export function SessionSection({
   embedded,
   busy,
   targetSessionId,
-  onTargetChange,
   onOpenSession,
   onBind,
   onUnbind,
@@ -71,7 +69,6 @@ export function SessionSection({
 }: SessionSectionProps) {
   const { t, lang } = useI18n();
   const selectId = useId();
-  const targetGroup = useId();
   const workspaceSelectId = useId();
   const cwdInputId = useId();
   const byId = new Map(sessions.map((session) => [session.id, session]));
@@ -160,10 +157,7 @@ export function SessionSection({
 
       {bound.length ? (
         <>
-          <p className="kb-session__summary">
-            {t('drawer.sessionCount', { count: bound.length })}
-            {bound.length > 1 ? ` · ${t('drawer.primarySession')}` : ''}
-          </p>
+          <p className="kb-session__summary">{t('drawer.sessionCount', { count: bound.length })}</p>
           <ul className="kb-session__list">
             {bound.map(({ id, session }, index) => {
               const isPrimary = index === 0;
@@ -192,24 +186,31 @@ export function SessionSection({
                   <span className="kb-icon kb-session__icon" aria-hidden="true">
                     <IconSession />
                   </span>
-                  <span className="kb-session__title" title={session?.title ?? id}>
-                    {session?.title ?? id}
-                    {isPrimary ? (
-                      <span className="kb-tag kb-session__primary">{t('drawer.primarySession')}</span>
-                    ) : null}
+                  <span className="kb-session__main">
+                    <span className="kb-session__title" title={session?.title ?? id}>
+                      <span className="kb-session__name">{session?.title ?? id}</span>
+                      {isPrimary ? (
+                        <span className="kb-tag kb-session__primary">{t('drawer.primarySession')}</span>
+                      ) : null}
+                    </span>
+                    <span className="kb-session__meta">
+                      {archived ? (
+                        <span className="kb-pill kb-session__badge">
+                          <span className="kb-dot kb-dot--tertiary" aria-hidden="true" />
+                          {t('sessionArchive.archived')}
+                        </span>
+                      ) : (
+                        <span className={`kb-pill${running ? ' kb-pill--business' : ''}`}>
+                          <span className={`kb-dot kb-dot--${running ? 'business' : 'tertiary'}`} aria-hidden="true" />
+                          {running ? t('drawer.running') : t('drawer.idle')}
+                        </span>
+                      )}
+                      {pending ? <span className="kb-pill kb-pill--warn">{t('sessionArchive.pendingBadge')}</span> : null}
+                      <code className="kb-session__id" title={id}>
+                        {id}
+                      </code>
+                    </span>
                   </span>
-                  {archived ? (
-                    <span className="kb-pill kb-session__badge">
-                      <span className="kb-dot kb-dot--tertiary" aria-hidden="true" />
-                      {t('sessionArchive.archived')}
-                    </span>
-                  ) : (
-                    <span className={`kb-pill${running ? ' kb-pill--business' : ''}`}>
-                      <span className={`kb-dot kb-dot--${running ? 'business' : 'tertiary'}`} aria-hidden="true" />
-                      {running ? t('drawer.running') : t('drawer.idle')}
-                    </span>
-                  )}
-                  {pending ? <span className="kb-pill kb-pill--warn">{t('sessionArchive.pendingBadge')}</span> : null}
                   {embedded ? (
                     <span className="kb-session__actions">
                       <button
@@ -277,26 +278,6 @@ export function SessionSection({
         <p className="kb-session__hint">{t('drawer.noSessionHint')}</p>
       )}
 
-      {embedded && bound.length > 1 ? (
-        <fieldset className="kb-session__target" aria-label={t('drawer.approvalTarget')}>
-          <legend className="kb-session__target-legend">{t('drawer.approvalTarget')}</legend>
-          {bound.map(({ id, session }) => (
-            <label
-              className={`kb-check${(targetSessionId ?? card.sessionIds[0]) === id ? ' kb-check--on' : ''}`}
-              key={`${targetGroup}-${id}`}
-            >
-              <input
-                type="radio"
-                name={targetGroup}
-                value={id}
-                checked={(targetSessionId ?? card.sessionIds[0]) === id}
-                onChange={() => onTargetChange(id)}
-              />
-              <span>{session?.title ?? id}</span>
-            </label>
-          ))}
-        </fieldset>
-      ) : null}
 
       {!embedded ? <p className="kb-session__hint">{t('drawer.standaloneSessionHint')}</p> : null}
 

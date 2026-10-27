@@ -272,8 +272,12 @@ test('completeCard / archiveCard / 会话绑定 / ack 的行为', () => {
 
   const linked = linkSession(draft, card.id, { sessionId: 'session-a', title: '讨论', now: FIXED_NOW + 11 })
   assert.equal(linked.card.sessionIds[0], 'session-a')
+  assert.equal(linked.linked, true)
+  assert.equal(linked.primaryChanged, true)
   const linkedAgain = linkSession(draft, card.id, { sessionId: 'session-a', now: FIXED_NOW + 12 })
   assert.equal(linkedAgain.card.sessionIds.filter(id => id === 'session-a').length, 1)
+  assert.equal(linkedAgain.activity, null, '已是主会话时重复绑定不写时间线')
+  assert.equal(linkedAgain.primaryChanged, false)
   const unlinked = unlinkSession(draft, card.id, { sessionId: 'session-a', now: FIXED_NOW + 13 })
   assert.equal(unlinked.card.sessionIds.includes('session-a'), false)
   assert.throws(() => unlinkSession(draft, card.id, { sessionId: 'session-a' }), error => error.code === 'CONFLICT')
@@ -285,6 +289,43 @@ test('completeCard / archiveCard / 会话绑定 / ack 的行为', () => {
   assert.equal(archived.card.archived, true)
   assert.equal(cardsOfBoard(draft, DEFAULT_BOARD_ID).includes(archived.card), false)
   assert.throws(() => requireCard(draft, card.id), error => error.code === 'CARD_NOT_FOUND')
+})
+
+test('多会话：设为主会话写入 session_primary 节点（含前后主会话），重复置顶幂等', () => {
+  const draft = seedDraft()
+  const card = findCardByStatus(draft, 'running')
+  const first = linkSession(draft, card.id, { sessionId: 'session-a', title: '讨论', now: FIXED_NOW + 20 })
+  assert.equal(first.activity.type, 'session_linked')
+  assert.equal(first.activity.data.previousSessionId, undefined)
+  const second = linkSession(draft, card.id, { sessionId: 'session-b', title: '执行', now: FIXED_NOW + 21 })
+  assert.equal(second.activity.type, 'session_linked')
+  assert.equal(second.activity.text, '关联了 DSH 会话「执行」，设为主会话')
+  assert.equal(second.activity.data.previousSessionId, 'session-a')
+  assert.deepEqual(second.card.sessionIds.slice(0, 2), ['session-b', 'session-a'])
+
+  const switched = linkSession(draft, card.id, { sessionId: 'session-a', title: '讨论', now: FIXED_NOW + 22 })
+  assert.equal(switched.activity.type, 'session_primary')
+  assert.equal(switched.activity.text, '主会话切换为「讨论」')
+  assert.deepEqual(switched.activity.data, { sessionId: 'session-a', action: 'primary', previousSessionId: 'session-b' })
+  assert.deepEqual(switched.card.sessionIds, ['session-a', 'session-b'])
+  assert.equal(switched.card.updatedAt, FIXED_NOW + 22)
+  assert.equal(draft.meta.lastActor.name, '你')
+
+  const nodesBefore = draft.activities.filter(item => item.cardId === card.id).length
+  const noop = linkSession(draft, card.id, { sessionId: 'session-a', now: FIXED_NOW + 23 })
+  assert.equal(noop.activity, null)
+  assert.equal(noop.primaryChanged, false)
+  assert.equal(noop.card.updatedAt, FIXED_NOW + 22, '幂等空操作不刷新卡片')
+  assert.equal(draft.activities.filter(item => item.cardId === card.id).length, nodesBefore)
+
+  // 无标题时退化为「切换了主会话」，仍写入 data 便于追溯
+  const untitled = linkSession(draft, card.id, { sessionId: 'session-b', now: FIXED_NOW + 24 })
+  assert.equal(untitled.activity.text, '切换了主会话')
+  assert.deepEqual(untitled.activity.data, { sessionId: 'session-b', action: 'primary', previousSessionId: 'session-a' })
+
+  // 新类型进入规范化白名单（不会被降级成 progress）
+  const normalized = normalizeStore({ ...draft, activities: draft.activities }, FIXED_NOW + 25)
+  assert.equal(normalized.activities.some(item => item.type === 'session_primary'), true)
 })
 
 test('列内排序：cardOrder 优先，未入列卡片按 updatedAt desc 兜底；counts 正确', () => {

@@ -13,6 +13,11 @@ import { SessionSection } from './SessionSection';
 import { Timeline, TimelineLoadMore } from './Timeline';
 import type { CardActionHandlers } from './types';
 import type { CreateSessionOptions } from './SessionSection';
+import {
+  nextTargetAfterPrimaryChange,
+  replyTargetOptions,
+  resolveReplyTarget,
+} from '../lib/replyTarget';
 import { pushOverlay } from '../lib/overlayStack';
 import { copyText } from '../lib/clipboard';
 import { formatHandoffCopy } from '../lib/handoff';
@@ -117,7 +122,9 @@ export function DetailDrawer({
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
-  const [targetSessionId, setTargetSessionId] = useState<string | null>(card.sessionIds[0] ?? null);
+  const [targetSessionId, setTargetSessionId] = useState<string | null>(() =>
+    resolveReplyTarget(card.sessionIds, card.sessionIds[0] ?? null),
+  );
   const [composerDirty, setComposerDirty] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [handoffCopied, setHandoffCopied] = useState(false);
@@ -148,15 +155,14 @@ export function DetailDrawer({
   const otherArtifacts = card.artifacts.filter((artifact) => !(artifact.kind === 'image' && artifact.url));
 
   useEffect(() => {
-    setTargetSessionId(card.sessionIds[0] ?? null);
+    setTargetSessionId(resolveReplyTarget(card.sessionIds, card.sessionIds[0] ?? null));
     setComposerDirty(false);
     setDiscardOpen(false);
   }, [card.id]);
 
   useEffect(() => {
-    if (targetSessionId && card.sessionIds.includes(targetSessionId)) return;
-    setTargetSessionId(card.sessionIds[0] ?? null);
-  }, [card.sessionIds, targetSessionId]);
+    setTargetSessionId((current) => resolveReplyTarget(card.sessionIds, current));
+  }, [card.sessionIds]);
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -202,7 +208,16 @@ export function DetailDrawer({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const targetSession = targetSessionId ?? card.sessionIds[0] ?? null;
+  const targetSession = resolveReplyTarget(card.sessionIds, targetSessionId);
+  const targetOptions = replyTargetOptions(card.sessionIds, sessions);
+  const targetOption = targetOptions.find((option) => option.id === targetSession) ?? targetOptions[0];
+  const targetLabel = targetOption?.title ?? null;
+  // 设为主会话后按设计规范 §7.5 让默认目标跟随（用户手动选过其它会话则保持）
+  const handleSetPrimary = (sessionId: string) => {
+    const previousPrimary = card.sessionIds[0] ?? null;
+    setTargetSessionId((current) => nextTargetAfterPrimaryChange(current, previousPrimary, sessionId));
+    onSetPrimary(card, sessionId);
+  };
 
   return (
     <div
@@ -337,6 +352,9 @@ export function DetailDrawer({
           {pendingApprovals.length ? (
             <section className="kb-drawer__section kb-drawer__section--approval">
               <h3 className="kb-drawer__section-title">{t('drawer.approvals')}</h3>
+              {targetOptions.length > 1 && targetLabel ? (
+                <p className="kb-drawer__target-hint">{t('drawer.approvalTargetHint', { session: targetLabel })}</p>
+              ) : null}
               {pendingApprovals.map((approval) => (
                 <ApprovalPanel
                   key={approval.id}
@@ -515,12 +533,11 @@ export function DetailDrawer({
               cards={allCards}
               embedded={embedded}
               busy={false}
-              targetSessionId={targetSessionId}
-              onTargetChange={setTargetSessionId}
+              targetSessionId={targetSession}
               onOpenSession={onOpenSession}
               onBind={(sessionId) => onBindSession(card, sessionId)}
               onUnbind={(sessionId) => onUnbindSession(card, sessionId)}
-              onSetPrimary={(sessionId) => onSetPrimary(card, sessionId)}
+              onSetPrimary={handleSetPrimary}
               onCreateSession={onCreateSession}
               archivedSessionIds={archivedSessionIds}
               archiveAvailable={archiveAvailable}
@@ -591,8 +608,9 @@ export function DetailDrawer({
         <footer className="kb-drawer__footer">
           <Composer
             embedded={embedded}
-            sessions={sessions}
+            targets={targetOptions}
             targetSessionId={targetSession}
+            onTargetChange={setTargetSessionId}
             onSubmit={(text, sessionId) => onReply(card, text, sessionId)}
             autoFocus={false}
             onDirtyChange={setComposerDirty}
