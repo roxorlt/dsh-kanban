@@ -399,6 +399,21 @@
 | 生效方式 | v0.12.0 含服务端改动（`lib/domain.js` / `lib/routes.js` / `lib/tools.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端（旧服务端不写 `session_primary`，前端仍可工作）。**已于 2026-10-27 09:41 重启桌面 DSH 完成，health=0.12.0** |
 | 已知口径 | 390「满宽」按**看板面板区**计（334px，DSH 侧栏在 390 宽仍占 56px 且「收起侧栏」按钮未渲染）；隔离真实宿主的渲染已覆盖，桌面 App 内 390 弹层因窗口不可脚本化未自动复核，可人工抽查 |
 
+## 1.26 v0.13.0（卡片详情 Git 分支 / 工作树可视化，2026-10-27）
+
+| 项 | 结果 |
+|---|---|
+| 背景 | 卡片 `card-6f4b3d72`「卡片详情可视化展示 git 分支或 worktree 情况」：DSH 宿主用分支 / worktree 执行 coding 任务时，看板里看不出「这张卡片现在在哪个分支、哪个工作树、与主分支和远端差多少」。本版在**卡片详情抽屉**新增只读「分支 / 工作树」区块：当前分支与工作树、远端跟踪 ↑↓、主分支关系 ↑↓、Fork 风格的**两泳道提交图**（HEAD / 分叉点 / 共享主干）与多工作树列表；数据来自对卡片 `cwd` 的**只读 git 探测**，不落库、不改卡片字段（契约 `docs/contracts/06-git-context.md`） |
+| 服务端 | 新增 `lib/git.js`（`collectGitContext`，512 行）：`execFile('git')` 不拼 shell，单条命令 2s / 整次 4s 超时、`maxBuffer=4MiB`、`GIT_OPTIONAL_LOCKS=0` + `LC_ALL=C`；主分支探测（origin/HEAD → main → master → origin/main → origin/master）、upstream 与主分支两套 base 模式、`git worktree list` 解析、提交列表上限（ahead 12 / behind 8 / shared 4）、refs 标记；`?cwd=` 候选只接受「与 `card.cwd` 同仓库 + 候选是 linked worktree + `card.cwd` 在主工作树」时才采用，其余静默回退到 `card.cwd`；失败一律收敛为 `available:false` + `reason`（`no_cwd` / `missing` / `not_git` / `no_commits` / `timeout` / `error`）。`lib/routes.js` 新增 `GET/HEAD /api/kanban/cards/:id/git?cwd=`（非 GET/HEAD 405、卡片不存在 404、业务失败仍 200）；`package.json` 的 `files` 已补 `lib/git.js` |
+| Web | 新增 `web/src/lib/gitGraph.ts`（ahead/behind 按 `committedAt` 稳定合并且同时间戳先 ahead、shared 接后、分叉点、refs 同 sha 合并、**12 行上限优先保住分叉点** + 中段「还有 N 个提交」、单泳道退化、`shortenPath`）与 `useCardGit`（打开卡片按需请求；`?cwd=` 取卡片主会话 cwd；4s / 20 条 LRU 缓存；旧服务端 404 与失败静默隐藏）；`GitBranchSection.tsx`（chips + 两泳道 SVG + 多工作树列表，当前工作树高亮；`base.kind='main'` 时主工作树行不再显示自比 ↑0↓0）；接入 `DetailDrawer`（结果之后、审批之前）；`types.ts` / `api.ts` / `i18n.tsx`（zh/en 23 条 `git.*`）/ `drawer.css`（`kb-git-*`，仅 alias 令牌、0.5px 发丝线、全圆角配 `corner-shape: round`） |
+| 单测 | 服务端 `node --test test/*.test.mjs` **162/162**（新增 12：`test/git.test.mjs` 8 例覆盖普通仓库 / detached / 分叉 + linked worktree / upstream 领先落后 / origin/HEAD 探测 / 11→8 工作树截断 / 提交上限 / 全部不可用原因 / `?cwd=` 采用与忽略；`test/routes.test.mjs` 4 例覆盖 404 / 405 / 200 available true·false / HEAD / 候选目录）。Web `vitest` **25 文件 / 249 测试**（新增 `gitGraph` 24 例：排序稳定、分叉点与 activeLanes、refs 合并去重、12 行截断优先分叉点与中段提示、单泳道、工作树计数隐藏、`shortenPath`）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 9 个 CSS 0 error / 0 warning |
+| 真实仓库接口自检（dev-server + 临时 git 仓库） | 演示仓库：`main` 与 `origin/main` 分叉（本地领先 1 / 落后 1）、`feat/graph` linked worktree（领先 main 3 / 落后 1、本地 1 提交未推）、`feat/long` linked worktree（领先 main 15，验证 12 行截断仍能看到分叉点）。HTTP 验证：worktree 卡返回 `current.isWorktree=true`、`worktree=.worktrees/feat-graph`、`base.ahead=3/behind=1`、`upstream.ahead=1`、2 个工作树且 `isCurrent` 正确；主仓库卡返回 `base.kind=upstream`（origin/main ↑1↓1）、`commits` 计数与 `rev-list` 一致；`?cwd=` 传入 linked worktree 时被采用（`dir` 变为 worktree、`current.isWorktree=true`），跨仓库 / 方向相反候选被忽略；非 git 目录 / 无 cwd / 目录不存在分别返回 `not_git` / `no_cwd` / `missing`；未知卡片 404、POST 405 |
+| 真实浏览器验收（Chromium 1440×900 DPR2 / 390×844，亮/暗，16 项断言全 PASS） | 打开 6 张真实卡片：① worktree 卡区块出现、6 行、分叉点、图例 `main / feat/graph`、refs 含 `HEAD` 与 `origin/feat/graph`、3 个工作树且当前高亮；② 主仓库卡 4 行、分叉点、`origin/main` ref；③ `feat/long` 卡 12 行、分叉点仍可见、中段「还有 3 个提交」（9 ahead + 3 shared）；④ 非 git / 无 cwd / 目录不存在三张卡区块整块隐藏；⑤ 暗色下区块与分叉点正常；⑥ 390 竖屏区块出现且抽屉 `scrollWidth==clientWidth`（无横向溢出），长 subject 省略、长路径靠 `title` 看全。全程 **console error 0、pageerror 0、4xx 0** |
+| 截图 | `docs/assets/screens/git-branch-worktree-light.png`（worktree 卡：chips + 两泳道 + 分叉点 + 工作树列表）、`git-branch-main-light.png`（main vs origin/main）、`git-branch-fork-truncated-light.png`（领先 15 条、12 行上限下仍见分叉点与中段提示）、`git-branch-worktree-dark.png`、`git-branch-worktree-portrait.png`（390 竖屏）、`git-branch-board-light.png` / `git-branch-board-dark.png`（1440 看板 + 右侧抽屉全貌）、`git-branch-hidden-nogit.png`（非 git 目录：区块隐藏、无报错） |
+| 生效方式 | 含服务端改动（`lib/git.js` / `lib/routes.js`），需**重启 DSH**；`web/dist` 已重建（v0.13.0），刷新看板后前端生效。旧服务端（< v0.13）没有 git 接口时，前端按 404 静默隐藏该区块，其余功能不受影响 |
+| 分支 | `feat/git-branch-viz`（基于 `f65b4f1`，与主工作区并行会话隔离，未合入主线） |
+| 已知限制 | 远端只识别 `origin`（无 origin 时只显示本地关系）；提交图只比较当前分支与主分支/上游两条线，不画任意多分支拓扑；抽屉打开期间不自动刷新（4s 缓存 + 打开时请求，契约 §1）；工作树列表上限 8 个（多余数量提示）；桌面真实宿主复验需合入主线并重启 DSH 后按 §6 命令执行 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
@@ -554,3 +569,26 @@ node /tmp/dsh-kanban-m2-host/scripts/phase4.mjs        # ④ 390 面板区满宽
 node /tmp/dsh-kanban-m2-host/scripts/phase5.mjs        # ③ 审批目标提示与路由
 ```
 > 说明：v0.12 的隔离宿主脚本（phase1–5、login、结果 JSON）放在 `/tmp/dsh-kanban-m2-host/`，属一次性验证资产，未纳入仓库；产品变更与断言结论见 §1.25。
+
+```bash
+# v0.13 卡片 Git 分支 / 工作树可视化 —— 服务端单测 + 真实仓库手工复跑
+npm test                                   # 162/162（含 test/git.test.mjs 8 例 + routes 4 例）
+npm --prefix web run test                  # 25 文件 / 249 例（含 gitGraph 24 例）
+npm --prefix web run build                 # tsc --noEmit + vite build → web/dist
+npm --prefix web run lint:tokens           # 9 个 CSS 0 error / 0 warning
+
+# ① 造演示仓库（main 与 origin/main 分叉 + feat/graph / feat/long 两个 linked worktree + 非 git 目录）
+node scripts/demo-git-repo.mjs             # 默认 /tmp/dsh-kanban-git-demo，可 --root 指定
+
+# ② 起独立 dev-server（不碰真实 ~/.dsh-kanban）
+node scripts/dev-server.mjs --port 4609 --data /tmp/dsh-kanban-git-demo/data/data.json --seed empty --reset
+
+# ③ 建卡（cwd 指向主仓库 / worktree / 非 git 目录 / 不存在的目录，各建一张）
+curl -s -X POST http://127.0.0.1:4609/api/kanban/cards -H 'content-type: application/json' \
+  -d '{"boardId":"board-default","title":"worktree 演示","status":"running","cwd":"/tmp/dsh-kanban-git-demo/repo/.worktrees/feat-graph"}'
+curl -s "http://127.0.0.1:4609/api/kanban/cards/<cardId>/git" | python3 -m json.tool   # 直接看契约响应
+
+# ④ 打开 http://127.0.0.1:4609/dsh-kanban/ 双击卡片：详情抽屉出现「分支 / 工作树」区块
+#    非 git / 无 cwd / 目录不存在的卡片该区块不出现；390 竖屏与暗色主题同样复查
+#    本次 16 项 Playwright 断言脚本与截图脚本为一次性资产，保留在 /tmp/git-viz-verify/tools/（未入库），
+#    结果与证据见 §1.26。

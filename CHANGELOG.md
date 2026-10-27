@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.13.0 — 2026-10-27
+
+### 新增：卡片详情「分支 / 工作树」可视化（v0.13）
+
+- 背景（卡片 `card-6f4b3d72`「卡片详情可视化展示 git 分支或 worktree 情况」）：看板管理 coding 任务时，DSH 宿主常用 git 分支或 worktree 执行；多张卡片分属不同分支 / 工作树时，看板里看不出一张卡「现在在哪个分支、哪个工作树、与主分支和远端差多少」。本版在**卡片详情抽屉**（右侧）新增只读「分支 / 工作树」区块：生成方式参照 Fork 等 Git 客户端的泳道提交图。
+- 服务端（新增 `lib/git.js`，512 行）：对卡片 `cwd` 执行一组**只读** git 命令，产出 `repo / current / upstream / base / worktrees / commits(ahead·behind·shared) / refs` 上下文；`execFile('git')` 不拼 shell、单条 2s / 整次 4s 超时、`maxBuffer=4MiB`、`GIT_OPTIONAL_LOCKS=0` + `LC_ALL=C`；主分支探测（`origin/HEAD` → `main` → `master` → `origin/main` → `origin/master`）；两种比较模式（当前分支 ≠ 主分支时比主分支；当前就在主分支时比其 upstream）；`?cwd=` 候选（DSH 会话已切到 linked worktree 时前端带上会话执行目录）只有在「与 `card.cwd` 同仓库 + 候选是 linked worktree + `card.cwd` 在主工作树」时才采用，其余静默回退；任何失败都收敛为 `available:false` + `reason`（`no_cwd` / `missing` / `not_git` / `no_commits` / `timeout` / `error`），**不返回 5xx、不写仓库、不落库**。
+- 接口（`lib/routes.js`）：新增 `GET/HEAD /api/kanban/cards/:id/git?cwd=`（非 GET/HEAD 405、卡片不存在 404、业务失败仍 200 + `available:false`）。契约见新增 `docs/contracts/06-git-context.md`，`docs/contracts/02-http-api.md` 登记路由。
+- Web（新增 4 个文件 / 改 5 个）：`GitBranchSection.tsx`（区块标题、chips：分支 / 工作树 / 远端跟踪 ↑↓ / 主分支关系 ↑↓、两泳道 SVG 提交图、多工作树列表；数据不可用或旧服务端 404 时整块静默隐藏）；`gitGraph.ts`（ahead/behind 按 `committedAt` 稳定合并且同时间戳先 ahead、shared 接后、分叉点汇合线、refs 同 sha 合并去重、**12 行上限优先保住分叉点**并把「还有 N 个提交」放在中段、单泳道退化、路径末两段省略）；`useCardGit.ts`（打开卡片按需请求 + `?cwd=` 候选主会话 cwd + 4s / 20 条 LRU 缓存 + 切卡丢弃在途响应）；`types.ts` / `api.ts`（含服务端响应容错归一化）/ `i18n.tsx`（zh/en 各 23 条 `git.*`）/ `drawer.css`（`kb-git-*`，仅 alias 令牌、0.5px 发丝线、全圆角配 `corner-shape: round`）/ `DetailDrawer.tsx`（插在「结果」之后、「审批」之前）。视觉：HEAD 大圆点 + 外环、分叉点汇合曲线、`origin/*` ref 徽标、当前工作树高亮；亮暗主题只靠令牌。
+- 细节口径：`base.kind='main'` 时主工作树行的 ↑↓ 恒为 0/0（自己跟自己比），隐藏避免噪声；`base.kind='upstream'`（当前就在主分支）时保留；当前就在主分支且 base 就是 upstream 时，「主分支关系」chip 与「远端跟踪」完全重复，只保留后者。
+- 测试：服务端 `node --test` **162/162**（新增 `test/git.test.mjs` 8 例：普通 / detached / 分叉 + linked worktree / upstream 领先落后 / origin/HEAD 探测 / 11→8 工作树截断 / 提交上限 / 全部不可用原因 / `?cwd=` 采用与忽略；`test/routes.test.mjs` +4 例：404 / 405 / 200 available true·false / HEAD / `?cwd=` 候选）；Web `vitest` **25 文件 / 249 测试**（新增 `gitGraph` 24 例，含分叉点优先截断、工作树计数隐藏）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 9 个 CSS 0 error / 0 warning。
+- 真实数据验收：`node scripts/demo-git-repo.mjs` 造演示仓库（main 与 origin/main 分叉、`feat/graph` / `feat/long` 两个 linked worktree、非 git 目录），`scripts/dev-server.mjs` 起独立服务 + 6 张真实卡片；Chromium 1440×900 DPR2 / 390×844、亮/暗共 **16 项 Playwright 断言全过**、console error 0 / pageerror 0 / 4xx 0、无横向溢出；`feat/long` 领先 15 条时 12 行上限下分叉点仍可见（9 ahead + 3 shared + 中段「还有 3 个提交」）；非 git / 无 `cwd` / 目录不存在三种卡区块整块隐藏；`?cwd=` 跨仓库候选被忽略。证据 `docs/assets/screens/git-branch-*.png`（8 张），验证记录 `docs/06-verification.md` §1.26。
+- 版本与服务端文件白名单：`package.json` / `web/package.json` → **0.13.0**，`files` 补 `lib/git.js`（否则发版缺文件、`lib/routes.js` 的 import 会在宿主里失败）。
+- 生效方式：含服务端改动（`lib/git.js` / `lib/routes.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。旧服务端（< v0.13）无该接口时前端按 404 静默隐藏，其余功能不受影响。
+- 已知限制：只比较「当前分支 vs 主分支/上游」两条泳道，不画任意多分支拓扑；远端只识别 `origin`；数据是打开详情时的快照（4s 缓存），不随新提交自动刷新；工作树列表上限 8 个。
+- 分支：`feat/git-branch-viz`（基于 `f65b4f1`，与主工作区并行会话隔离，未合入主线）；真实宿主复验需合入主线并重启 DSH 后执行（步骤见 docs/06 §6）。
+
 ## v0.12.0 — 2026-10-27
 
 ### 新增：多会话主会话切换与回复/审批目标（M2 收口）

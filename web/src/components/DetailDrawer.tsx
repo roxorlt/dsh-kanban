@@ -9,6 +9,7 @@ import { ApprovalPanel } from './ApprovalPanel';
 import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 import { Composer } from './Composer';
 import { ConfirmDialog } from './ConfirmDialog';
+import { GitBranchSection } from './GitBranchSection';
 import { SessionSection } from './SessionSection';
 import { Timeline, TimelineLoadMore } from './Timeline';
 import type { CardActionHandlers } from './types';
@@ -348,6 +349,9 @@ export function DetailDrawer({
               <p className="kb-drawer__text kb-drawer__text--result">{card.result}</p>
             </section>
           ) : null}
+
+          {/* 分支 / 工作树：数据不可用、读取失败或旧服务端 404 时整块静默隐藏 */}
+          <GitBranchSection card={card} sessions={sessions} />
 
           {pendingApprovals.length ? (
             <section className="kb-drawer__section kb-drawer__section--approval">

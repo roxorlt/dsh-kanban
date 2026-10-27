@@ -7,6 +7,8 @@ import type {
   Board,
   Card,
   ColumnId,
+  GitContext,
+  GitUnavailableReason,
   KanbanState,
   Priority,
   SessionActivityEntry,
@@ -372,6 +374,59 @@ async function getActivities(
   }
 }
 
+/** git 上下文不可用原因枚举（契约 §3.1）；未知值一律归到 error。 */
+const GIT_UNAVAILABLE_REASONS: readonly GitUnavailableReason[] = [
+  'no_cwd',
+  'missing',
+  'not_git',
+  'no_commits',
+  'timeout',
+  'error',
+];
+
+function normalizeGitReason(value: unknown): GitUnavailableReason {
+  return GIT_UNAVAILABLE_REASONS.find((reason) => reason === value) ?? 'error';
+}
+
+/**
+ * 容错归一化 git 上下文：服务端字段缺失时不让抽屉渲染崩溃。
+ * 数组缺失 → 空数组（图退化为空、组件整块隐藏）；available 缺失 → 按不可用处理。
+ */
+function normalizeGitContext(raw: GitContext | null | undefined): GitContext {
+  if (!raw || typeof raw !== 'object' || raw.available !== true) {
+    return {
+      available: false,
+      reason: normalizeGitReason(raw && typeof raw === 'object' ? raw.reason : null),
+      message: raw && typeof raw === 'object' ? raw.message ?? null : null,
+      requestedDir: raw && typeof raw === 'object' ? raw.requestedDir ?? null : null,
+    };
+  }
+  if (!raw.dir || !raw.current || !raw.repo) {
+    throw new KanbanApiError('INTERNAL', 'git 响应缺少必要字段');
+  }
+  return {
+    ...raw,
+    upstream: raw.upstream ?? null,
+    base: raw.base
+      ? {
+          ...raw.base,
+          remoteRef: raw.base.remoteRef ?? null,
+          remoteAhead: raw.base.remoteAhead ?? null,
+          remoteBehind: raw.base.remoteBehind ?? null,
+          mergeBase: raw.base.mergeBase ?? null,
+        }
+      : null,
+    worktrees: raw.worktrees ?? [],
+    worktreesTruncated: raw.worktreesTruncated ?? 0,
+    commits: {
+      ahead: raw.commits?.ahead ?? [],
+      behind: raw.commits?.behind ?? [],
+      shared: raw.commits?.shared ?? [],
+    },
+    refs: raw.refs ?? [],
+  };
+}
+
 /** POST /cards/:id/session 的响应：新绑定或主会话切换；已是主会话时 activity 为 null（幂等）。 */
 export interface BindSessionResult {
   card: Card;
@@ -572,6 +627,22 @@ export const api = {
       archivedSessionIds: normalizeArchivedSessionIds(result.archivedSessionIds),
       ...(typeof result.revision === 'number' ? { revision: result.revision } : {}),
     };
+  },
+
+  /**
+   * 卡片 Git 上下文（docs/contracts/06-git-context.md）：
+   * `cwd` 是「卡片主会话执行目录」候选，服务端只在同仓库 linked worktree 方向正确时采用。
+   * 业务失败（无 cwd / 非 git 仓库等）也是 200 + `available:false`；网络/旧服务端 404 会抛错，
+   * 由调用方（useCardGit）兜底静默隐藏区块。
+   */
+  getCardGit: async (cardId: string, options: { cwd?: string } = {}): Promise<GitContext> => {
+    const params = new URLSearchParams();
+    if (options.cwd) params.set('cwd', options.cwd);
+    const query = params.toString();
+    const result = await request<{ git?: GitContext | null }>(
+      `/cards/${encodeURIComponent(cardId)}/git${query ? `?${query}` : ''}`,
+    );
+    return normalizeGitContext(result.git);
   },
 
   ack: (cardId: string): Promise<{ revision: number }> =>
