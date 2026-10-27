@@ -253,3 +253,154 @@ export interface KanbanState {
   serverTime: number;
   activities?: Activity[];
 }
+
+// ------------------------------------------------ 卡片 Git 上下文（docs/contracts/06-git-context.md）
+// 只读派生信息：GET /api/kanban/cards/:cardId/git 的 `git` 对象；不写 data.json、不改卡片字段。
+
+/** `available:false` 的原因；前端对全部原因都静默隐藏区块。 */
+export type GitUnavailableReason = 'no_cwd' | 'missing' | 'not_git' | 'no_commits' | 'timeout' | 'error';
+
+/** refs 徽标来源：HEAD / 当前分支 / 参照分支（主分支）/ 远端跟踪分支。 */
+export type GitRefKind = 'head' | 'branch' | 'base' | 'upstream';
+
+export interface GitRepo {
+  /** 主工作树目录名 */
+  name: string;
+  /** 主工作树根目录（worktree list 里 isMain 的那项） */
+  root: string;
+  /** .git 目录；linked worktree 下是主仓库的 common dir */
+  commonDir: string;
+}
+
+export interface GitCurrent {
+  /** 采集目录所在工作树根 */
+  worktree: string;
+  /** true = linked worktree（非主工作树） */
+  isWorktree: boolean;
+  isMainWorktree: boolean;
+  /** detached HEAD 时为 null */
+  branch: string | null;
+  detached: boolean;
+  sha: string;
+  shortSha: string;
+  subject: string;
+  authorName: string;
+  /** 毫秒时间戳 */
+  committedAt: number;
+}
+
+/** 当前分支的跟踪分支；无 upstream 时为 null。 */
+export interface GitUpstream {
+  /** upstream 完整短名，如 origin/feat/x */
+  ref: string;
+  remote: string;
+  /** 远端侧分支名 */
+  branch: string;
+  ahead: number;
+  behind: number;
+}
+
+/** 泳道 0 的参照物（主分支 / upstream），探测不到主分支时为 null。 */
+export interface GitBase {
+  kind: 'main' | 'upstream';
+  /** 泳道 0 展示标签 */
+  label: string;
+  /** 主分支名 */
+  branch: string;
+  /** 主分支的远端同名引用；不存在时 null */
+  remoteRef: string | null;
+  /** current 相对参照物领先 */
+  ahead: number;
+  /** current 相对参照物落后 */
+  behind: number;
+  /** 探测不到比较对象时为 null（图退化为单泳道） */
+  mergeBase: { sha: string; shortSha: string } | null;
+  /** 主分支相对 remoteRef 领先；remoteRef 为 null 时 null */
+  remoteAhead: number | null;
+  remoteBehind: number | null;
+}
+
+export interface GitWorktree {
+  path: string;
+  branch: string | null;
+  detached: boolean;
+  sha: string;
+  shortSha: string;
+  /** worktree list 的第一项 / 路径等于主工作树根 */
+  isMain: boolean;
+  /** 是否本次采集目录所在工作树 */
+  isCurrent: boolean;
+  /** 相对 base 参照物；无法计算时 null */
+  aheadOfBase: number | null;
+  behindOfBase: number | null;
+}
+
+export interface GitCommit {
+  sha: string;
+  shortSha: string;
+  subject: string;
+  authorName: string;
+  /** 毫秒时间戳 */
+  committedAt: number;
+}
+
+/** 泳道图行内徽标；同一 sha 的多个 ref 由前端合并到同一行。 */
+export interface GitRef {
+  name: string;
+  sha: string;
+  shortSha: string;
+  kind: GitRefKind;
+}
+
+export interface GitCommits {
+  /** current 领先参照物的提交（新 → 旧） */
+  ahead: GitCommit[];
+  /** current 落后参照物的提交（新 → 旧） */
+  behind: GitCommit[];
+  /** 从 mergeBase 开始向旧（含 mergeBase 本身） */
+  shared: GitCommit[];
+}
+
+/** 服务端单次采集上限（前端展示上限另计：12 行） */
+export interface GitLimits {
+  ahead: number;
+  behind: number;
+  shared: number;
+  worktrees: number;
+}
+
+export interface GitContextAvailable {
+  available: true;
+  /** 可用时恒为 null */
+  reason: null;
+  /** 可选调试信息，不进入正式 UI 文案 */
+  message?: string | null;
+  /** 实际采集目录（realpath） */
+  dir: string;
+  /** 传入的 ?cwd=（未传则 null；未采用时也返回原值） */
+  requestedDir?: string | null;
+  repo: GitRepo;
+  current: GitCurrent;
+  upstream: GitUpstream | null;
+  base: GitBase | null;
+  worktrees: GitWorktree[];
+  /** 超过上限时省略的工作树数量 */
+  worktreesTruncated?: number;
+  commits: GitCommits;
+  refs: GitRef[];
+  limits: GitLimits;
+  fetchedAt?: number;
+  durationMs?: number;
+}
+
+/** 卡片无 cwd / 目录不存在 / 非 git 仓库 / 旧服务端 404 等：UI 静默隐藏区块。 */
+export interface GitContextUnavailable {
+  available: false;
+  reason: GitUnavailableReason;
+  message?: string | null;
+  requestedDir?: string | null;
+  fetchedAt?: number;
+  durationMs?: number;
+}
+
+export type GitContext = GitContextAvailable | GitContextUnavailable;

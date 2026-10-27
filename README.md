@@ -3,7 +3,7 @@
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里的原生看板插件。
 **卡片是控制面，DSH 会话是执行面**：你在看板里管理"要做什么、到哪了、需要你决定什么"，agent 在会话里执行，并通过原生工具把进展写回卡片。卡片内回复会直接进入绑定的 DSH 会话，会话里的决定也会回到卡片。
 
-> 状态：v0.12.0（工作区），已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写 → 会话归档 → 多会话回复目标）。v0.9.2 起含服务端改动（审批自定义回答、摘要上限），v0.10.0 决策日志、v0.11.0 会话归档联动 + 会话运行失败同步、v0.12.0 多会话目标下拉与主会话切换时间线同样含服务端改动，**都需要重启 DSH 后生效**；纯前端修复刷新看板即可。数据存本机 `~/.dsh-kanban/data.json`，决策日志另存同目录 `decisions.jsonl`（只追加）。
+> 状态：v0.13.0（分支 `feat/git-branch-viz`，待合入），已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写 → 会话归档 → 多会话回复目标）。v0.9.2 起含服务端改动（审批自定义回答、摘要上限），v0.10.0 决策日志、v0.11.0 会话归档联动 + 会话运行失败同步、v0.12.0 多会话目标下拉与主会话切换时间线、v0.13.0 卡片 Git 分支 / 工作树可视化同样含服务端改动，**都需要重启 DSH 后生效**；纯前端修复刷新看板即可。数据存本机 `~/.dsh-kanban/data.json`，决策日志另存同目录 `decisions.jsonl`（只追加）。
 > 仓库：[github.com/roxorlt/dsh-kanban](https://github.com/roxorlt/dsh-kanban)
 
 ![看板视图（真实 DSH 内）](docs/assets/screens/embedded-board-light.png)
@@ -24,6 +24,7 @@
 - **会话返回看板**：DSH 会话标题右侧提供「看板」按钮，从卡片打开的会话可一键回看板。
 - **会话绑定**：选择已有会话作为主会话、打开会话跳转 DSH 对话、显示运行状态。
 - **多会话目标与主会话切换（v0.12）**：详情抽屉列出卡片全部会话（主会话徽标 + 完整 session id + 运行状态）；`设为主会话` 即置顶并写入时间线（「主会话切换为「X」」），已是主会话时幂等不重复记录；**回复/审批目标**用 Composer 上方的下拉切换，默认主会话，设为主会话后默认目标跟随。
+- **分支 / 工作树可视化（v0.13）**：详情抽屉按卡片执行目录只读探测 Git，展示当前分支、是否 linked worktree、远端跟踪 ↑↓、相对主分支（main/master/远端 HEAD 自动探测）的领先与落后；**Fork 风格两泳道提交图**——HEAD 高亮、分叉点汇合线、共享主干，领先再长也优先保住分叉点（超出 12 行给「还有 N 个提交」）；多工作树时列出各工作树分支 / 相对主分支 ↑↓ / 路径并高亮当前工作树；工作目录不是 Git 仓库、不存在或无 `cwd` 时整块静默隐藏。DSH 用 worktree 执行任务时，卡片 `cwd` 仍是主仓库也行——主会话已在 linked worktree 时前端会带上会话执行目录候选，服务端校验同仓库后采纳。
 - **会话归档联动（v0.11）**：卡片完成后可在详情归档其 DSH 会话（从侧栏隐藏、随时可恢复）；归档前检查共享该会话的其它卡片是否都已完成、会话是否空闲/有待确认；运行中会话弹「停止并归档」二次确认（写明会丢弃排队输入、删除定时任务、被停止的工作不会自动继续）；已完成列支持批量归档（dryRun 预览 + 跳过原因，可直接处理历史数据）；卡片完成时轻提示，重开卡片/打开会话/发消息前自动恢复；已完成超过 7 天的卡片会话自动归档（`autoArchiveSessionsDays` 可配，0 关闭）；旧宿主无可逆能力时入口自动隐藏。
 - **实时刷新**：SSE 推送 revision，断线指数退避，页面隐藏暂停；手动重试只在断连错误条出现。
 - **批量操作**：工具栏「选择」进入选择模式（与拖拽手势分离），批量移动到列 / 批量归档；列表视图同样支持。
@@ -36,7 +37,8 @@
 
 ## 已验证
 
-- 服务端 `node --test`：**150/150 通过**；Web `tsc` + Vite 构建通过，vitest 24 文件 / 225 测试，令牌 lint 0 error / 0 warning。
+- 服务端 `node --test`：**162/162 通过**（v0.13 新增 12 例 Git 上下文与接口用例）；Web `tsc` + Vite 构建通过，vitest 25 文件 / 249 测试，令牌 lint 0 error / 0 warning。
+- v0.13.0 卡片 Git 分支 / 工作树可视化：详情抽屉新增只读「分支 / 工作树」区块（分支 + 工作树 + 远端跟踪 ↑↓ + 主分支关系 ↑↓ + 两泳道提交图 + 多工作树列表）。真实临时 git 仓库（main 与 origin/main 分叉、`feat/graph` / `feat/long` 两个 linked worktree）验证：worktree 卡正确显示 `feat/graph` 与分叉点、领先 15 条的 `feat/long` 在 12 行上限下仍可见分叉点与「还有 3 个提交」、`?cwd=` 候选被同仓库校验后采纳、非 git / 无 cwd / 目录不存在三种卡整块隐藏；Chromium 1440×900 DPR2 + 390×844、亮/暗共 16 项断言全过、console 0 error / pageerror 0 / 4xx 0、无横向溢出（证据 `docs/assets/screens/git-branch-*.png`，全部见 docs/06 §1.26）。含服务端改动，需重启 DSH 后生效；真实宿主复验待合入主线后执行。
 - v0.12.0 多会话主会话切换与回复/审批目标：合并后服务端 150/150、Web vitest 24 文件 / 225 测试；`设为主会话` 写入 `session_primary` 时间线（「主会话切换为「X」」，已是主会话幂等不重复），Composer 上方「回复/审批目标」下拉默认主会话、设为主会话后默认跟随，回复与审批决定都发到选中会话；隔离真实 DSH 宿主（0.1.5-rc.2 + 真实插件 + 3 个真实会话，Playwright）4/4 验收全过、console 0 error、0 个 4xx（截图 `design/screens/m2-merged-host-*.png`）；2026-10-27 09:41 重启桌面 DSH 后 `/api/kanban/health` 返回 0.12.0、真实数据与 v0.10/v0.11 接口共存（全部证据见 docs/06 §1.25）。
 - v0.11.0 会话归档联动：真实 Chromium E2E（真服务端路由 + 假 workspaceRegistry + 假父页面桥）覆盖归档/恢复/停止并归档/共享会话阻塞/待确认阻塞/批量预览+执行/时间线活动，10 项断言全过；真实宿主需重启 DSH 加载服务端 v0.11 后复验（证据 `design/screens/session-archive-e2e-*.png`）。
 - v0.11.0 会话运行失败同步：并入后服务端 149/149（本特性 12 例覆盖失败判定口径、主会话过滤、同轮去重、自动置失败/恢复、监听器接线与开关）；dev-server 冒烟正常；真实宿主失败复验在重启 DSH 后执行（步骤见 docs/06 §1.23）。
@@ -72,6 +74,18 @@
 | 列表视图（按项目分组） | 已完成防膨胀 |
 | --- | --- |
 | ![列表分组](docs/assets/screens/board-list-groups.png) | ![done 折叠](docs/assets/screens/board-list-done.png) |
+
+| 详情「分支 / 工作树」（linked worktree，v0.13） | 暗色 |
+| --- | --- |
+| ![分支可视化](docs/assets/screens/git-branch-worktree-light.png) | ![暗色](docs/assets/screens/git-branch-worktree-dark.png) |
+
+| 领先 15 条仍保住分叉点（12 行上限） | main 与 origin/main 分叉 |
+| --- | --- |
+| ![截断](docs/assets/screens/git-branch-fork-truncated-light.png) | ![main 分叉](docs/assets/screens/git-branch-main-light.png) |
+
+| 看板 + 右侧详情全貌 | 390 竖屏 |
+| --- | --- |
+| ![看板](docs/assets/screens/git-branch-board-light.png) | ![竖屏](docs/assets/screens/git-branch-worktree-portrait.png) |
 
 ## 安装
 
@@ -171,6 +185,9 @@ npm test
 
 # 构建
 npm --prefix web run build
+
+# 造一个带分叉 / 远端 / linked worktree 的演示仓库（验证详情抽屉「分支 / 工作树」区块）
+node scripts/demo-git-repo.mjs
 ```
 
 目录结构：
@@ -182,6 +199,7 @@ lib/
   store.js        # 本地 JSON 存储（原子写 / 乐观锁 / revision）
   decisions.js    # 决策日志：decisions.jsonl 只追加事件流（读取 / 回填 / 导出）
   domain.js       # 状态与列、种子数据、节点构造
+  git.js          # 卡片 Git 上下文：只读探测分支 / worktree / 远端关系（v0.13）
   routes.js       # REST API + SSE + 静态资源
   tools.js        # 11 个 kanban_* agent 工具
 web/              # 看板 UI（React + Vite），构建产物 web/dist
@@ -195,7 +213,7 @@ docs/             # 分析、契约、设计、架构、验证
 - [DSH 插件机制与集成要点](docs/02-dsh-integration.md)
 - [设计规范与响应式规格](docs/03-design-system.md)
 - [架构与信息架构](docs/04-architecture.md)
-- [契约：数据模型](docs/contracts/01-data-model.md) / [HTTP API](docs/contracts/02-http-api.md) / [客户端桥](docs/contracts/03-client-bridge.md) / [决策日志](docs/contracts/05-decision-log.md)
+- [契约：数据模型](docs/contracts/01-data-model.md) / [HTTP API](docs/contracts/02-http-api.md) / [客户端桥](docs/contracts/03-client-bridge.md) / [决策日志](docs/contracts/05-decision-log.md) / [卡片 Git 上下文](docs/contracts/06-git-context.md)
 - [验证记录（含 0.2.1 宿主）](docs/06-verification.md)
 - [Deep link 提案（已搁置，应用内打开会话已实现）](docs/08-deeplink-proposal.md)
 - [OpenDesign 设计/动效 skill 调研](docs/09-design-motion-skills.md)
@@ -209,13 +227,15 @@ docs/             # 分析、契约、设计、架构、验证
 - 无团队协作/云端同步，数据仅本机。
 - 决策日志只追加、不自动清理/轮转，长期使用会持续增长；需要备份可在 DSH 停止写入时直接复制 `decisions.jsonl`（或调 `/decisions/export`）。
 - 未做超大看板（>500 卡）压力测试与真机软键盘验证；旧版 DSH 仅保证降级不崩溃。
+- 分支可视化（v0.13）只比较「当前分支 vs 主分支/上游」两条泳道，不画任意多分支拓扑；远端只识别 `origin`；数据是打开详情时的快照（4s 缓存），不会随会话新提交自动刷新；工作树列表上限 8 个。
+- 卡片未绑定会话或会话无 `cwd` 时，「分支 / 工作树」以卡片 `cwd` 为准；卡片 `cwd` 缺失则整块隐藏。
 
 ## 路线图
 
 | 阶段 | 内容 |
 | --- | --- |
 | M1（当前） | 单看板、四列、CRUD、审批、会话绑定、卡片内回复、SSE、双布局、响应式、agent 工具与技能 |
-| M2（进行中） | 多会话回复目标（v0.12 完成）、handoff 交接摘要（v0.8）、审批收件箱合并（v0.10）；剩余：卡片依赖与阻塞、按 workspace 分看板 |
+| M2（进行中） | 多会话回复目标（v0.12 完成）、handoff 交接摘要（v0.8）、审批收件箱合并（v0.10）、卡片 Git 分支 / 工作树可视化（v0.13）；剩余：卡片依赖与阻塞、按 workspace 分看板 |
 | M3 | 会话事件自动回填（工具调用数 / 耗时 / 搜索结果数）、审批与原生审批联动、卡片自动重开、周期卡 |
 | M4 | 团队协作、GitHub/Jira 集成、仪表盘（吞吐/阻塞时长）、导出 Markdown/JSON |
 

@@ -26,6 +26,7 @@
 | PATCH | `/api/kanban/cards/:id` | 改卡，见 §3，必须带 `version`（工具强制除外）→ `{ok, card, revision}` |
 | DELETE | `/api/kanban/cards/:id` | 归档（`archived:true`）→ `{ok, revision}` |
 | POST | `/api/kanban/cards/:id/move` | `{column, version?, beforeId?, afterId?}` → `{ok, card, revision}`；设置对应代表 status 并更新 cardOrder |
+| GET | `/api/kanban/cards/:id/git?cwd=` | 卡片执行目录的 git 上下文（只读派生，不落库），见 §10 → `{ok, git, revision}`；不可用时仍是 200 + `git.available:false` |
 | GET | `/api/kanban/cards/:id/activities?limit=&before=` | 单卡时间线（倒序，默认 30，上限 100）。`before` 为上一页最后一条 activity id，用于「加载更早」；返回 `{ok, activities, hasMore, nextBefore}`。`/state` 不内嵌全量时间线 |
 | POST | `/api/kanban/cards/:id/comments` | `{text, actor?}` → `{ok, activity, card, revision}`（UI 提交后由客户端桥把同一文本发到主会话） |
 | POST | `/api/kanban/cards/:id/approvals` | 二选一：单题 `{title, detail, options[], multiSelect?, sessionId?}`；多题 `{questions:[{header?,question,multiSelect?,options[]}], detail?, sessionId?}` → `{ok, approval, card, revision}`；卡片 status→`needs_you`；多题时每题独立单选/多选。选项可带 `outcome: 'running'\|'backlog'\|'done'` 声明「选中后卡片进哪一列」（v0.9.5），非法值 400 |
@@ -214,3 +215,13 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
   - 执行阶段 `reason`: `running`（附 `activity`）| `missing` | `failed`（附 `message`）。
 - 成功归档的会话会给代表卡写 `session_archived` 活动（同一事务）。
 - 无宿主：dryRun 仍可返回计划（`available:false`）；执行时逐项失败，UI 依据 `available` 隐藏入口。
+
+## 10. 卡片 Git 上下文（v0.13 增量）
+
+完整字段定义见 `docs/contracts/06-git-context.md`（本文件只登记路由与错误语义）。
+
+- `GET /api/kanban/cards/:cardId/git?cwd=<绝对路径>`
+- `cwd` 可选：前端可传卡片主会话的当前执行目录（宿主用 worktree 执行任务时用），服务端校验「与 `card.cwd` 同一仓库、且候选是 linked worktree」后才会采用，其余情况静默回退到 `card.cwd`。
+- 200：`{ ok:true, revision, git }`；`git.available:false` 表示「无 cwd / 目录不存在 / 非 git 仓库 / 空仓库 / 超时 / git 错误」，前端静默隐藏区块，**不要按错误处理**。
+- 404 `CARD_NOT_FOUND`；405（非 GET/HEAD）。
+- 只读：不写仓库、不写 `data.json`；每条 git 命令 2s 超时、整次采集 4s 兜底；同源校验与其它接口一致。

@@ -2,8 +2,10 @@
 // SSE、同源拒绝、JSON 限制、静态资源与路径穿越、SPA fallback。
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdir, symlink, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { api, openSse, rawRequest, startServer, tempDir, testStore, writeStaticFixture } from './helpers.mjs'
 
 async function setup(t, options = {}) {
@@ -16,6 +18,30 @@ async function createCard(server, body = {}) {
   const res = await api(server, '/api/kanban/cards', { method: 'POST', body: { title: '测试卡片', ...body } })
   assert.equal(res.status, 200, res.text)
   return res.json.card
+}
+
+// ---- 卡片 git 上下文路由用的临时仓库（真实 git，离线；提交身份固定） ----
+const execFileAsync = promisify(execFile)
+const GIT_ROUTE_ENV = {
+  ...process.env,
+  GIT_CONFIG_NOSYSTEM: '1',
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_AUTHOR_NAME: '路由测试',
+  GIT_AUTHOR_EMAIL: 'route@example.com',
+  GIT_COMMITTER_NAME: '路由测试',
+  GIT_COMMITTER_EMAIL: 'route@example.com',
+  LC_ALL: 'C',
+}
+
+async function gitExec(cwd, args) {
+  return execFileAsync('git', args, { cwd, env: GIT_ROUTE_ENV, maxBuffer: 4 * 1024 * 1024 })
+}
+
+async function makeGitRepo(t) {
+  const repo = await tempDir(t, 'dsh-kanban-route-git-')
+  await gitExec(repo, ['init', '-q', '-b', 'main'])
+  await gitExec(repo, ['-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', '初始化提交'])
+  return repo
 }
 
 test('GET /health 返回版本、schemaVersion、dataDir、revision', async t => {
@@ -1031,4 +1057,125 @@ test('POST /seed demo：演示审批补写请求事件、可正常提交；HEAD 
   const headMeta = await api(server, '/api/kanban/decisions/meta', { method: 'HEAD' })
   assert.equal(headMeta.status, 200)
   assert.equal(headMeta.text, '')
+})
+
+// ---------------- 卡片 Git 上下文（契约 docs/contracts/06-git-context.md） ----------------
+
+test('GET /cards/:id/git：卡片 cwd 在 git 仓库时返回 available:true 与完整结构', async t => {
+  const { server } = await setup(t)
+  const repo = await makeGitRepo(t)
+  const card = await createCard(server, { title: 'git 卡片', cwd: repo })
+
+  const res = await api(server, `/api/kanban/cards/${card.id}/git`)
+  assert.equal(res.status, 200)
+  assert.equal(res.headers.get('content-type'), 'application/json; charset=utf-8')
+  assert.equal(res.headers.get('cache-control'), 'no-store')
+  assert.equal(res.json.ok, true)
+  assert.equal(res.json.revision, 2) // demo 种子 revision=1，建卡后为 2
+  const git = res.json.git
+  assert.equal(git.available, true)
+  assert.equal(git.reason, null)
+  assert.equal(git.dir, await realpath(repo))
+  assert.equal(git.requestedDir, null)
+  assert.equal(git.repo.root, await realpath(repo))
+  assert.equal(git.current.branch, 'main')
+  assert.equal(git.current.detached, false)
+  assert.equal(git.base.kind, 'main')
+  assert.equal(git.base.label, 'main')
+  assert.equal(git.refs[0].name, 'HEAD')
+  assert.equal(git.worktrees.length, 1)
+  assert.equal(git.worktrees[0].isMain, true)
+  assert.equal(git.worktrees[0].isCurrent, true)
+  assert.deepEqual(git.limits, { ahead: 12, behind: 8, shared: 4, worktrees: 8 })
+  assert.equal(git.commits.shared.length, 1)
+  assert.ok(git.fetchedAt > 0)
+  assert.ok(git.durationMs >= 0)
+
+  // HEAD 与 GET 同状态，只是不带 body
+  const head = await api(server, `/api/kanban/cards/${card.id}/git`, { method: 'HEAD' })
+  assert.equal(head.status, 200)
+  assert.equal(head.headers.get('cache-control'), 'no-store')
+  assert.equal(head.text, '')
+})
+
+test('GET /cards/:id/git：无 cwd / 目录不存在 / 非 git 仓库一律 200 + available:false', async t => {
+  const { server } = await setup(t)
+  const noCwd = await createCard(server, { title: '无 cwd 卡片' })
+  const noCwdRes = await api(server, `/api/kanban/cards/${noCwd.id}/git`)
+  assert.equal(noCwdRes.status, 200)
+  assert.equal(noCwdRes.json.git.available, false)
+  assert.equal(noCwdRes.json.git.reason, 'no_cwd')
+  assert.equal(noCwdRes.json.git.message, null)
+  assert.equal(noCwdRes.json.git.requestedDir, null)
+
+  const plain = await tempDir(t, 'dsh-kanban-route-plain-')
+  const plainCard = await createCard(server, { title: '非 git 仓库', cwd: plain })
+  const plainRes = await api(server, `/api/kanban/cards/${plainCard.id}/git`)
+  assert.equal(plainRes.status, 200)
+  assert.equal(plainRes.json.git.available, false)
+  assert.equal(plainRes.json.git.reason, 'not_git')
+
+  const missingCard = await createCard(server, { title: '目录不存在', cwd: join(plain, 'missing') })
+  const missingRes = await api(server, `/api/kanban/cards/${missingCard.id}/git`)
+  assert.equal(missingRes.status, 200)
+  assert.equal(missingRes.json.git.available, false)
+  assert.equal(missingRes.json.git.reason, 'missing')
+
+  // 业务失败不影响看板其它接口
+  const state = await api(server, '/api/kanban/state')
+  assert.equal(state.status, 200)
+  assert.equal(state.json.ok, true)
+})
+
+test('GET /cards/:id/git：卡片不存在 404、非 GET/HEAD 405、非法卡片 ID 400', async t => {
+  const { server } = await setup(t)
+  const missing = await api(server, '/api/kanban/cards/card-ffffffff/git')
+  assert.equal(missing.status, 404)
+  assert.equal(missing.json.error.code, 'CARD_NOT_FOUND')
+
+  const card = await createCard(server)
+  const post = await api(server, `/api/kanban/cards/${card.id}/git`, { method: 'POST', body: {} })
+  assert.equal(post.status, 405)
+  assert.equal(post.headers.get('allow'), 'GET, HEAD')
+
+  const badId = await api(server, '/api/kanban/cards/not-a-card/git')
+  assert.equal(badId.status, 400)
+  assert.equal(badId.json.error.code, 'BAD_REQUEST')
+})
+
+test('GET /cards/:id/git?cwd=：同仓库 linked worktree 被采用，跨仓库忽略', async t => {
+  const { server } = await setup(t)
+  const repo = await makeGitRepo(t)
+  const linkedRoot = await tempDir(t, 'dsh-kanban-route-wt-')
+  const linked = join(linkedRoot, 'wt')
+  await gitExec(repo, ['worktree', 'add', '-q', '-b', 'feat/x', linked])
+  const realLinked = await realpath(linked)
+  const realRepo = await realpath(repo)
+  const card = await createCard(server, { title: '工作树卡片', cwd: repo })
+
+  const adopted = await api(server, `/api/kanban/cards/${card.id}/git?cwd=${encodeURIComponent(linked)}`)
+  assert.equal(adopted.status, 200)
+  assert.equal(adopted.json.git.available, true)
+  assert.equal(adopted.json.git.dir, realLinked)
+  assert.equal(adopted.json.git.requestedDir, linked)
+  assert.equal(adopted.json.git.current.isWorktree, true)
+  assert.equal(adopted.json.git.current.isMainWorktree, false)
+  assert.equal(adopted.json.git.current.branch, 'feat/x')
+  assert.equal(adopted.json.git.worktrees.length, 2)
+
+  // 跨仓库候选：静默忽略，仍采集卡片 cwd
+  const other = await makeGitRepo(t)
+  const ignored = await api(server, `/api/kanban/cards/${card.id}/git?cwd=${encodeURIComponent(other)}`)
+  assert.equal(ignored.status, 200)
+  assert.equal(ignored.json.git.dir, realRepo)
+  assert.equal(ignored.json.git.requestedDir, other)
+  assert.equal(ignored.json.git.current.isWorktree, false)
+
+  // 卡片没有 cwd：拒绝候选，reason=no_cwd 但回显入参
+  const noCwd = await createCard(server, { title: '无 cwd 卡片' })
+  const candidateOnly = await api(server, `/api/kanban/cards/${noCwd.id}/git?cwd=${encodeURIComponent(linked)}`)
+  assert.equal(candidateOnly.status, 200)
+  assert.equal(candidateOnly.json.git.available, false)
+  assert.equal(candidateOnly.json.git.reason, 'no_cwd')
+  assert.equal(candidateOnly.json.git.requestedDir, linked)
 })
