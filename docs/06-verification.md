@@ -411,8 +411,18 @@
 | 真实浏览器验收（Chromium 1440×900 DPR2 / 390×844，亮/暗，16 项断言全 PASS） | 打开 6 张真实卡片：① worktree 卡区块出现、6 行、分叉点、图例 `main / feat/graph`、refs 含 `HEAD` 与 `origin/feat/graph`、3 个工作树且当前高亮；② 主仓库卡 4 行、分叉点、`origin/main` ref；③ `feat/long` 卡 12 行、分叉点仍可见、中段「还有 3 个提交」（9 ahead + 3 shared）；④ 非 git / 无 cwd / 目录不存在三张卡区块整块隐藏；⑤ 暗色下区块与分叉点正常；⑥ 390 竖屏区块出现且抽屉 `scrollWidth==clientWidth`（无横向溢出），长 subject 省略、长路径靠 `title` 看全。全程 **console error 0、pageerror 0、4xx 0** |
 | 截图 | `docs/assets/screens/git-branch-worktree-light.png`（worktree 卡：chips + 两泳道 + 分叉点 + 工作树列表）、`git-branch-main-light.png`（main vs origin/main）、`git-branch-fork-truncated-light.png`（领先 15 条、12 行上限下仍见分叉点与中段提示）、`git-branch-worktree-dark.png`、`git-branch-worktree-portrait.png`（390 竖屏）、`git-branch-board-light.png` / `git-branch-board-dark.png`（1440 看板 + 右侧抽屉全貌）、`git-branch-hidden-nogit.png`（非 git 目录：区块隐藏、无报错） |
 | 生效方式 | 含服务端改动（`lib/git.js` / `lib/routes.js`），需**重启 DSH**；`web/dist` 已重建（v0.13.0），刷新看板后前端生效。旧服务端（< v0.13）没有 git 接口时，前端按 404 静默隐藏该区块，其余功能不受影响 |
-| 分支 | `feat/git-branch-viz`（基于 `f65b4f1`，与主工作区并行会话隔离，未合入主线） |
-| 已知限制 | 远端只识别 `origin`（无 origin 时只显示本地关系）；提交图只比较当前分支与主分支/上游两条线，不画任意多分支拓扑；抽屉打开期间不自动刷新（4s 缓存 + 打开时请求，契约 §1）；工作树列表上限 8 个（多余数量提示）；桌面真实宿主复验需合入主线并重启 DSH 后按 §6 命令执行 |
+| 分支 | `feat/git-branch-viz`（基于 `f65b4f1`；已合入主线 merge `97ad6da`，见 §1.27） |
+| 已知限制 | 远端只识别 `origin`（无 origin 时只显示本地关系）；提交图只比较当前分支与主分支/上游两条线，不画任意多分支拓扑；抽屉打开期间不自动刷新（4s 缓存 + 打开时请求，契约 §1）；工作树列表上限 8 个（多余数量提示）；桌面真实宿主复验见 §1.27（合入主线并重启 DSH 后执行） |
+
+## 1.27 v0.13.0 合入主线与真实宿主复验（2026-10-27）
+
+| 项 | 结果 |
+|---|---|
+| 合并 | `feat/git-branch-viz`（`95762de`，v0.13.0）→ 主线合并提交 **`97ad6da`**。**无冲突**：分支基于 `f65b4f1`，合入时 main 恰好仍停在同一提交（v0.12 之后主工作区的并行改动已在 `f65b4f1` 内收口），卡面预判的 `CHANGELOG` / `README` / `docs/04` / `docs/06` / `package.json` / `web/package.json` / `web/dist` 冲突均未发生，`--no-ff` 一键干净合并 |
+| 版本头 | `package.json` / `web/package.json` → **0.13.0**；`files` 含 `lib/git.js`；`CHANGELOG` v0.13.0 置顶；README 状态行 / 功能 / 已验证 / 截图表已含 v0.13 |
+| dist 重建 | 合并后先删除旧产物（`rm -rf web/dist`）再 `npm --prefix web run build`（`tsc --noEmit && vite build`）：`index-D4ScdgBg.css`（93.79 KB，gzip 14.30 KB）/ `index-uM6BVSce.js`（376.16 KB，gzip 113.03 KB），与分支构建内容哈希一致（可复现），重建后工作树干净 |
+| 合入后自测 | 服务端 `node --test test/*.test.mjs` **162/162**；Web `vitest` **25 文件 / 249 测试**；`tsc --noEmit` 0 error；令牌 lint 9 个 CSS 0 error / 0 warning |
+| 桌面 DSH 重启后真实宿主 | **待重启后复验**（health 应为 0.13.0；真实卡片详情出现「分支 / 工作树」区块、非 git 卡隐藏、暗色与 390 竖屏抽查） |
 
 ## 2. 自动化测试
 
@@ -420,27 +430,27 @@
 
 ```
 $ npm test
-# tests 150
-# pass 150# fail 0
-# duration_ms ~2.2s
+# tests 162
+# pass 162 / # fail 0
+# duration_ms ~4.6s
 ```
 
-覆盖：`store`（原子写 / 串行队列 / revision / 损坏备份重建 / schema 迁移）、`domain`（状态列映射 / 规范化 / 种子 / 写原语 / 审批决策事件收集 / 会话运行失败与恢复回写）、`session-sync`（turn 失败判定口径 / 主会话过滤 / 同轮去重 / 监听器接线与容错）、`decisions`（追加格式 / 派生状态 / 筛选分页 / 坏行容忍 / 回填 / store 接线与日志失败中止）、`session-archive`（能力探测 / 预检 / 批量 / HTTP 降级 / 活动写入）、`routes`（CRUD / move / 乐观锁 409 / 审批 resolve / comments / session link / 同源 403 / SSE 首帧 / 静态资源防穿越与 SPA fallback / 决策日志与会话归档接口）、`tools`（11 个工具 schema 与 execute）、`index`（插件注册、决策日志回填、会话运行失败监听接线）。
+覆盖：`store`（原子写 / 串行队列 / revision / 损坏备份重建 / schema 迁移）、`domain`（状态列映射 / 规范化 / 种子 / 写原语 / 审批决策事件收集 / 会话运行失败与恢复回写）、`git`（卡片 Git 上下文：普通仓库 / detached / 分叉 + linked worktree / upstream 领先落后 / 主分支探测 / 工作树截断 / 提交上限 / 全部不可用原因 / `?cwd=` 候选采用与忽略）、`session-sync`（turn 失败判定口径 / 主会话过滤 / 同轮去重 / 监听器接线与容错）、`decisions`（追加格式 / 派生状态 / 筛选分页 / 坏行容忍 / 回填 / store 接线与日志失败中止）、`session-archive`（能力探测 / 预检 / 批量 / HTTP 降级 / 活动写入）、`routes`（CRUD / move / 乐观锁 409 / 审批 resolve / comments / session link / 同源 403 / SSE 首帧 / 静态资源防穿越与 SPA fallback / 决策日志与会话归档接口 / 卡片 Git 上下文接口）、`tools`（11 个工具 schema 与 execute）、`index`（插件注册、决策日志回填、会话运行失败监听接线）。
 
 ### 2.2 Web
 
 ```
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
-> vite build     # dist: JS gzip ~74KB / CSS gzip ~9KB
-$ npm --prefix web run test    # vitest 24 文件 / 225 测试（含 replyTarget 10 例）
+> vite build     # dist: JS gzip ~113KB / CSS gzip ~14KB
+$ npm --prefix web run test    # vitest 25 文件 / 249 测试（含 gitGraph 24 例）
 $ npm --prefix web run lint:tokens
 # 9 个 CSS 文件：0 error / 0 warning
 ```
 
 ### 2.3 令牌规范
 
-`dsh-ui-spec` 的 `lint-tokens.mjs` 对 8 个 CSS 文件 0 error / 0 warning；`design/lint` 抽出的 mockup 组件样式同样 0/0。
+`dsh-ui-spec` 的 `lint-tokens.mjs` 对 9 个 CSS 文件 0 error / 0 warning；`design/lint` 抽出的 mockup 组件样式同样 0/0。
 
 ## 3. 端到端验证
 

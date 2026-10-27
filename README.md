@@ -3,7 +3,7 @@
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里的原生看板插件。
 **卡片是控制面，DSH 会话是执行面**：你在看板里管理"要做什么、到哪了、需要你决定什么"，agent 在会话里执行，并通过原生工具把进展写回卡片。卡片内回复会直接进入绑定的 DSH 会话，会话里的决定也会回到卡片。
 
-> 状态：v0.13.0（分支 `feat/git-branch-viz`，待合入），已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写 → 会话归档 → 多会话回复目标）。v0.9.2 起含服务端改动（审批自定义回答、摘要上限），v0.10.0 决策日志、v0.11.0 会话归档联动 + 会话运行失败同步、v0.12.0 多会话目标下拉与主会话切换时间线、v0.13.0 卡片 Git 分支 / 工作树可视化同样含服务端改动，**都需要重启 DSH 后生效**；纯前端修复刷新看板即可。数据存本机 `~/.dsh-kanban/data.json`，决策日志另存同目录 `decisions.jsonl`（只追加）。
+> 状态：v0.13.0（工作区，已合入主线 `97ad6da`），已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写 → 会话归档 → 多会话回复目标 → 卡片 Git 分支 / 工作树可视化）。v0.9.2 起含服务端改动（审批自定义回答、摘要上限），v0.10.0 决策日志、v0.11.0 会话归档联动 + 会话运行失败同步、v0.12.0 多会话目标下拉与主会话切换时间线、v0.13.0 卡片 Git 分支 / 工作树可视化同样含服务端改动，**都需要重启 DSH 后生效**；纯前端修复刷新看板即可。数据存本机 `~/.dsh-kanban/data.json`，决策日志另存同目录 `decisions.jsonl`（只追加）。
 > 仓库：[github.com/roxorlt/dsh-kanban](https://github.com/roxorlt/dsh-kanban)
 
 ![看板视图（真实 DSH 内）](docs/assets/screens/embedded-board-light.png)
@@ -38,7 +38,7 @@
 ## 已验证
 
 - 服务端 `node --test`：**162/162 通过**（v0.13 新增 12 例 Git 上下文与接口用例）；Web `tsc` + Vite 构建通过，vitest 25 文件 / 249 测试，令牌 lint 0 error / 0 warning。
-- v0.13.0 卡片 Git 分支 / 工作树可视化：详情抽屉新增只读「分支 / 工作树」区块（分支 + 工作树 + 远端跟踪 ↑↓ + 主分支关系 ↑↓ + 两泳道提交图 + 多工作树列表）。真实临时 git 仓库（main 与 origin/main 分叉、`feat/graph` / `feat/long` 两个 linked worktree）验证：worktree 卡正确显示 `feat/graph` 与分叉点、领先 15 条的 `feat/long` 在 12 行上限下仍可见分叉点与「还有 3 个提交」、`?cwd=` 候选被同仓库校验后采纳、非 git / 无 cwd / 目录不存在三种卡整块隐藏；Chromium 1440×900 DPR2 + 390×844、亮/暗共 16 项断言全过、console 0 error / pageerror 0 / 4xx 0、无横向溢出（证据 `docs/assets/screens/git-branch-*.png`，全部见 docs/06 §1.26）。含服务端改动，需重启 DSH 后生效；真实宿主复验待合入主线后执行。
+- v0.13.0 卡片 Git 分支 / 工作树可视化：详情抽屉新增只读「分支 / 工作树」区块（分支 + 工作树 + 远端跟踪 ↑↓ + 主分支关系 ↑↓ + 两泳道提交图 + 多工作树列表）。真实临时 git 仓库（main 与 origin/main 分叉、`feat/graph` / `feat/long` 两个 linked worktree）验证：worktree 卡正确显示 `feat/graph` 与分叉点、领先 15 条的 `feat/long` 在 12 行上限下仍可见分叉点与「还有 3 个提交」、`?cwd=` 候选被同仓库校验后采纳、非 git / 无 cwd / 目录不存在三种卡整块隐藏；Chromium 1440×900 DPR2 + 390×844、亮/暗共 16 项断言全过、console 0 error / pageerror 0 / 4xx 0、无横向溢出（证据 `docs/assets/screens/git-branch-*.png`，全部见 docs/06 §1.26）。含服务端改动，需重启 DSH 后生效；已合入主线（merge `97ad6da`），真实宿主复验待重启桌面 DSH 后执行（见 docs/06 §1.27）。
 - v0.12.0 多会话主会话切换与回复/审批目标：合并后服务端 150/150、Web vitest 24 文件 / 225 测试；`设为主会话` 写入 `session_primary` 时间线（「主会话切换为「X」」，已是主会话幂等不重复），Composer 上方「回复/审批目标」下拉默认主会话、设为主会话后默认跟随，回复与审批决定都发到选中会话；隔离真实 DSH 宿主（0.1.5-rc.2 + 真实插件 + 3 个真实会话，Playwright）4/4 验收全过、console 0 error、0 个 4xx（截图 `design/screens/m2-merged-host-*.png`）；2026-10-27 09:41 重启桌面 DSH 后 `/api/kanban/health` 返回 0.12.0、真实数据与 v0.10/v0.11 接口共存（全部证据见 docs/06 §1.25）。
 - v0.11.0 会话归档联动：真实 Chromium E2E（真服务端路由 + 假 workspaceRegistry + 假父页面桥）覆盖归档/恢复/停止并归档/共享会话阻塞/待确认阻塞/批量预览+执行/时间线活动，10 项断言全过；真实宿主需重启 DSH 加载服务端 v0.11 后复验（证据 `design/screens/session-archive-e2e-*.png`）。
 - v0.11.0 会话运行失败同步：并入后服务端 149/149（本特性 12 例覆盖失败判定口径、主会话过滤、同轮去重、自动置失败/恢复、监听器接线与开关）；dev-server 冒烟正常；真实宿主失败复验在重启 DSH 后执行（步骤见 docs/06 §1.23）。
