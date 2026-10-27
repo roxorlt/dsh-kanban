@@ -200,6 +200,16 @@ test('upstream：base 用 upstream，领先/落后计数完整，refs 带 origin
   assert.equal(ctx.refs[2].sha, shaE2)
   assert.equal(ctx.current.sha, shaB)
 
+  // v0.14 graph：当前分支就是主分支，HEAD/当前分支/origin 主分支各一次，upstream 同名去重
+  assert.deepEqual(ctx.graph.refs.map(ref => [ref.name, ref.kind]), [
+    ['HEAD', 'head'], ['main', 'branch'], ['origin/main', 'remote'],
+  ])
+  assert.equal(ctx.graph.refs[1].isCurrent, true)
+  assert.equal(ctx.graph.refs[1].upstream, 'origin/main')
+  assert.equal(ctx.graph.refs[1].ahead, 1)
+  assert.equal(ctx.graph.refs[1].behind, 2)
+  assert.equal('isCurrent' in ctx.graph.refs[2], false)
+
   // 只有远端 main、没有本地 main：主分支仍可从 origin/main 探测，比较用远端引用
   await git(repo, ['checkout', '-q', '-b', 'dev'])
   await git(repo, ['branch', '-D', 'main'])
@@ -468,4 +478,291 @@ test('主分支探测：本地 main 优先于 master，探测不到时退化为�
   assert.deepEqual(single.refs.map(ref => [ref.name, ref.kind]), [['HEAD', 'head'], ['trunk', 'branch']])
   assert.equal(single.worktrees[0].aheadOfBase, null)
   assert.equal(single.worktrees[0].behindOfBase, null)
+})
+
+// ---------------- v0.14 Fork 风格多分支提交图（graph，契约 §4.5） ----------------
+
+/** 固定作者/提交时间的 git 环境（merge 提交等需要精确排序的场景）。 */
+function stampedEnv(seq) {
+  const stamp = `@${commitEpoch(seq)} +0000`
+  return { ...GIT_ENV, GIT_AUTHOR_DATE: stamp, GIT_COMMITTER_DATE: stamp }
+}
+
+test('graph：合并提交多父、date-order 拓扑（父提交永远排在孩子之后）', async t => {
+  const repo = await initRepo(t)
+  const shaA = await commit(repo, 'A 初始提交', 1)
+  const shaB = await commit(repo, 'B 主分支提交', 2)
+  await git(repo, ['checkout', '-q', '-b', 'feat/x'])
+  const shaC = await commit(repo, 'C 分支提交', 3)
+  await git(repo, ['checkout', '-q', 'main'])
+  const shaD = await commit(repo, 'D 主分支提交', 4)
+  await git(repo, ['merge', '--no-ff', '-q', '-m', 'merge feat/x', 'feat/x'], stampedEnv(5))
+  const shaM = await git(repo, ['rev-parse', 'HEAD'])
+
+  const ctx = await collectGitContext({ cwd: repo })
+  assert.equal(ctx.available, true)
+  const graph = ctx.graph
+  assert.ok(graph, 'graph 应存在（仓库可读、有提交）')
+  assert.deepEqual(graph.refs.map(ref => ref.name), ['HEAD', 'main', 'feat/x'])
+  assert.deepEqual(graph.refs[0], { name: 'HEAD', kind: 'head', sha: shaM, shortSha: shaM.slice(0, 7), branch: 'main' })
+  assert.deepEqual(graph.refs[1], {
+    name: 'main', kind: 'branch', sha: shaM, shortSha: shaM.slice(0, 7),
+    isCurrent: true, upstream: null, ahead: null, behind: null,
+  })
+  assert.deepEqual(graph.refs[2], {
+    name: 'feat/x', kind: 'branch', sha: shaC, shortSha: shaC.slice(0, 7),
+    isCurrent: false, upstream: null, ahead: null, behind: null,
+  })
+  assert.equal(graph.refsTruncated, 0)
+  assert.equal(graph.maxCommits, 48)
+  assert.equal(graph.maxRefs, 10)
+
+  assert.deepEqual(graph.commits.map(item => item.sha), [shaM, shaD, shaC, shaB, shaA])
+  const mergeCommit = graph.commits[0]
+  assert.deepEqual(mergeCommit.parents, [shaD, shaC])
+  assert.equal(mergeCommit.committedAt, commitEpoch(5) * 1000)
+  assert.equal(mergeCommit.subject, 'merge feat/x')
+  assert.equal(mergeCommit.authorName, '测试作者')
+  assert.deepEqual(graph.commits.find(item => item.sha === shaB).parents, [shaA])
+  assert.deepEqual(graph.commits.find(item => item.sha === shaA).parents, [])
+  // --date-order 保证父提交永远排在孩子之后（前端泳道布局依赖该拓扑性）
+  const indexBySha = new Map(graph.commits.map((item, index) => [item.sha, index]))
+  for (const item of graph.commits) {
+    for (const parent of item.parents) {
+      if (indexBySha.has(parent)) assert.ok(indexBySha.get(parent) > indexBySha.get(item.sha), `${parent} 应排在 ${item.sha} 之后`)
+    }
+  }
+  assert.equal(graph.truncated, 0)
+  // v0.13 兼容：老字段照旧可用
+  assert.equal(ctx.base.label, 'main')
+  assert.equal(ctx.current.branch, 'main')
+})
+
+test('graph：引用选取顺序与去重（HEAD→当前→主分支→origin 主分支→upstream→工作树分支→其余本地→origin 分支）', async t => {
+  const root = await tempDir(t, 'dsh-git-graph-')
+  const remoteDir = join(root, 'origin.git')
+  await git(root, ['init', '-q', '--bare', '-b', 'main', remoteDir])
+  const repo = join(root, 'repo')
+  await mkdir(repo)
+  await git(repo, ['init', '-q', '-b', 'main'])
+  const shaA = await commit(repo, 'A 初始提交', 1)
+  await git(repo, ['remote', 'add', 'origin', remoteDir])
+  await git(repo, ['push', '-q', '-u', 'origin', 'main'])
+
+  // 当前分支 feat/x：推送建立 upstream 后本地再加 1 个提交 → ahead 1
+  await git(repo, ['checkout', '-q', '-b', 'feat/x'])
+  await commit(repo, 'F1 分支提交', 2)
+  await git(repo, ['push', '-q', '-u', 'origin', 'feat/x'])
+  const shaF2 = await commit(repo, 'F2 分支提交', 3)
+
+  // 远端 main 前进 1 → 本地 main 落后 1（track [behind 1]）
+  const other = join(root, 'other')
+  await git(root, ['clone', '-q', remoteDir, other])
+  const shaE1 = await commit(other, 'E1 远端提交', 4)
+  await git(other, ['push', '-q', 'origin', 'main'])
+  await git(repo, ['fetch', '-q', 'origin'])
+
+  // b2：本地分支并推到 origin（不带 -u：无 upstream，但存在 origin/b2 远端引用）
+  await git(repo, ['branch', 'b2', 'main'])
+  await git(repo, ['push', '-q', 'origin', 'b2'])
+
+  // 工作树分支：worktree list 顺序应排在「其余本地分支」之前
+  const linkedRoot = await tempDir(t, 'dsh-git-graph-wt-')
+  const linked = join(linkedRoot, 'wt')
+  await git(repo, ['worktree', 'add', '-q', '-b', 'wt-branch', linked])
+
+  const ctx = await collectGitContext({ cwd: repo })
+  const graph = ctx.graph
+  assert.ok(graph)
+  assert.deepEqual(graph.refs.map(ref => ref.name), [
+    'HEAD', 'feat/x', 'main', 'origin/main', 'origin/feat/x', 'wt-branch', 'b2', 'origin/b2',
+  ])
+  assert.deepEqual(graph.refs.map(ref => ref.kind), [
+    'head', 'branch', 'branch', 'remote', 'remote', 'branch', 'branch', 'remote',
+  ])
+  assert.equal(graph.refs.length, 8)
+  assert.equal(graph.refsTruncated, 0)
+
+  const byName = new Map(graph.refs.map(ref => [ref.name, ref]))
+  assert.equal(byName.get('HEAD').branch, 'feat/x')
+  assert.equal(byName.get('HEAD').sha, shaF2)
+  assert.equal(byName.get('feat/x').isCurrent, true)
+  assert.equal(byName.get('feat/x').upstream, 'origin/feat/x')
+  assert.equal(byName.get('feat/x').ahead, 1)
+  assert.equal(byName.get('feat/x').behind, 0)
+  assert.equal(byName.get('main').isCurrent, false)
+  assert.equal(byName.get('main').upstream, 'origin/main')
+  assert.equal(byName.get('main').ahead, 0)
+  assert.equal(byName.get('main').behind, 1)
+  // 远端引用只有 name/kind/sha/shortSha（契约只给本地分支 ahead/behind/isCurrent）
+  assert.equal('isCurrent' in byName.get('origin/main'), false)
+  assert.equal('upstream' in byName.get('origin/main'), false)
+  assert.equal('ahead' in byName.get('origin/main'), false)
+  assert.equal(byName.get('b2').upstream, null)
+  assert.equal(byName.get('b2').ahead, null)
+  assert.equal(byName.get('b2').behind, null)
+  assert.equal(byName.get('wt-branch').upstream, null)
+
+  // 提交集合来自选中的 raw 引用（包含只存在于 origin/main 上的远端提交）
+  const shas = graph.commits.map(item => item.sha)
+  assert.ok(shas.includes(shaF2))
+  assert.ok(shas.includes(shaE1))
+  assert.ok(shas.includes(shaA))
+  assert.equal(graph.truncated, 0)
+
+  // clone 仓库带 refs/remotes/origin/HEAD 符号引用：不应出现在 graph.refs 里
+  const cloneCtx = await collectGitContext({ cwd: other })
+  assert.ok(cloneCtx.graph)
+  assert.equal(cloneCtx.graph.refs.some(ref => ref.name === 'origin/HEAD'), false)
+})
+
+test('graph：%(upstream:track) 解析（ahead/behind 单边、同步、gone、无 upstream）', async t => {
+  const root = await tempDir(t, 'dsh-git-graph-track-')
+  const remoteDir = join(root, 'origin.git')
+  await git(root, ['init', '-q', '--bare', '-b', 'main', remoteDir])
+  const repo = join(root, 'repo')
+  await mkdir(repo)
+  await git(repo, ['init', '-q', '-b', 'main'])
+  await commit(repo, 'A 初始提交', 1)
+  await git(repo, ['remote', 'add', 'origin', remoteDir])
+  await git(repo, ['push', '-q', '-u', 'origin', 'main'])
+
+  // b-ahead：推送后本地再加 1 个提交 → ahead 1 / behind 0（track [ahead 1]）
+  await git(repo, ['checkout', '-q', '-b', 'b-ahead'])
+  await commit(repo, 'BA1 提交', 2)
+  await git(repo, ['push', '-q', '-u', 'origin', 'b-ahead'])
+  const shaBA2 = await commit(repo, 'BA2 提交', 3)
+
+  // b-behind：推送后远端再前进 1 个提交 → ahead 0 / behind 1（track [behind 1]）
+  await git(repo, ['checkout', '-q', '-b', 'b-behind', 'main'])
+  await commit(repo, 'BB1 提交', 4)
+  await git(repo, ['push', '-q', '-u', 'origin', 'b-behind'])
+  const other = join(root, 'other')
+  await git(root, ['clone', '-q', remoteDir, other])
+  await git(other, ['fetch', '-q', 'origin'])
+  await git(other, ['checkout', '-q', '-b', 'b-behind', 'origin/b-behind'])
+  await commit(other, 'E-behind 远端提交', 5)
+  await git(other, ['push', '-q', 'origin', 'b-behind'])
+  await git(repo, ['fetch', '-q', 'origin'])
+
+  // b-sync：推送后不再提交 → 与 upstream 一致（track 为空 → 0/0）
+  await git(repo, ['checkout', '-q', '-b', 'b-sync', 'main'])
+  const shaBS = await commit(repo, 'BS1 提交', 6)
+  await git(repo, ['push', '-q', '-u', 'origin', 'b-sync'])
+
+  // b-gone：推送后删除远端分支并 prune → [gone] → ahead/behind null（upstream 名仍保留）
+  await git(repo, ['checkout', '-q', '-b', 'b-gone', 'main'])
+  await commit(repo, 'BG1 提交', 7)
+  await git(repo, ['push', '-q', '-u', 'origin', 'b-gone'])
+  await git(remoteDir, ['branch', '-D', 'b-gone'])
+  await git(repo, ['fetch', '-q', '--prune', 'origin'])
+
+  // b-none：纯本地分支，无 upstream
+  await git(repo, ['checkout', '-q', '-b', 'b-none', 'main'])
+  await git(repo, ['checkout', '-q', 'main'])
+
+  const ctx = await collectGitContext({ cwd: repo })
+  const byName = new Map(ctx.graph.refs.map(ref => [ref.name, ref]))
+  assert.deepEqual(byName.get('b-ahead'), {
+    name: 'b-ahead', kind: 'branch', sha: shaBA2, shortSha: shaBA2.slice(0, 7),
+    isCurrent: false, upstream: 'origin/b-ahead', ahead: 1, behind: 0,
+  })
+  assert.equal(byName.get('b-behind').upstream, 'origin/b-behind')
+  assert.equal(byName.get('b-behind').ahead, 0)
+  assert.equal(byName.get('b-behind').behind, 1)
+  assert.equal(byName.get('b-sync').upstream, 'origin/b-sync')
+  assert.equal(byName.get('b-sync').ahead, 0)
+  assert.equal(byName.get('b-sync').behind, 0)
+  assert.equal(byName.get('b-sync').sha, shaBS)
+  assert.equal(byName.get('b-gone').upstream, 'origin/b-gone')
+  assert.equal(byName.get('b-gone').ahead, null)
+  assert.equal(byName.get('b-gone').behind, null)
+  assert.equal(byName.get('b-none').upstream, null)
+  assert.equal(byName.get('b-none').ahead, null)
+  assert.equal(byName.get('b-none').behind, null)
+  // 当前分支 main 与 origin/main 同步
+  assert.equal(byName.get('main').ahead, 0)
+  assert.equal(byName.get('main').behind, 0)
+})
+
+test('graph：提交上限 48 与 truncated 计数', async t => {
+  const repo = await initRepo(t)
+  for (let index = 1; index <= 60; index += 1) await commit(repo, `C${index} 提交`, index)
+  const headSha = await git(repo, ['rev-parse', 'HEAD'])
+  const ctx = await collectGitContext({ cwd: repo })
+  const graph = ctx.graph
+  assert.equal(graph.commits.length, 48)
+  assert.equal(graph.commits[0].sha, headSha)
+  assert.equal(graph.commits.at(-1).subject, 'C13 提交') // 最旧的 12 条（C1..C12）被截掉
+  assert.equal(graph.truncated, 12)
+  assert.equal(graph.maxCommits, 48)
+  assert.deepEqual(graph.refs.map(ref => ref.name), ['HEAD', 'main'])
+  // 线性历史的 date-order：每条提交的第一父就是下一条
+  for (let index = 0; index < graph.commits.length - 1; index += 1) {
+    assert.deepEqual(graph.commits[index].parents, [graph.commits[index + 1].sha])
+  }
+})
+
+test('graph：引用上限 10 与 refsTruncated（其余本地分支按 committerdate 倒序）', async t => {
+  const repo = await initRepo(t)
+  for (let index = 1; index <= 12; index += 1) {
+    await commit(repo, `M${index} 提交`, index)
+    await git(repo, ['branch', `b${index}`])
+  }
+  const ctx = await collectGitContext({ cwd: repo })
+  const graph = ctx.graph
+  assert.deepEqual(graph.refs.map(ref => ref.name), [
+    'HEAD', 'main', 'b12', 'b11', 'b10', 'b9', 'b8', 'b7', 'b6', 'b5',
+  ])
+  assert.equal(graph.refs.length, 10)
+  assert.equal(graph.refsTruncated, 4) // 候选 14 条（HEAD + 当前/主分支 + 12 个分支），b4..b1 被挤掉
+  assert.equal(graph.maxRefs, 10)
+  assert.equal(graph.commits.length, 12)
+  assert.equal(graph.truncated, 0)
+})
+
+test('graph：老分支 tip 被 48 条上限截掉时仍返回引用，truncated 只计数', async t => {
+  const repo = await initRepo(t)
+  const shaOld = await commit(repo, 'O1 老分支提交', 1)
+  await git(repo, ['branch', 'old-branch'])
+  for (let index = 2; index <= 56; index += 1) await commit(repo, `C${index} 提交`, index)
+  const ctx = await collectGitContext({ cwd: repo })
+  const graph = ctx.graph
+  const oldRef = graph.refs.find(ref => ref.name === 'old-branch')
+  assert.ok(oldRef, '老分支引用应保留（只截提交，不截引用）')
+  assert.equal(oldRef.sha, shaOld)
+  assert.equal(graph.commits.some(item => item.sha === shaOld), false)
+  assert.equal(graph.commits.length, 48)
+  assert.equal(graph.truncated, 56 - 48)
+})
+
+test('graph：detached HEAD 仍出图（HEAD.branch=null、无 isCurrent）', async t => {
+  const repo = await initRepo(t)
+  const shaA = await commit(repo, 'A 初始提交', 1)
+  const shaB = await commit(repo, 'B 主分支提交', 2)
+  await git(repo, ['branch', 'feat/x', shaA])
+  await git(repo, ['checkout', '-q', '--detach', shaA])
+
+  const ctx = await collectGitContext({ cwd: repo })
+  assert.equal(ctx.current.detached, true)
+  const graph = ctx.graph
+  assert.ok(graph)
+  assert.deepEqual(graph.refs[0], { name: 'HEAD', kind: 'head', sha: shaA, shortSha: shaA.slice(0, 7), branch: null })
+  assert.equal(graph.refs.some(ref => ref.isCurrent === true), false)
+  // 无当前分支时仍能看到主分支与其它本地分支：HEAD → main → feat/x
+  assert.deepEqual(graph.refs.map(ref => ref.name), ['HEAD', 'main', 'feat/x'])
+  assert.deepEqual(graph.commits.map(item => item.sha).sort(), [shaA, shaB].sort())
+  assert.equal(graph.commits[0].sha, shaB) // date-order：新提交在前
+})
+
+test('graph：探测不到主分支（trunk）时仍按 HEAD/当前分支出图', async t => {
+  const repo = await initRepo(t, 'solo', { branch: 'trunk' })
+  for (let index = 1; index <= 3; index += 1) await commit(repo, `T${index} 提交`, index)
+  const ctx = await collectGitContext({ cwd: repo })
+  assert.equal(ctx.base, null)
+  const graph = ctx.graph
+  assert.ok(graph)
+  assert.deepEqual(graph.refs.map(ref => [ref.name, ref.kind]), [['HEAD', 'head'], ['trunk', 'branch']])
+  assert.equal(graph.commits.length, 3)
+  assert.equal(graph.truncated, 0)
 })

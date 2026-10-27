@@ -361,6 +361,54 @@ export interface GitCommits {
   shared: GitCommit[];
 }
 
+// ------------------------------------------------ 多分支提交图（v0.14 graph）
+// 契约 §4.5 / §5：refs 顺序即泳道种子优先级，commits 为 --date-order（父提交永远在孩子之后）。
+
+/** graph.refs 引用类型：HEAD 伪引用 / 本地分支 / 远端引用。 */
+export type GitGraphRefKind = 'head' | 'branch' | 'remote';
+
+/** 多分支图的一条引用；数组顺序 = 前端泳道种子顺序。 */
+export interface GitGraphRef {
+  /** 展示名：HEAD / 分支名 / origin/xxx */
+  name: string;
+  kind: GitGraphRefKind;
+  sha: string;
+  shortSha: string;
+  /** HEAD 伪引用 = 当前分支名；本地分支 = 分支名；远端引用为 null */
+  branch?: string | null;
+  /** 本地分支：是否当前分支 */
+  isCurrent?: boolean;
+  /** 本地分支：upstream 短名（无则 null） */
+  upstream?: string | null;
+  /** 本地分支相对 upstream 领先/落后；HEAD / remote / 无 upstream 为 null */
+  ahead?: number | null;
+  behind?: number | null;
+}
+
+/** 多分支图的一条提交（--date-order：父提交永远出现在孩子之后）。 */
+export interface GitGraphCommit {
+  sha: string;
+  shortSha: string;
+  subject: string;
+  authorName: string;
+  /** 毫秒时间戳 */
+  committedAt: number;
+  /** 父提交 sha（合并提交有多个） */
+  parents: string[];
+}
+
+/** 多分支提交图数据（`git.graph`）；旧服务端没有该字段。 */
+export interface GitGraphData {
+  refs: GitGraphRef[];
+  /** 超出 maxRefs 未返回的引用数 */
+  refsTruncated?: number;
+  commits: GitGraphCommit[];
+  /** 引用范围内总提交数 − 返回条数 */
+  truncated: number;
+  maxCommits?: number;
+  maxRefs?: number;
+}
+
 /** 服务端单次采集上限（前端展示上限另计：12 行） */
 export interface GitLimits {
   ahead: number;
@@ -386,6 +434,9 @@ export interface GitContextAvailable {
   worktrees: GitWorktree[];
   /** 超过上限时省略的工作树数量 */
   worktreesTruncated?: number;
+  /** v0.14 Fork 风格多分支提交图数据；旧服务端无此字段（前端整块隐藏） */
+  graph?: GitGraphData;
+  /** v0.13 legacy 两泳道数据：保留给旧前端 */
   commits: GitCommits;
   refs: GitRef[];
   limits: GitLimits;

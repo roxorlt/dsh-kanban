@@ -45,7 +45,7 @@ web/
       useRealtime.ts          # SSE：150ms debounce、指数退避、页面隐藏暂停
       useMediaQuery.ts        # 响应式断点
       clipboard.ts            # 复制（clipboard + execCommand 兜底）
-      gitGraph.ts             # 详情「分支 / 工作树」泳道图纯函数（合并排序、分叉点、refs、12 行截断、路径省略）
+      forkGraph.ts            # 详情「分支 / 工作树」Fork 风格多泳道布局（种子泳道、状态机、汇入/出弯、8 色、路径省略）
       useCardGit.ts           # 打开卡片按需拉 Git 上下文（?cwd= 候选会话目录 + 4s LRU 缓存 + 失败静默）
     components/               # Toolbar/FilterMenu/BoardView/ListView/KanbanCard/DetailDrawer/
                               # ApprovalPanel/Timeline/Composer/SessionSection/Modal/Toast/Icons…
@@ -87,10 +87,11 @@ web/
   「回复/审批目标」下拉（默认主会话，设为主会话后默认目标跟随），回复与审批决定都发到该会话。
 - **详情抽屉头部（v0.7.2）**：首行是 kicker + 标题（左）与编辑/归档/关闭（右）；摘要独占第二行，
   宽度与正文内容一致（右边缘与 chips / 元数据对齐），长摘要不再被 138px 操作簇挤成窄列。
-- **分支 / 工作树（v0.13）**：详情抽屉「结果」之后、「审批」之前新增只读区块：chips（分支 / 工作树 / 远端跟踪 ↑↓ / 主分支关系 ↑↓）+
-  两泳道 SVG 提交图（HEAD 外环、分叉点汇合线、`origin/*` ref 徽标、12 行上限优先保住分叉点、中段「还有 N 个提交」）+
-  多工作树列表（当前工作树高亮）。数据来自 `GET /cards/:id/git?cwd=`（可带卡片主会话执行目录候选，服务端校验同仓库 linked worktree 后采纳）；
-  非 git / 无 cwd / 目录不存在 / 旧服务端 404 时整块静默隐藏。
+- **分支 / 工作树（v0.14，Fork 风格）**：详情抽屉「结果」之后、「审批」之前新增只读区块：chips（当前分支 / 工作树）+
+  引用图例（彩点 + ↑↓ + 当前 / 工作树徽标）+ 多泳道 SVG 提交图（本地分支与 `origin/*` 同图、合并/分叉贝塞尔曲线、合并双环、HEAD 外环、
+  彩色 ref 徽标、320px 内滚动、`truncated` 行提示）+ 多工作树列表（当前工作树高亮）。纯函数 `forkGraph.ts` 负责泳道布局（主干颜色稳定、
+  第一父沿用当前泳道、多泳道期望同一父提交时汇入后释放）。数据来自 `GET /cards/:id/git?cwd=`（可带卡片主会话执行目录候选，
+  服务端校验同仓库 linked worktree 后采纳）；非 git / 无 cwd / 目录不存在 / 旧服务端 404 / 无 `graph` 字段时整块静默隐藏。
 - **时间线分页**：`GET /cards/:id/activities?limit=&before=`（返回 `hasMore/nextBefore`）。
   展开卡默认最近 3 条 +「加载更早」，展开区 max-height 内部滚动；详情首屏 20 条 + 分页加载。
 - **已完成**：看板 done 列只展示最近 5 张 +「查看全部 N」跳到列表并展开 done；列表 done 分组默认折叠、

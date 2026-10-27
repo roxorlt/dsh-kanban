@@ -223,5 +223,6 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
 - `GET /api/kanban/cards/:cardId/git?cwd=<绝对路径>`
 - `cwd` 可选：前端可传卡片主会话的当前执行目录（宿主用 worktree 执行任务时用），服务端校验「与 `card.cwd` 同一仓库、且候选是 linked worktree」后才会采用，其余情况静默回退到 `card.cwd`。
 - 200：`{ ok:true, revision, git }`；`git.available:false` 表示「无 cwd / 目录不存在 / 非 git 仓库 / 空仓库 / 超时 / git 错误」，前端静默隐藏区块，**不要按错误处理**。
+- **v0.14 起** `git.graph` 为 Fork 风格多分支提交图数据（refs / commits / truncated / refsTruncated / maxCommits / maxRefs），字段语义见 `06-git-context.md` §4.5；旧服务端没有该字段时前端整块隐藏。
 - 404 `CARD_NOT_FOUND`；405（非 GET/HEAD）。
 - 只读：不写仓库、不写 `data.json`；每条 git 命令 2s 超时、整次采集 4s 兜底；同源校验与其它接口一致。

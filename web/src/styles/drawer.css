@@ -750,14 +750,32 @@
   row-gap: 2px;
 }
 
-/* ------------------------------------------------- 卡片 Git 上下文（v0.13）*/
-/* 「分支 / 工作树」区块：chips + 两泳道提交图 + 多工作树列表。
-   泳道 0 = 参照分支（--dsw-alias-label-caption 灰），泳道 1 = 当前分支（业务蓝）；
+/* ------------------------------------------------- 卡片 Git 上下文（v0.14）*/
+/* 「分支 / 工作树」区块：简化 chips + Fork 风格多分支彩色提交图 + 多工作树列表。
+   泳道调色板 8 色只在 .kb-git 上定义（--kb-git-lane-0..7 = alias 令牌）；
    亮暗主题只靠 alias 令牌，不写主题选择器。 */
 
 .kb-git {
+  --kb-git-lane-0: var(--dsw-alias-state-business-primary);
+  --kb-git-lane-1: var(--dsw-alias-state-success-primary);
+  --kb-git-lane-2: var(--dsw-alias-state-warn-primary);
+  --kb-git-lane-3: var(--dsw-alias-state-error-primary);
+  --kb-git-lane-4: var(--dsw-alias-state-success-secondary);
+  --kb-git-lane-5: var(--dsw-alias-state-error-secondary);
+  --kb-git-lane-6: var(--dsw-alias-state-warn-label);
+  --kb-git-lane-7: var(--dsw-alias-label-tertiary);
   gap: 8px;
 }
+
+/* 6 色槽位：元素上叠加 kb-git__fork-cN 即可拿到 --kb-fork-color（连线/圆点/图例共用） */
+.kb-git__fork-c0 { --kb-fork-color: var(--kb-git-lane-0); }
+.kb-git__fork-c1 { --kb-fork-color: var(--kb-git-lane-1); }
+.kb-git__fork-c2 { --kb-fork-color: var(--kb-git-lane-2); }
+.kb-git__fork-c3 { --kb-fork-color: var(--kb-git-lane-3); }
+.kb-git__fork-c4 { --kb-fork-color: var(--kb-git-lane-4); }
+.kb-git__fork-c5 { --kb-fork-color: var(--kb-git-lane-5); }
+.kb-git__fork-c6 { --kb-fork-color: var(--kb-git-lane-6); }
+.kb-git__fork-c7 { --kb-fork-color: var(--kb-git-lane-7); }
 
 .kb-git__chips {
   display: flex;
@@ -779,10 +797,6 @@
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
-}
-
-.kb-git__chip--muted {
-  color: var(--dsw-alias-label-tertiary);
 }
 
 .kb-git__chip-label {
@@ -832,21 +846,25 @@
   border: 0;
 }
 
-.kb-git__graph {
+/* ------------------------------------------------------ Fork 风格提交图 */
+
+.kb-git__fork {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
 }
 
-.kb-git__legend {
+/* 引用图例：彩色圆点 + 等宽名称 + ↑↓ + 当前/工作树徽标，换行不溢出 */
+.kb-git__fork-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  align-items: center;
+  gap: 4px 10px;
   min-width: 0;
 }
 
-.kb-git__legend-item {
+.kb-git__fork-legend-item {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -854,121 +872,24 @@
   max-width: 100%;
 }
 
-.kb-git__legend-dot {
+.kb-git__fork-legend-dot {
   flex: none;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   corner-shape: round;
+  background: var(--kb-fork-color);
 }
 
-.kb-git__legend-dot--base {
-  background: var(--dsw-alias-label-caption);
+/* 远端引用：空心点 */
+.kb-git__fork-legend-dot--hollow {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--kb-fork-color);
 }
 
-.kb-git__legend-dot--current {
-  background: var(--dsw-alias-state-business-primary);
-}
-
-.kb-git__legend-label {
+.kb-git__fork-legend-name {
   min-width: 0;
   overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
-  font-family: var(--ds-font-family-code);
-  font-size: 11px;
-  line-height: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.kb-git__rows {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.kb-git__row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 20px;
-  min-width: 0;
-  padding-right: 2px;
-}
-
-.kb-git__cell {
-  display: flex;
-  flex: none;
-  align-items: center;
-  width: 30px;
-  height: 20px;
-}
-
-.kb-git__svg {
-  display: block;
-  overflow: visible;
-}
-
-.kb-git__line {
-  stroke-width: 1.5;
-  stroke-linecap: round;
-}
-
-.kb-git__line--base {
-  stroke: var(--dsw-alias-label-caption);
-}
-
-.kb-git__line--current {
-  stroke: var(--dsw-alias-state-business-primary);
-}
-
-/* 分叉点：当前分支的线自上而下汇入参照分支的提交点 */
-.kb-git__join {
-  fill: none;
-  stroke: var(--dsw-alias-state-business-primary);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-}
-
-.kb-git__dot {
-  stroke: none;
-}
-
-.kb-git__dot--base {
-  fill: var(--dsw-alias-label-caption);
-}
-
-.kb-git__dot--current,
-.kb-git__dot--head {
-  fill: var(--dsw-alias-state-business-primary);
-}
-
-/* HEAD 提交点：外圈细环，一眼找到「我在这里」 */
-.kb-git__dot-halo {
-  fill: none;
-  stroke: var(--dsw-alias-state-business-primary);
-  stroke-width: 1;
-  opacity: 0.35;
-}
-
-.kb-git__refs {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  max-width: 55%;
-  overflow: hidden;
-}
-
-.kb-git__ref {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 118px;
-  overflow: hidden;
-  padding: 0 4px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
   color: var(--dsw-alias-label-secondary);
   font-family: var(--ds-font-family-code);
   font-size: 11px;
@@ -977,32 +898,149 @@
   white-space: nowrap;
 }
 
-/* HEAD / 当前分支是行的主信息，不参与省略挤压；其余 refs（远端/主分支）先让位 */
-.kb-git__ref--head,
-.kb-git__ref--branch {
-  flex-shrink: 0;
+.kb-git__fork-legend-more {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
 }
 
-.kb-git__ref--head {
-  background: var(--dsw-alias-state-business-tertiary);
-  color: var(--dsw-alias-state-business-primary);
+/* 固定最大高度 + 内部滚动（overscroll 不带动抽屉） */
+.kb-git__fork-scroll {
+  max-height: 320px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
 }
 
-.kb-git__ref--branch {
-  background: color-mix(in srgb, var(--dsw-alias-label-primary) 7%, transparent);
-  color: var(--dsw-alias-label-primary);
+.kb-git__fork-rows {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.kb-git__ref--base {
+.kb-git__fork-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.kb-git__fork-row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-git__fork-graph {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 22px;
+}
+
+.kb-git__fork-svg {
+  display: block;
+  overflow: visible;
+}
+
+.kb-git__fork-seg {
+  fill: none;
+  stroke: var(--kb-fork-color);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.kb-git__fork-dot {
+  fill: var(--kb-fork-color);
+  stroke: none;
+}
+
+/* 合并提交：外环（底色挖空）+ 内点，形成双环 */
+.kb-git__fork-merge-ring {
+  fill: var(--dsw-alias-bg-layer-1);
+  stroke: var(--kb-fork-color);
+  stroke-width: 1.5;
+}
+
+/* HEAD 提交：再加深一圈外环 */
+.kb-git__fork-head-ring {
+  fill: none;
+  stroke: var(--dsw-alias-label-primary);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.kb-git__fork-refs {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+}
+
+/* ref 徽标：本地分支 = 实心彩点 + 名称；远端 = 描边；HEAD = 深色底 */
+.kb-git__fork-ref {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 120px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 15px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.kb-git__fork-ref--head {
+  flex: none;
+  background: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.kb-git__fork-ref--remote {
+  border: 0.5px solid var(--dsw-alias-border-l2);
   background: transparent;
-  box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l3);
   color: var(--dsw-alias-label-tertiary);
 }
 
-.kb-git__subject {
-  /* basis 0：先让 subject 吃掉剩余宽度并省略，而不是把 refs 徽标挤成「ma…」 */
+.kb-git__fork-ref-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--kb-fork-color);
+}
+
+.kb-git__fork-ref-dot--hollow {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--kb-fork-color);
+}
+
+.kb-git__fork-ref-name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-git__fork-subject {
   flex: 1 1 0%;
-  min-width: 40px;
+  min-width: 60px;
   overflow: hidden;
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
@@ -1010,20 +1048,7 @@
   white-space: nowrap;
 }
 
-.kb-git__row--fork .kb-git__subject {
-  color: var(--dsw-alias-label-primary);
-}
-
-.kb-git__fork {
-  flex: none;
-  padding: 0 4px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 4px;
-  color: var(--dsw-alias-label-caption);
-  font: var(--dsw-font-xxxs-11);
-}
-
-.kb-git__sha {
+.kb-git__fork-sha {
   flex: none;
   color: var(--dsw-alias-label-caption);
   font-family: var(--ds-font-family-code);
@@ -1032,11 +1057,13 @@
   font-variant-numeric: tabular-nums;
 }
 
-.kb-git__more {
-  padding-left: 34px;
+.kb-git__fork-more {
+  padding-left: 4px;
   color: var(--dsw-alias-label-caption);
   font: var(--dsw-font-xxxs-11);
 }
+
+/* ------------------------------------------------------------ 工作树列表 */
 
 .kb-git__worktrees {
   display: flex;
@@ -1110,4 +1137,12 @@
   line-height: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 窄屏（390 竖屏 / 底部弹层）：图列已占 ~100px，行内 ref 徽标只保留 HEAD，
+   把宽度让给 commit 说明（分支名在顶部图例里仍可看全）。 */
+@media (max-width: 480px) {
+  .kb-git__fork-ref:not(.kb-git__fork-ref--head) {
+    display: none;
+  }
 }
