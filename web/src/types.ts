@@ -16,6 +16,7 @@ export type ActivityType =
   | 'approval_requested'
   | 'approval_resolved'
   | 'session_linked'
+  | 'session_primary'
   | 'checklist'
   | 'artifact'
   | 'result'

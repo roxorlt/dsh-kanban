@@ -146,6 +146,13 @@
   letter-spacing: 0.02em;
 }
 
+/* 多会话时审批区块显示决定将发往哪个会话（与 Composer 的目标下拉一致） */
+.kb-drawer__target-hint {
+  margin: 0;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
 .kb-drawer__text {
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xs-13);
@@ -328,20 +335,55 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.kb-session__title {
+.kb-session__main {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+}
+
+.kb-session__title {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xs-13);
+  white-space: nowrap;
+}
+
+.kb-session__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kb-session__primary {
+  flex: none;
+}
+
+/* 元信息行：运行状态 pill + 完整 session id（等宽小字，窄抽屉里省略并靠 title 看全） */
+.kb-session__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-session__id {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-caption);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.kb-session__primary {
+.kb-session__meta .kb-pill {
   flex: none;
 }
 
@@ -382,22 +424,6 @@
 .kb-session__row--target {
   border-color: var(--dsw-alias-border-l4);
   background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.kb-session__target {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 6px 8px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: var(--kb-r-ctl);
-}
-
-.kb-session__target-legend {
-  padding: 0 2px;
-  color: var(--dsw-alias-label-tertiary);
-  font: var(--dsw-font-xxxs-11);
 }
 
 .kb-session__create {
@@ -567,6 +593,15 @@
   color: var(--dsw-alias-label-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.kb-composer__target-select {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 22px 0 8px;
+  font: var(--dsw-font-xxs-12);
 }
 
 .kb-composer__target-hint {

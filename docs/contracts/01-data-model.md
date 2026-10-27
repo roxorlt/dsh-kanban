@@ -9,7 +9,7 @@
 | --- | --- |
 | Board 看板 | 一个看板对应一个工作面上的一组事项。首版默认一个看板，可扩展多看板。 |
 | Card 卡片 | 最小工作单元。一张卡片 = 一个意图 / 一个 todo / 一个可验收的交付。卡片可绑定 0..n 个 DSH 会话。 |
-| Session 绑定 | DSH 会话是执行线程。卡片的主会话（sessionIds[0]）是"当前执行会话"，回复、打开会话、进度回写都走它。 |
+| Session 绑定 | DSH 会话是执行线程。卡片的主会话（sessionIds[0]）是"当前执行会话"，回复、审批决定、打开会话、进度回写都走它。绑定即置顶；把已绑定会话重新绑定到首位 = **设为主会话**（v0.12），写入 `session_primary` 节点；已是主会话再绑定为幂等空操作（不写节点）。 |
 | Activity 节点 | 卡片时间线上的一条重要节点（状态变化 / 进展 / 评论 / 审批 / 会话绑定 / 产物）。 |
 | Approval 审批 | 需要人决策的待定项：批准/拒绝/多方案选择。卡片进入"待你确认"列，由人解决。 |
 | Checklist 清单 | 卡片内的子步骤（agent 可勾选），用于展示计划与完成度。 |
@@ -156,13 +156,24 @@ interface Activity {
   cardId: string;
   type:
     | 'created' | 'status' | 'progress' | 'comment' | 'approval_requested'
-    | 'approval_resolved' | 'session_linked' | 'checklist' | 'artifact'
+    | 'approval_resolved' | 'session_linked' | 'session_primary' | 'checklist' | 'artifact'
     | 'result' | 'error' | 'ack' | 'archived' | 'handoff';
   actor: Actor;
   text: string;                  // 展示文本，≤ 400 字
   at: number;
   data?: Record<string, unknown>;
 }
+```
+
+活动 `data` 约定（会话相关，v0.12）：
+
+```ts
+// session_linked（新绑定；绑定即置顶为主会话）
+{ sessionId: string; action: 'link'; primary: true; previousSessionId?: string }
+// session_primary（设为主会话；仅当目标已绑定且不是当前主会话）
+{ sessionId: string; action: 'primary'; previousSessionId: string | null }
+// 解绑沿用 session_linked + action:'unlink'
+{ sessionId: string; action: 'unlink' }
 
 interface Artifact {
   id: string;                    // "art-" + 6 hex

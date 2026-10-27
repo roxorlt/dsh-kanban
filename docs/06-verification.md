@@ -284,16 +284,29 @@
 | 生效方式 | 含服务端改动（`lib/domain.js` / `lib/tools.js`），需重启 DSH；仅刷新页面会继续用旧服务端（旧服务端不改状态，乐观移列会被刷新回滚） |
 | 提交 | `814c17e`（合并 `fix/approval-resolve-outcome` → v0.9.5） |
 
+## 1.21 v0.12.0（M2 多会话：主会话切换写时间线 + 回复/审批目标下拉）
+
+| 项 | 结果 |
+|---|---|
+| 背景 | 卡片卡 `card-680c0577`「M2 多会话回复目标与主会话切换」：多会话列表 / 设为主会话 / 回复·审批目标在 v0.2 已有，缺口是「主会话变更写入时间线」——旧实现点「设为主会话」只写通用「关联了 DSH 会话」，真实数据里同一会话重复 8 条且看不出切换；设计规范 §2.6/§7.5 要求 Composer 旁的目标下拉，旧实现是会话区单选 + Composer 只读文案 |
+| 服务端 | `linkSession` 区分三种语义：新绑定（`session_linked`，已有主会话时文案带「设为主会话」+ `previousSessionId`）、设为主会话（新类型 `session_primary`「主会话切换为「X」」，含前后主会话）、已是主会话（幂等空操作，不写节点、不刷新卡片）。`POST /cards/:id/session` 响应补 `activity / linked / primaryChanged / primarySessionId`；`kanban_link_session` 输出 `primarySessionId` 与对应 hint |
+| 单测 | 服务端 `node --test` **95/95**（新增 domain 多会话用例 1 条，扩展 routes 绑定/主会话/幂等、tools hint 断言）；Web `vitest` **21 文件 / 175 测试**（新增 `replyTarget` 10 例：选项顺序与缺标题回退、目标解析、主会话切换后目标跟随）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 9 个 CSS 0 error / 0 warning |
+| Web | Composer 上方新增「回复/审批目标」下拉（>1 会话 + 嵌入模式；主会话选项带「· 主会话」、运行中带「· 运行中」），替换会话区旧单选；会话行改两行（标题 + 主会话徽标 / 运行状态 + 完整 session id，窄屏省略并带 `title`）；`设为主会话` 后默认目标跟随（用户手动选过其它会话则保持）；多会话时审批区块显示「决定会发送到「X」」；回复与审批决定都按当前目标会话经桥发送 |
+| 真实浏览器（隔离 dev-server + 宿主桥替身 + Chrome 1440×900 DPR2 / 390×844） | 24 项断言全过、console 0 error、0 个 4xx 请求：嵌入握手 embedded；会话列表 2 行且主会话徽标在首位；会话行显示完整 `session-m2-beta` / `session-m2-alpha`；旧单选 `.kb-session__target` 0 个；目标下拉默认主会话且选项为「执行会话 · 主会话」「讨论会话 · 运行中」；审批提示指向主会话；切换目标后高亮行与审批提示同步；点「设为主会话」后 1.2s 内时间线出现「主会话切换为「讨论会话」」、Toast「已设为主会话」、下拉默认值跟随、列表首位切换、服务端 `sessionIds=[alpha,beta]`、活动落库 `session_primary`（`previousSessionId=beta`）；回复经 `session.ensure` 发到选定目标；审批「批准」决定同样发到选定目标；390 底部弹层满宽、无横向溢出、目标下拉可见 |
+| 截图 | `design/screens/m2-multi-session-drawer-1440.png`（两行会话 + 目标下拉 + 审批目标提示）、`m2-reply-target-switch-1440.png`（切到非主会话）、`m2-primary-switched-1440.png`（设为主会话后的时间线节点 + Toast + 目标跟随）、`m2-multi-session-sheet-390.png`（竖屏底部弹层） |
+| 生效方式 | 含服务端改动（`lib/domain.js` / `lib/routes.js` / `lib/tools.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板后前端生效（旧服务端仍能工作，只是不写 `session_primary` 且响应无新字段） |
+| 提交 | 分支 `feat/m2-session-target`（基于 v0.9.5；待并入主线后做真实宿主复验） |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
 
 ```
 $ npm test
-# tests 94
-# pass 94
+# tests 95
+# pass 95
 # fail 0
-# duration_ms ~1.1s
+# duration_ms ~2.2s
 ```
 
 覆盖：`store`（原子写 / 串行队列 / revision / 损坏备份重建 / schema 迁移）、`domain`（状态列映射 / 规范化 / 种子 / 写原语）、`routes`（CRUD / move / 乐观锁 409 / 审批 resolve / comments / session link / 同源 403 / SSE 首帧 / 静态资源防穿越与 SPA fallback）、`tools`（10 个工具 schema 与 execute）、`index`（插件注册）。
@@ -304,7 +317,7 @@ $ npm test
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
 > vite build     # dist: JS gzip ~74KB / CSS gzip ~9KB
-$ npm --prefix web run test    # vitest 20 文件 / 165 测试
+$ npm --prefix web run test    # vitest 21 文件 / 175 测试（含 replyTarget 10 例）
 $ npm --prefix web run lint:tokens
 # 9 个 CSS 文件：0 error / 0 warning
 ```

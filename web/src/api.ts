@@ -260,6 +260,16 @@ async function getActivities(
   }
 }
 
+/** POST /cards/:id/session 的响应：新绑定或主会话切换；已是主会话时 activity 为 null（幂等）。 */
+export interface BindSessionResult {
+  card: Card;
+  revision: number;
+  activity?: Activity | null;
+  linked?: boolean;
+  primaryChanged?: boolean;
+  primarySessionId?: string | null;
+}
+
 export const api = {
   getHealth: (): Promise<HealthPayload> => request<HealthPayload>('/health'),
 
@@ -360,8 +370,13 @@ export const api = {
     }));
   },
 
-  bindSession: (cardId: string, sessionId: string, title?: string): Promise<{ card: Card; revision: number }> =>
-    request<{ card: Card; revision: number }>(`/cards/${encodeURIComponent(cardId)}/session`, {
+  /**
+   * 绑定会话 / 设为主会话：服务端把该会话放到 sessionIds[0]。
+   * 已绑定但不是主会话时写 `session_primary` 节点（activity 非空，linked=false）；
+   * 已是主会话时幂等（activity=null、primaryChanged=false，不写时间线）。
+   */
+  bindSession: (cardId: string, sessionId: string, title?: string): Promise<BindSessionResult> =>
+    request<BindSessionResult>(`/cards/${encodeURIComponent(cardId)}/session`, {
       method: 'POST',
       body: JSON.stringify({ sessionId, title }),
     }).then((result) => ({ ...result, card: normalizeCard(result.card) })),

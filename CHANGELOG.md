@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.12.0 — 2026-10-27
+
+### 新增：多会话主会话切换与回复/审批目标（M2 收口）
+
+- 背景（卡片 `card-680c0577`「M2 多会话回复目标与主会话切换」）：多会话列表 / 设为主会话 / 回复·审批目标其实在 v0.2 已落地，但**主会话变更从不写时间线**——点「设为主会话」只写一条通用「关联了 DSH 会话」，真实数据里同一会话重复 8 条、看不出主会话被切换；另外设计规范 §2.6/§7.5 要求 Composer 旁有「回复目标下拉」，旧实现是会话区里一组单选 + Composer 只读文案。
+- 服务端（`lib/domain.js`）：`linkSession` 拆成三种语义 —— ① 新绑定：`session_linked`，绑定即置顶；已有主会话时文案为「关联了 DSH 会话「X」，设为主会话」，`data.previousSessionId` 记录旧主会话；② 设为主会话（目标已绑定但不是当前主会话）：新活动类型 **`session_primary`**，文案「主会话切换为「X」」，`data = {sessionId, action:'primary', previousSessionId}`；③ 已是主会话：**幂等空操作**，不写节点、不刷新卡片，消除重复绑定刷屏。
+- 接口（`lib/routes.js`）：`POST /api/kanban/cards/:id/session` 响应补 `activity`（幂等时为 `null`）、`linked`、`primaryChanged`、`primarySessionId`；非法 sessionId / 不存在卡片行为不变。
+- 工具（`lib/tools.js`）：`kanban_link_session` 输出 `primarySessionId`，并按语义给 hint（「该会话已是卡片绑定的会话，已设为主会话。」/「该会话已经是卡片主会话，未重复写入时间线。」）。
+- Web：① Composer 上方新增 **「回复/审批目标」下拉**（>1 个会话且嵌入模式时出现；选项带「· 主会话」「· 运行中」，默认主会话），替换会话区旧单选；② 会话行改两行：标题 + `主会话` 徽标 / 运行状态 + **完整 session id**（等宽小字，窄屏省略并带 `title`）；③ 点 `设为主会话` 后默认目标跟随新主会话（用户手动选过其它会话则保持）；④ 多会话时审批区块标题下显示「决定会发送到「X」」，与下拉保持一致；⑤ 回复与审批决定都按当前目标经桥发送（`session.ensure`）。
+- 纯逻辑（`web/src/lib/replyTarget.ts`）：`replyTargetOptions`（绑定顺序 / 缺标题退回 id）、`resolveReplyTarget`（目标失效回退主会话）、`nextTargetAfterPrimaryChange`（主会话切换后默认目标跟随）。
+- 兼容：`data.json` 不变；新增活动类型只影响白名单（旧数据照常读取）；旧服务端仍可工作，只是不写 `session_primary`、响应无新字段（前端不依赖新字段）。
+- 验证：服务端 `node --test` **95/95**（新增多会话 domain 用例，扩展 routes/tools）；Web **vitest 21 文件 / 175 测试**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 9 个 CSS 0/0；隔离 dev-server + 宿主桥替身 harness + Chrome 1440×900 DPR2 / 390×844 共 **24 项断言全过、console 0 error、0 个 4xx**（含：设为主会话后时间线出现「主会话切换为「讨论会话」」、Toast、下拉默认值跟随、服务端 `sessionIds` 顺序与 `session_primary` 活动落库、回复与审批决定均发到选定目标、旧单选 `.kb-session__target` 为 0、390 弹层满宽无横向溢出）。
+- 生效方式：含服务端改动（`lib/domain.js` / `lib/routes.js` / `lib/tools.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。
+- 证据：`design/screens/m2-multi-session-drawer-1440.png`、`m2-reply-target-switch-1440.png`、`m2-primary-switched-1440.png`、`m2-multi-session-sheet-390.png`；验证记录 `docs/06-verification.md` §1.21；分支 `feat/m2-session-target`。
+
+
 ## v0.9.5 — 2026-10-23
 
 ### 修复：「待你确认」提交选项后卡片状态不立即变更

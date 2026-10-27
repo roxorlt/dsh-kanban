@@ -80,8 +80,9 @@ web/
   逐题校验并高亮/聚焦缺题，提交 `answers:[{questionId, optionIds[]}]`。卡片内 questions 限高滚动、详情内展开。
   resolved 逐题展示所选 labels（兼容旧 `resolution.optionIds/labels`）；多问题会话全文按
   `【看板·审批】已提交「title」：\n- header：A、B` 拼接（`session.ensure`，详情里可用目标会话覆盖）。
-- **多会话**：详情抽屉列出卡片全部会话、主会话徽标、设为主会话（复用绑接口置顶）、解绑/打开；
-  >1 个会话时可选「回复与审批同步到」的目标会话。
+- **多会话（v0.12）**：详情抽屉列出卡片全部会话（两行：标题 + 主会话徽标 / 运行状态 + 完整 session id）、
+  设为主会话（复用绑接口置顶，写 `session_primary` 时间线）、解绑/打开；>1 个会话时 Composer 上方出现
+  「回复/审批目标」下拉（默认主会话，设为主会话后默认目标跟随），回复与审批决定都发到该会话。
 - **详情抽屉头部（v0.7.2）**：首行是 kicker + 标题（左）与编辑/归档/关闭（右）；摘要独占第二行，
   宽度与正文内容一致（右边缘与 chips / 元数据对齐），长摘要不再被 138px 操作簇挤成窄列。
 - **时间线分页**：`GET /cards/:id/activities?limit=&before=`（返回 `hasMore/nextBefore`）。

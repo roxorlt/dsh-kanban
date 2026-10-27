@@ -898,14 +898,16 @@ export function App() {
   const handleSetPrimary = useCallback(
     async (card: Card, sessionId: string) => {
       try {
-        await api.bindSession(card.id, sessionId);
+        // 标题只用于时间线节点文案（「主会话切换为「X」」）
+        const title = sessions.find((session) => session.id === sessionId)?.title;
+        await api.bindSession(card.id, sessionId, title);
         notifyToast(t('toast.primarySet'), 'success');
         await refresh({ silent: true });
       } catch (error) {
         notifyToast(error instanceof Error ? error.message : t('toast.sessionFailed'), 'error');
       }
     },
-    [notifyToast, refresh, t],
+    [notifyToast, refresh, sessions, t],
   );
 
   const handleUnbindSession = useCallback(
