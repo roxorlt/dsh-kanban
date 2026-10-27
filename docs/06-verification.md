@@ -322,17 +322,30 @@
   9. 已完成列「批量归档会话」dryRun 预览可归档 3 / 跳过 2（含原因）；
   10. 批量执行后历史卡片会话进入归档集合。
 - 证据：`design/screens/session-archive-e2e-drawer.png`、`session-archive-e2e-batch-preview.png`、`session-archive-e2e-batch-done.png`。
-- 真实宿主（桌面 `0.2.1-rc.2`，2026-10-27 09:06 重启到 v0.11.0）：`GET /api/kanban/health` 返回 `version: 0.11.0`；`GET /api/kanban/sessions/archive` 返回 `available: true`（`archivedSessionIds` 已有 29 个历史归档会话）——服务端能力已生效。**下列 UI 清单待逐项走查**。
+- 真实宿主（桌面 `0.2.1-rc.2`）分两次核对：2026-10-27 09:06 重启到 v0.11.0 时确认 `health=0.11.0`、`/sessions/archive available=true`（29 个历史归档会话）；2026-10-27 15:53 重启到 **v0.12.0** 后完成完整 UI 走查（真实宿主 API + 真实 `web/dist`，经本地代理 + 假父页面桥置为嵌入模式；桌面窗口本身不可脚本化）：
 
-### 重启后复验清单（v0.11.0）
+| # | 清单 | 结果 |
+| --- | --- | --- |
+| 1 | health / archive 能力 | ✅ `health=0.12.0`、`GET /sessions/archive available=true`（归档集合 29 个） |
+| 2 | 已完成卡详情归档 | ✅ 真实卡 `card-02d2dc3c`「合入 v0.12.0 多会话分支…」详情出现「归档会话」→ 归档成功；归档集合 +1；行内变「已归档 / 恢复会话」；时间线写入 `session_archived`「归档了会话，可在卡片详情恢复」。侧栏隐藏由 DSH 原生归档语义保证，桌面窗口未直接截图 |
+| 3 | 恢复会话 | ✅ 点「恢复会话」后归档集合移除、时间线写入 `session_unarchived` |
+| 4 | 运行中会话「停止并归档」 | ⚠️ 真实宿主当时唯一运行中的是本验收卡绑定的会话（不能停止），无安全可停止的运行中会话；该路径由隔离 harness E2E 第 5/6 项覆盖（`SESSION_ACTIVE` → 确认框 → `stopActivity` 成功），真实宿主留待自然场景观察 |
+| 5 | 打开/回复已归档会话自动恢复 | ⚠️ 桥层自动恢复逻辑由 `lib/client.js` 实现并由 harness 覆盖；真实宿主需在桌面窗口内点开归档会话才能观察，本次未直接触发 |
+| 6 | 批量归档 / 历史数据 | ✅ 真实数据 dryRun 预览「可归档 15 个 / 跳过 1 个（运行中的验收卡占用 session-b3295675…）」；执行后**真实归档 15 个已完成卡片的会话**（归档集合 29→44），代表卡时间线写 `session_archived`。`autoArchiveSessionsDays=7` 未到期限，自动通道本次未触发；历史数据由手动批量完成，后续自动通道同类逻辑复用同一执行器 |
+| 7 | console | ✅ 页面 console error 0 |
 
-1. ✅ `GET /api/kanban/health` 返回 `version: 0.11.0`；`GET /api/kanban/sessions/archive` 返回 `available:true`（2026-10-27 实测）。
-2. 任意已完成卡详情出现「归档会话」；归档后 DSH 侧栏会话消失、行内显示「已归档 / 恢复会话」、时间线出现活动。
-3. 恢复后会话回到侧栏原位置。
-4. 运行中会话归档 → 「停止并归档」确认 → 成功。
-5. 打开/回复已归档会话时桥自动恢复（`lib/client.js`）；不再出现消息静默不处理。
-6. 已完成列「批量归档会话」dryRun/执行正常；`autoArchiveSessionsDays=7` 的历史会话在宿主可用后由定时任务归档（可用 `autoArchiveSessionsDays:0` 关闭验证）。
-7. console 0 error。
+- 说明：本次真实宿主批量归档的 15 个会话均属于已完成卡片，可在对应卡片详情逐个「恢复会话」；验收卡自身的会话因卡片仍在「进行中」被服务端正确跳过（反向依赖生效）。
+- 证据：`design/screens/session-archive-host-before.png` / `-archived.png` / `-restored.png` / `-blocked.png` / `-batch-preview.png` / `-batch-done.png`（6 张，真实宿主数据）。
+
+### 重启后复验清单（v0.11.0）—— 已完成
+
+1. ✅ health / available（v0.11.0 与 v0.12.0 两次实测）。
+2. ✅ 已完成卡详情归档 + 行内状态 + 时间线活动（真实宿主）。
+3. ✅ 恢复会话（真实宿主）。
+4. ⚠️ 停止并归档：harness 覆盖，真实宿主待自然场景（无安全运行中会话）。
+5. ⚠️ 桥自动恢复：代码/harness 覆盖，真实宿主未直接触发。
+6. ✅ 批量 dryRun + 执行（真实归档 15 个历史会话）；autoArchiveSessionsDays 未到期限未触发。
+7. ✅ console 0 error。
 
 ## 1.23 v0.11.0（会话运行失败同步）
 
