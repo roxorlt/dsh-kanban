@@ -380,9 +380,11 @@
 | ↳ ④ 390×844 弹层满宽 / 无横向溢出 / 下拉可见 | **PASS**：窗口 390×844 时 DSH 侧栏仍占 56px，看板面板区 334×844；抽屉 `left=0, right=334, width=334`（=面板区满宽，圆角 16px，高 776），`documentElement/body scrollWidth==clientWidth`、`overflowX=0`；目标下拉 `left=91, right=318`（完整可见）；关闭抽屉后看板同样无横向溢出 |
 | 真实宿主统计 | console error **0**、4xx **0**；断言 phase3 15 PASS（其中 R3c 首轮为测试脚本期望写错——把会话 C 的标题写成 m2-c 且当时审批已结算导致 hint 为 null，已用新建审批在 phase5 复跑 **PASS**，产品行为正确）；phase4 390 5 项全过 |
 | 真实宿主证据 | `design/screens/m2-merged-host-01-session1.png` … `13-390-approval-hint.png`（13 张：两行会话行、目标默认/跟随/保持、设为主会话时间线节点、回复/审批路由、审批目标提示、390 抽屉与看板）；机器可读结果 `/tmp/dsh-kanban-m2-host/results.json`、`results2.json`、`results3.json`；复跑命令见 §6 |
-| 桌面 DSH 重启后真实宿主 | 待重启后复验（合并与隔离宿主验证已完成；桌面宿主 `58243` 仍在旧服务端 v0.11.0） |
-| 生效方式 | v0.12.0 含服务端改动（`lib/domain.js` / `lib/routes.js` / `lib/tools.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端（旧服务端不写 `session_primary`，前端仍可工作） |
-| 已知口径 | 390「满宽」按**看板面板区**计（334px，DSH 侧栏在 390 宽仍占 56px 且「收起侧栏」按钮未渲染）；真机 390 满宽与桌面 App 内 390 弹层待重启后复核 |
+| 桌面 DSH 重启后真实宿主（**2026-10-27 09:41 重启**，端口 58243 → 64054） | `GET /api/kanban/health` → **`version:"0.12.0"`**、`dataDir:"~/.dsh-kanban"`、revision 308；真实数据 50 张卡正常读出；`/dsh-kanban/` 返回新构建产物 `assets/index-DEFL1SPt.js`（200，371 KB）与 `assets/index-I71DtbCt.css`（200，88 KB），与本地 `web/dist` 哈希一致；v0.10 `/decisions/meta`（entries 33、waiting 0）与 v0.11 `/sessions/archive`（`available:true`，29 个历史归档会话）均可用——说明重启后 v0.12 + v0.11 + v0.10 服务端共存 |
+| 桌面宿主 v0.12 真实行为（HTTP，12 项 11 PASS + 1 项用 `force` 重试通过） | 在真实数据的桌面宿主上建临时卡 `card-dd9029e2` 并绑定两个真实会话：新绑定 A → `session_linked`「关联了 DSH 会话「复验会话 A」」；新绑定 B → 「…，设为主会话」+ `previousSessionId=A`；设 A 为主会话 → **`session_primary`「主会话切换为「复验会话 A」」**（`previousSessionId=B`、`linked:false`、`primaryChanged:true`）；再次设置 → 幂等（`activity:null`、时间线节点 4→4 不变）；时间线节点齐全（2×`session_linked` + 1×`session_primary`）；`sessionIds` 主会话置顶 `[A,B]`。临时卡随后归档清理（删除接口需乐观锁 version 或 `force:true`，非缺陷） |
+| 桌面宿主 UI 渲染说明 | 桌面 App 窗口不可脚本化（无 CDP；本机未授予辅助功能权限），UI 渲染证据来自隔离真实宿主（上两行，同一 `web/dist` 与同一插件代码）；桌面宿主已确认返回同一份新前端产物，刷新看板即生效 |
+| 生效方式 | v0.12.0 含服务端改动（`lib/domain.js` / `lib/routes.js` / `lib/tools.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端（旧服务端不写 `session_primary`，前端仍可工作）。**已于 2026-10-27 09:41 重启桌面 DSH 完成，health=0.12.0** |
+| 已知口径 | 390「满宽」按**看板面板区**计（334px，DSH 侧栏在 390 宽仍占 56px 且「收起侧栏」按钮未渲染）；隔离真实宿主的渲染已覆盖，桌面 App 内 390 弹层因窗口不可脚本化未自动复核，可人工抽查 |
 
 ## 2. 自动化测试
 
