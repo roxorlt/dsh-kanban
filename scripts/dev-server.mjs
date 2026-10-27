@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import { unlink } from 'node:fs/promises'
 import { createStore } from '../lib/store.js'
+import { dismissStalePendingApprovals, hasStalePendingApprovals } from '../lib/domain.js'
+import { DECISION_FILE_NAME } from '../lib/decisions.js'
 import { createRoutes } from '../lib/routes.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -49,7 +51,7 @@ function usage() {
     '  --host <host>    监听地址，默认 127.0.0.1',
     `  --data <file>    数据文件，默认 ${DEFAULT_DATA}`,
     '  --seed <mode>    种子模式 demo|empty，默认 demo',
-    '  --reset          启动前删除数据文件（重新生成演示数据）',
+    '  --reset          启动前删除数据文件与决策日志（重新生成演示数据）',
     '  --static <dir>   前端产物目录，默认 web/dist',
     '  --help, -h       显示帮助',
   ].join('\n')
@@ -81,13 +83,26 @@ async function main() {
   if (args.reset) {
     const dir = dirname(dataFile)
     await unlink(dataFile).catch(error => { if (error.code !== 'ENOENT') throw error })
-    console.log(`[reset] 已删除 ${dataFile}`)
-    void dir
+    await unlink(join(dir, DECISION_FILE_NAME)).catch(error => { if (error.code !== 'ENOENT') throw error })
+    console.log(`[reset] 已删除 ${dataFile} 与 ${join(dir, DECISION_FILE_NAME)}`)
   }
 
   const store = createStore({ dataDir: dirname(dataFile), file: dataFile, seedMode: args.seed })
   try {
     await store.ready()
+    // 与插件 apply 一致：回填 + 历史遗留 pending 同步放在同一个 store.update 事务里，避免启动窗口竞态。
+    const data = await store.read()
+    const initialized = await store.decisionLog.isInitialized()
+    const needsStaleSync = hasStalePendingApprovals(data)
+    if (!initialized || needsStaleSync) {
+      const { result } = await store.update(draft => (async () => {
+        const backfill = await store.decisionLog.initializeFromSnapshot(draft)
+        const staleClosed = dismissStalePendingApprovals(draft)
+        return { ...backfill, staleClosed }
+      })())
+      if (result.created) console.log(`[决策日志] 已回填 ${result.entries} 条历史事件：${store.decisionLog.file}`)
+      if (result.staleClosed > 0) console.log(`[决策日志] 已同步关闭 ${result.staleClosed} 条历史遗留的待确认审批`)
+    }
   } catch (error) {
     console.error(`数据加载失败：${error.message}`)
     process.exit(1)

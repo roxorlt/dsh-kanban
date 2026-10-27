@@ -2,6 +2,7 @@
 
 > 本文件是服务端、Web UI、客户端插件三方共同遵守的契约。改动必须先在 issues / 文档里更新"冻结"标记。
 > 存储位置：`~/.dsh-kanban/data.json`（可用插件 config `dataDir` 覆盖）。原子写 + 进程内串行队列。
+> v0.10 起同目录另有独立文件 `decisions.jsonl`（决策日志，只追加事件流），不并入 `data.json`，见 §3.aa 与 `05-decision-log.md`。
 
 ## 1. 核心概念
 
@@ -40,6 +41,11 @@ const COLUMN_OF_STATUS: Record<Status, ColumnId> = {
   2. 未声明时：批准（非全 danger）→ `running`，驳回（所选全为 danger/no/reject/deny/cancel）→ `backlog`；
   3. 迁移写入 `status` 活动并以评论者身份进时间线。
   仍有其它 `pending` 审批、卡片已归档、或卡片不在 `needs_you`（`blocked`/`failed`、被人工拖到别的列）时保持原状态，等人处理。
+- **会话运行失败同步（v0.11）**：绑定主会话（`sessionIds[0]`）的会话某一轮以失败结束时，看板自动回写：
+  1. 时间线追加 `error` 节点（轮次、原因、错误码）；
+  2. 卡片 `status=running` → 自动置 `failed`（进「待你确认」列）；其它状态只记节点、不改状态；
+  3. 同一卡片同一会话同一轮只记一次；归档卡片与旁支会话跳过；
+  4. 之后同一会话下一轮正常完成 → 自动回到 `running`，失败节点保留；手工置为 `failed` 的卡片不自动恢复。
 - 列内顺序由 `Board.cardOrder[columnId]: string[]` 决定；不在数组里的卡片按 `updatedAt desc` 兜底。
 
 ## 3. 实体定义
@@ -121,6 +127,8 @@ interface Approval {
   options: ApprovalOption[];     // 1..8 个；卡片内必须完整展示所有选项与说明，不折叠
   // —— v0.3 多问题（存在时优先渲染 questions，title/detail/options 仍保留作摘要与兼容）——
   questions?: ApprovalQuestion[]; // 1..6 题；每题独立单选/多选
+  // v0.10 起 dismissed 由「归档 / 离开待你确认 / 20 条裁剪 / seed 重置」实际写入：
+  // 同时写 resolvedAt / resolvedBy，不伪造 resolution；每一条另记 approval_unresolved 事件。
   status: 'pending' | 'approved' | 'rejected' | 'dismissed';
   requestedBy: Actor;
   requestedAt: number;
@@ -156,8 +164,11 @@ interface Activity {
   cardId: string;
   type:
     | 'created' | 'status' | 'progress' | 'comment' | 'approval_requested'
-    | 'approval_resolved' | 'session_linked' | 'checklist' | 'artifact'
-    | 'result' | 'error' | 'ack' | 'archived' | 'handoff';
+    | 'approval_resolved' | 'session_linked' | 'session_archived' | 'session_unarchived'
+    | 'checklist' | 'artifact' | 'result' | 'error' | 'ack' | 'archived' | 'handoff';
+  // v0.11：session_archived / session_unarchived 的 data 固定为
+  // { sessionId: string; auto?: true; autoDays?: number }，文本由服务端生成；
+  // auto=true 表示插件自动归档策略写入（区别于用户手动操作）。
   actor: Actor;
   text: string;                  // 展示文本，≤ 400 字
   at: number;
@@ -190,6 +201,8 @@ interface StoreFile {
   meta: { createdAt: number; updatedAt: number; revision: number; seededAt?: number; lastActor?: Actor };
 }
 ```
+
+> v0.10 起另有独立文件 `<dataDir>/decisions.jsonl`（默认 `~/.dsh-kanban/decisions.jsonl`）：决策日志的只追加事件流，与 `data.json` 同目录但不并入、不随卡片裁剪或 `POST /seed` 重置，见 §3.aa。
 
 ## 3.x 自动归档配置（v1.1）
 
@@ -231,6 +244,46 @@ interface StoreFile {
 - 卡片上限 2000；单卡 activities 保留最近 300 条；approvals 保留最近 20 条。
 - 时间戳全部 epoch ms，服务端生成，客户端不传时间。
 - 所有字符串 trim；超长截断而不是报错（工具返回提示）。
+
+## 3.aa 决策日志（v0.10）
+
+- 正式审批（`Approval`）的请求 / 提交 / 未提交关闭，以只追加事件流写入 `<dataDir>/decisions.jsonl`（默认 `~/.dsh-kanban/decisions.jsonl`，权限 `0600`）：一行一个 JSON 事件，不修改、不删除、无条数上限，不并入 `data.json`。
+- 写入顺序：同一次 `store.update()` 事务内先 append 日志（`fsync`）再原子写 `data.json`；日志可能领先数据（多记一条未完成操作的记录），不会少记；日志写失败会中止本次操作（`DECISION_LOG_IO`），`data.json` 不提交。
+- 事件：`approval_requested`（请求快照：题目 / 选项 / 卡片上下文 / 会话）、`approval_resolved`（决定、选项与自定义回答、`waitedMs`、提交后落列 `outcomeColumn`）、`approval_unresolved`（`reason` 为 `archived` / `left_needs_you` / `trimmed` / `data_reset`），以及标记事件 `log_initialized`（回填完成）/ `data_reset`（`POST /seed` 断点）。只记正式审批；受阻 / 失败卡、手动移列、agent 自行决策不入日志。
+- 派生状态：`waiting` / `resolved` / `unresolved` 在读取时由事件重放得出，不写回文件。
+- 回填：以 `log_initialized` 标记判断是否已初始化；首次启用从 `data.json` 的 `approvals[]` 与相关活动一次性回填并以标记收尾，已有标记则跳过（标记缺失时会补一次，历史事件追加在文件末尾，读取按 `at` 排序；回填按确定性 id 去重）。历史遗留的 pending 审批（归档卡 / 不在待你确认列）与回填在同一个 `store.update` 事务内被静默置为 `dismissed`（回填「收口感知」，不重复记事件），与日志一致。
+- 读取：`GET /api/kanban/decisions`、`/decisions/meta`、`/decisions/export` 与只读工具 `kanban_decisions`，参数与响应见 `05-decision-log.md` §6 / §8。
+- 字段与完整语义以 `05-decision-log.md` 为准（冻结）；本节只说明它与 `data.json` 的关系。
+
+## 3.ab 会话运行失败同步（v0.11）
+
+宿主事件：插件监听 `session/event`，只看 `turn/end`（判定口径与 DSH 聊天界面「本轮运行失败」一致）：
+
+| `reason.kind` | 是否失败 | 写入的 `reason` 字段 | 默认文案 / code |
+| --- | --- | --- | --- |
+| `error` | 是 | `error` | 宿主 `error.message` / `error.code`（如 `TRANSPORT`） |
+| `interrupted` | 是 | `interrupted` | 「DSH 进程在本轮结束前退出」/ `INTERRUPTED` |
+| `aborted`（`reason.kind=hook` 且 `reason.reason=deepseek-account/signed-out`） | 是 | `aborted` | 「已退出 DeepSeek 账号，本轮中止」/ `ACCOUNT_SIGNED_OUT` |
+| `completed` | 否（用于恢复） | — | 失败标记自动解除 |
+| 其它（用户停止等） | 否 | — | 不写 |
+
+时间线节点（`Activity.data`）：
+
+```ts
+// 失败节点：type='error'，actor=system
+{ kind: 'session_turn_failure', sessionId: string, turn: number, seq?: number,
+  reason: 'error' | 'interrupted' | 'aborted', code?: string, message: string }
+
+// 恢复节点：type='progress'，actor=system
+{ kind: 'session_turn_recovered', sessionId: string, turn: number, seq?: number }
+```
+
+规则：
+- 只同步卡片主会话（`sessionIds[0]`）；已归档卡片、旁支会话不参与。
+- 失败节点去重键：卡片 + `sessionId` + `turn`。
+- 自动状态迁移只发生在 `status=running`（→ `failed`）与自动失败后的恢复（`failed` → `running`）；`needs_you`/`blocked`/`done`/`canceled`/`backlog` 只记节点。
+- 恢复只撤销本功能写入的失败状态：卡片最近一条 `status` 节点必须带 `data.reason='session_turn_failure'`；人工置为失败的卡片不自动恢复。
+- 插件 config `sessionFailureSync: false` 可整体关闭；宿主无 `session/event` 时监听器不触发（旧版 DSH 不受影响）。
 
 ## 4. 卡片摘要的"五层信息"（设计契约）
 

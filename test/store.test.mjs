@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { readFile, readdir, writeFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createStore } from '../lib/store.js'
+import { requestApproval } from '../lib/domain.js'
 import { tempDir } from './helpers.mjs'
 
 const readJson = async file => JSON.parse(await readFile(file, 'utf8'))
@@ -158,3 +159,22 @@ test('同一 dataDir 复用同一实例，避免两条写队列', async t => {
   const second = createStore({ dataDir: dir })
   assert.ok(first === second)
 })
+
+test('首次种子会先规范化：demo 卡片的数组字段齐全，可直接写审批', async t => {
+  const dir = await tempDir(t)
+  const store = createStore({ dataDir: dir, seedMode: 'demo', forceNew: true })
+  t.after(() => store.close())
+  const data = await store.read()
+  for (const card of data.cards) {
+    assert.ok(Array.isArray(card.approvals), `${card.title} 缺少 approvals 数组`)
+    assert.ok(Array.isArray(card.checklists))
+    assert.ok(Array.isArray(card.artifacts))
+    assert.ok(Array.isArray(card.sessionIds))
+  }
+  // 种子卡（原 blocked/failed 卡没有 approvals 字段）在首个进程生命周期内也能请求审批
+  const target = data.cards.find(card => card.status === 'blocked') || data.cards[0]
+  const { result } = await store.update(draft => requestApproval(draft, target.id, { title: '首启种子卡能写审批吗？', options: ['能'] }))
+  assert.equal(result.card.status, 'needs_you')
+  assert.equal(result.card.approvals.length, 1)
+})
+

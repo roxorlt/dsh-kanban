@@ -21,6 +21,8 @@ import {
   validateApprovalDraft,
 } from '../lib/approvalQuestions';
 import type { ApprovalDraft, ApprovalDraftIssue } from '../lib/approvalQuestions';
+import { supportsApprovalCustomAnswers } from '../lib/serverCapabilities';
+import { useServerVersion } from '../lib/useServerVersion';
 import { DecisionOption } from './DecisionOption';
 import { IconAlert, IconCheck, IconClose, IconInfo, IconPlus } from './Icons';
 
@@ -91,6 +93,10 @@ export function ApprovalPanel({
   const groupId = useId();
   const multiQuestion = isMultiQuestionApproval(approval);
   const questions = useMemo(() => approvalQuestions(approval), [approval]);
+  // 服务端版本错配兜底：旧宿主（<0.9.5）不认识「其他（自行填写）」的 custom 答案，
+  // 会把空 optionIds 当成「没选」直接 400；拿到明确旧版本时先禁用自定义项并给出可执行提示。
+  const serverVersion = useServerVersion();
+  const customAnswersSupported = supportsApprovalCustomAnswers(serverVersion);
 
   // —— 单题状态 ——
   const [singleSelection, setSingleSelection] = useState<string[]>(() => defaultSingleSelection(approval));
@@ -359,6 +365,17 @@ export function ApprovalPanel({
   };
 
   const submitMulti = () => {
+    // 旧服务端不读 custom：只要有任何一题是「仅自定义、没选选项」，就会报
+    // 「第 <questionId> 题至少需要选择 1 个选项」；这里提前拦下并给出可执行说明。
+    if (
+      !customAnswersSupported &&
+      Object.values(drafts).some((value) => isCustomPicked(value))
+    ) {
+      const message = t('approval.customUnsupported', { version: serverVersion ?? '' }).trim();
+      setValidation(message);
+      onValidationError?.(message);
+      return;
+    }
     const result = validateApprovalDraft(approval, drafts);
     if (!result.ok) {
       const { index, kind } = result.issue;
@@ -381,7 +398,9 @@ export function ApprovalPanel({
   const customOption: ApprovalOption = {
     id: APPROVAL_CUSTOM_OPTION_ID,
     label: t('approval.otherOption'),
-    description: t('approval.otherOptionDesc'),
+    description: customAnswersSupported
+      ? t('approval.otherOptionDesc')
+      : t('approval.customUnsupportedDesc'),
   };
 
   return (
@@ -452,17 +471,18 @@ export function ApprovalPanel({
                   type={currentQuestion.multiSelect ? 'checkbox' : 'radio'}
                   name={`${groupId}-${currentQuestion.id}`}
                   checked={customPicked}
-                  disabled={busy}
-                  onChange={() =>
+                  disabled={busy || !customAnswersSupported}
+                  onChange={() => {
+                    if (!customAnswersSupported) return;
                     toggleQuestionOption(
                       currentQuestion.id,
                       APPROVAL_CUSTOM_OPTION_ID,
                       currentQuestion.multiSelect === true,
-                    )
-                  }
+                    );
+                  }}
                 />
               </div>
-              {customPicked ? (
+              {customPicked && customAnswersSupported ? (
                 <div className="kb-decision-custom">
                   <label className="kb-sr-only" htmlFor={`${groupId}-custom-${currentQuestion.id}`}>
                     {t('approval.customLabel')}

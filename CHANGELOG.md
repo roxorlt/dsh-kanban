@@ -1,5 +1,75 @@
 # Changelog
 
+## v0.11.0 — 2026-10-23
+
+### 新增：卡片会话归档联动（M1+M2+自动归档；不做会话复用）
+
+- 背景：看板「一卡一会话」，卡片完成后宿主会话没有任何收敛机制（本机实测 91 个会话 / 173MB）。本版把「卡片生命周期」接到 DSH 0.2.x 的可逆会话归档能力上：归档后会话从侧栏隐藏、不能再跑模型步骤，但可在任意时刻恢复。
+- 服务端：新增 `lib/session-archive.js`（包装宿主 `workspaceRegistry`，能力探测 + 稳定错误码）与四个接口（详见 `docs/contracts/02-http-api.md` §9）：`GET /sessions/archive`、`POST /cards/:id/sessions/:sid/archive`（预检：触发卡 done/canceled、会话已绑定、所有未归档绑定卡都已收口；宿主活动检查失败可带 `stopActivity` 重试）、`POST .../unarchive`（幂等）、`POST /sessions/archive-batch`（`dryRun` 预览 + 跳过原因，供已完成列批量与历史数据一次性处理）。
+- 活动时间线：新增 `session_archived` / `session_unarchived` 活动（含 `sessionId`、自动归档标记与天数），在触发卡上可追溯。
+- 自动归档：`autoArchiveSessionsDays`（默认 7 天，0 关闭）— 卡片 done/canceled 超过 N 天后，若所有绑定卡都已收口且宿主可用，则每小时的定时任务自动归档其会话；运行中/待确认由宿主活动检查拒绝并跳过，不 `stopActivity`。与卡片 30 天自动归档（`autoArchiveDays`）并列。
+- 客户端桥（`lib/client.js`）：`kanban:sessions` 推送新增 `archivedSessionIds`；订阅 `ctx.workspaces.list` 失效通知重推；`session.open` / `session.prompt` / `session.ensure` 执行前自动 `unarchiveSession`（幂等），恢复失败返回 `SESSION_ARCHIVE_UNAVAILABLE` 并阻止把消息发进归档会话（归档闸门会静默拦下）。
+- Web：详情「会话」区按会话展示 已归档 / 运行中 / 待确认 徽标与「归档会话 / 恢复会话」操作；条件不满足时禁用并展示原因（还有 N 张卡片未完成：… / 会话运行中 / 有待确认 / 宿主不支持）；卡片完成时轻提示「可在详情归档会话」（Q1 拍板，不自动执行）；`SESSION_ACTIVE` 弹「停止并归档此会话？」确认（列出将被停止的回合/后台任务/子智能体/定时提醒，并写明会丢弃排队输入、删除定时任务、被停止的工作不会自动继续）；已完成列头新增「批量归档会话」（先 dryRun 预览可归档与跳过清单，再执行）；卡片从完成态重开时自动恢复其归档会话。
+- 版本门槛与降级：宿主没有 `unarchiveSession`（如 CLI 0.1.5）时 `available=false`，全部入口隐藏、接口 501；Web 端 `GET /sessions/archive` 404/失败同样隐藏，避免出现不可逆归档。
+- 验证：服务端 149/149（新增 10 例会话归档用例 + 12 例会话语义与失败同步用例，见下一节）；Web vitest 23 文件 / 215 例、tsc 0 error、build 通过、令牌 lint 0/0；用「真服务端路由 + 假 workspaceRegistry + 假父页面桥」搭临时 harness，在真实 Chromium 下 E2E 覆盖归档/恢复/停止并归档/共享会话阻塞/待确认阻塞/批量 dryRun+执行与活动写入，10 项断言全过（截图 `design/screens/session-archive-e2e-*.png`）。真实宿主需重启 DSH 加载服务端 v0.11 后复验。
+
+### 新增：会话运行失败同步到卡片（原 v0.9.6 计划，并入 v0.11.0）
+
+- 现象 / 背景：会话因断网等原因某一轮运行失败（DSH 聊天界面显示「本轮运行失败」）时，看板卡片完全没反应——状态、时间线都不变，只能点进会话才发现；反馈实例的绑定会话在 16:32 / 16:56 两次 `DeepSeek Messages transport failed`（`TRANSPORT`，宿主自动重试 5 次后终态失败）。
+- 服务端：新增 `lib/session-sync.js`，监听宿主 `session/event`（`{ global: true }`，与 DSH 自身 api-session-controller 相同的订阅方式），只处理 `turn/end`；失败判定对齐聊天界面「本轮运行失败」：`error` / `interrupted`（进程中途退出）/ 退出账号 `aborted`，`completed` 用于恢复判定。`lib/domain.js` 新增 `recordSessionTurnFailure` / `recordSessionTurnRecovered`（+`mainSessionId` / `cardsByMainSession`）；`lib/index.js` 挂载（`sessionFailureSync:false` 可关闭；旧宿主无 `session/event` 时不触发，不影响其它能力）。
+- 行为（按用户拍板）：只同步卡片主会话（`sessionIds[0]`）；失败时时间线追加 `error` 节点（轮次 / 原因 / 错误码），卡片处于「进行中」自动置「失败」进「待你确认」；同一卡片同一会话同一轮只记一次；同一会话下一轮正常完成后自动回「进行中」并保留失败记录；手工置「失败」的卡片不自动恢复。Web 无改动（时间线已支持 `error` 节点与 `failed` 样式）。
+- 验证：并入后服务端 `node --test` 149/149（本特性 12 例：判定口径、主会话/归档/非法输入、进行中→失败、同轮去重、非 running 只记节点、恢复回进行中、手工失败不恢复、监听器接线与容错、apply 接线集成、关闭开关）；dev-server 冒烟 `version=0.11.0`、`/state` 正常；桌面宿主重启到 v0.11.0 后 `health=0.11.0`；新增 `scripts/verify-session-sync.mjs`（真实 0.2.1 `cordis` + `dsh-session` 驱动插件）**7/7 通过**，覆盖失败置位、时间线节点、去重、恢复回进行中；真实 Electron 全链路的首次自然失败按 `docs/06-verification.md` §1.23 核对。
+- 生效方式：服务端改动，需重启 DSH。
+
+## v0.10.0 — 2026-10-23
+
+### 新增：决策日志（正式审批的原始事件流）
+
+- 背景：看板里的「待你确认」条目、等待中的选择、最终做了什么选择，此前只存在于 `data.json` 的卡片 `approvals[]` 与 300 条时间线里，会被单卡 20 条审批上限和 `/seed` 重置抹掉。目标是留下可追溯的原始数据，日后据此做抽象总结，或让 agent 依据原始记录协助处理待确认事项；**本轮只负责保存原始数据**，不做总结、不自动处理。
+- 存储：新增 `lib/decisions.js`，独立文件 `<dataDir>/decisions.jsonl`（默认 `~/.dsh-kanban/decisions.jsonl`，权限 `0600`），一行一个 JSON 事件，只追加、不修改、不删除、无条数上限；与 `data.json` 同目录但不并入，不受单卡 20 条审批上限裁剪与 `/seed` 重置影响。
+- 写入顺序：在同一个 `store.update()` 事务里先 append 日志并 `fsync`，再原子写 `data.json`；日志可能领先数据（多记一条未完成操作的记录），不会少记；日志写失败则本次操作中止（`DECISION_LOG_IO`），`data.json` 不提交。
+- 事件模型：`approval_requested`（题目 / 选项 / 卡片上下文 / 会话的请求快照）、`approval_resolved`（决定、选项与自定义回答、等待时长 `waitedMs`、提交后落列 `outcomeColumn`）、`approval_unresolved`（未提交就关闭，`reason` 为 `archived` / `left_needs_you` / `trimmed` / `data_reset`），另有 `log_initialized`（回填完成）与 `data_reset`（`POST /seed` 断点）两个标记事件。本轮只记正式审批，不含受阻 / 失败卡、手动移列、agent 自行决策。
+- 派生状态：日志不存状态，读取时按事件重放得出 `waiting` / `resolved` / `unresolved`；坏行跳过但不删除，`skippedLines` 在 meta 中可见。
+- 存量回填：以 `log_initialized` 标记判断初始化状态；首次启用从 `data.json` 现有 `approvals[]` 与相关活动一次性回填，末行写标记；已有标记不重复回填（若启动瞬间先有实时写入或上次回填在写标记前中断，会补一次回填，历史事件追加在文件末尾，读取按 `at` 排序）。`lib/index.js` 与 `scripts/dev-server.mjs` 均已接线。
+
+### 行为变化：未提交审批的收口
+
+- 卡片归档、或卡片离开「待你确认」列（拖拽 / 批量移动 / 完成 / 状态变更）时，未提交的审批置为 `dismissed`，同时写 `resolvedAt` / `resolvedBy`（不伪造 `resolution`），并记一条 `approval_unresolved`。
+- 单卡 20 条审批上限裁剪时被挤掉的 pending 记 `reason=trimmed`；`POST /seed` 前把未提交审批收口为 `data_reset`。
+- 历史遗留 pending（旧版本把卡片移出「待你确认」/归档但没关审批）：回填时记未决事件，随后启动流程把 `data.json` 里的审批静默置为 `dismissed`（幂等、不重复记事件），避免日志判死而数据仍可提交的矛盾。
+- 回填按确定性 `id` 跳过文件里已有的事件；`waiting` 按唯一 `id` 计数，旧文件中的重复 id 不会让等待数虚高或让分页游标死循环。
+- `Approval.status` 的 `dismissed` 由「旧数据兼容值」变为实际写入值；Web 侧沿用既有「已忽略」文案，本次不改前端。
+
+### 接口
+
+- `GET /api/kanban/decisions`：倒序列表，支持 `limit`（默认 50、上限 200）、`before` 游标、`type`、`state=waiting|resolved|unresolved`、`cardId`、`boardId`、`approvalId`、`since`、`until`、`source=live|backfill`；返回 `{ok, decisions, hasMore, nextBefore, total, filtered, waiting, revision}`。
+- `GET /api/kanban/decisions/meta`：文件路径、条数、坏行数、按类型计数、首个 / 末个事件时间、回填标记、等待数。
+- `GET /api/kanban/decisions/export`：原样导出 `decisions.jsonl` 的字节（不转码，invalid UTF-8 不替换；`application/x-ndjson`，`content-disposition: attachment`）。
+- 非法 `type` / `state` / `source` / 时间 / id → `400 BAD_REQUEST`；日志写失败对外为 `500 INTERNAL`，`data.json` 不提交。
+- 新增只读工具 `kanban_decisions`（`cardId` / `boardId` / `type` / `state` / `limit` / `before` / `since` / `until`）；工具总数 10 → 11。
+
+### 评审加固（冻结前）
+
+- 启动竞态：把「回填 + 历史遗留 pending 静默置 dismissed」收进同一个 `store.update` 事务，store 写队列天然串行，启动窗口内的 live 归档 / 移列 / 提交不会与回填交错；回填改为**收口感知**（同一请求在日志里已有 resolved / unresolved 时不再补第二条）。
+- 坏行后的 `seq` 取历史最大值之后，原始文件不再重号；已有 `decisions.jsonl` 在下次 append 时收紧为 `0600`。
+- 导出改为返回**原始字节**并排进写队列（invalid UTF-8 不再被替换成 U+FFFD，也不会读到写了一半的文件）。
+- `data_reset` 与 seed demo 补写请求的顺序写进契约（文件顺序 ≠ `at` 顺序，读取仍按 `at`）。
+- 修既有缺陷：首启 / `POST /seed demo` 的种子卡先规范化（补齐 `approvals` 等数组），首个进程生命周期内即可对这些卡请求审批（此前会 500）。
+- dev-server `--reset` 同时清理 `decisions.jsonl`，避免旧日志标记让新 seed 的请求事件缺失。
+- `GET /decisions/export` 文档明确为字节级原样导出。
+
+### 兼容与生效
+
+- 数据向后兼容：`data.json` schema 不变，决策事件不写入 `data.json`（草稿上的 `__decisions` 在落盘前被取走）；旧数据中遗留的 `dismissed` 照常读取。
+- 纯服务端改动（新增 `lib/decisions.js`，改 `store` / `domain` / `routes` / `tools` / `index` / dev-server）：需要重启 DSH 才生效；前端代码未改，**不需要重建 `web/dist`**。
+- 删除 `decisions.jsonl` 后重启会按当前 `data.json` 重新回填（只含当时仍保留在卡片里的审批）；已裁剪的历史无法恢复。单进程写入假设与 `data.json` 相同（同一 dataDir 不要起两个实例）。
+
+### 验证
+
+- 服务端 `npm test` **127/127** 通过：新增 `test/decisions.test.mjs` 23 例（追加格式与 0600、确定性 sha1 id 固定向量、筛选与游标、派生 state、坏行容忍与 seq 不重号、回填与不重复回填、以 `log_initialized` 判定初始化、收口感知回填、degraded 回填、重复 id 分页、历史遗留 pending 同步、启动回填与 live 写串行、seed demo 补请求、多题 + 自定义回答 + 备注、无效 UTF-8 导出、已有文件收紧 0600、store 接线、日志失败中止、归档 / 离开 / seed 收口、trimmed）；`domain` / `store` / `routes` / `tools` / `index` 各自增量（含启动回填、首启种子卡审批、seed demo 落盘与 HEAD 等集成用例）。
+- 真实数据冒烟（`~/.dsh-kanban/data.json` 的副本，未写原文件）：启动 dev-server 回填出 26 条历史事件（13 条 `approval_requested` + 12 条 `approval_resolved` + 1 条 `log_initialized`），其中 1 条仍在等待（`state=waiting`）；`/decisions`、`/decisions/meta`、`/decisions/export` 均返回预期结果，导出与日志文件逐字节一致；6 个非法参数均 400；重启不重复回填、实时请求/提交/归档收口实测通过。
+- 契约：见 `docs/contracts/05-decision-log.md`。
+
 ## v0.9.5 — 2026-10-23
 
 ### 修复：「待你确认」提交选项后卡片状态不立即变更

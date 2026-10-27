@@ -24,6 +24,7 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
    - `kanban_update_card` 更新 `currentAction`（一两句话，写正在做什么）、`progress`（`{step,total,text}`）、`checklists`（勾选子步骤）。
    - 里程碑、错误、关键决定用 `kanban_add_activity` 写一条时间线；**不要每一步工具调用都写**，只写用户值得看的节点。
    - 状态语义：`running` 进行中、`blocked` 受阻（需要人看）、`failed` 失败、`canceled` 已取消。
+   - 会话运行失败同步（v0.11）：卡片主会话某一轮运行失败时，服务端自动把 `running` 卡置为 `failed` 并写 `error` 节点（含轮次/原因/错误码）；同一会话下一轮正常完成后自动回 `running`，失败记录保留。看到这类节点先判断是否重试/收尾，不要当成人工结论。
 4. **需要用户决策**：`kanban_request_approval`，提供 1–4 个选项；卡片会自动进入「待你确认」列。**发完就停**，等用户在看板里选择，不要在同一轮里假装已获批准继续执行。
 5. **完成**：`kanban_complete_card`，`result` 写清交付物、位置、验收方式。已完成卡片不复用；有后续工作就新建卡片。
 6. **收尾**：如果用户要求讨论/答复，用 `kanban_update_card` 或 `kanban_add_activity` 把结论留在卡片上，让时间线自洽。
@@ -35,6 +36,7 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 | `kanban_boards` | 列看板与四列计数 | – |
 | `kanban_cards` | 查卡片摘要列表 | `boardId` `status` `project` `label` `q` `sessionId` `limit` |
 | `kanban_card` | 单卡详情 + 最近时间线 | `cardId` `activityLimit` |
+| `kanban_decisions` | 只读查询决策日志（审批原始事件流） | `cardId` `boardId` `type` `state` `limit` `before` `since` `until` |
 | `kanban_create_card` | 建卡 | `title`(必填) `summary` `status` `priority` `labels` `project` `cwd` `sessionId` |
 | `kanban_update_card` | 更新字段 | `cardId` + 任意字段（`currentAction` `progress` `checklists` `status` `result`…） |
 | `kanban_move_card` | 换列/换状态 + 原因 | `cardId` `column` 或 `status` `text` |
@@ -42,6 +44,8 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 | `kanban_request_approval` | 请求审批（→待你确认） | 单题：`title` `detail` `options`(1–8) `multiSelect`；多题：`questions`(1–6 题，每题独立单选/多选) |
 | `kanban_link_session` | 绑定当前会话 | `cardId` `sessionId` `title` |
 | `kanban_complete_card` | 完成并写结果 | `cardId` `result` |
+
+回顾历史决定、等待时长（`waitedMs`）或某张卡经历过的审批时，用 `kanban_decisions` 只读查询决策日志——原始审批事件流存在 `dataDir/decisions.jsonl`（默认 `~/.dsh-kanban/decisions.jsonl`），包含仍在等待、已提交、未提交就关闭的条目；它只读，不写数据，也不替你或用户做决定。
 
 ## 调用示例
 

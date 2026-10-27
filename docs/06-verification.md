@@ -284,19 +284,88 @@
 | 生效方式 | 含服务端改动（`lib/domain.js` / `lib/tools.js`），需重启 DSH；仅刷新页面会继续用旧服务端（旧服务端不改状态，乐观移列会被刷新回滚） |
 | 提交 | `814c17e`（合并 `fix/approval-resolve-outcome` → v0.9.5） |
 
+## 1.21 v0.10.0（决策日志，2026-10-23）
+
+| 项 | 结果 |
+|---|---|
+| 范围 | 只记录正式审批（请求 / 提交 / 未提交关闭）；不含受阻 / 失败卡、手动移列、agent 自行决策。本轮只负责保存原始数据，不做总结与自动处理。 |
+| 存储 | 新增 `lib/decisions.js`：`<dataDir>/decisions.jsonl`（默认 `~/.dsh-kanban/decisions.jsonl`），一行一个 JSON 事件，只追加、不修改、不删除、无条数上限，权限 `0600`；与 `data.json` 同目录但不并入。 |
+| 写入顺序 | `store.update()` 同一事务内先 append 日志（`fsync`），再原子写 `data.json`；日志可能领先数据、不会少记；日志写失败 → 本次操作中止（`DECISION_LOG_IO`），`data.json` 不提交（测试用同名目录占住日志文件验证 revision 与审批均未变）。 |
+| 事件 | `approval_requested`（请求快照）、`approval_resolved`（决定 / 选项 / 自定义回答 / `waitedMs` / `outcomeColumn`）、`approval_unresolved`（`archived` / `left_needs_you` / `trimmed` / `data_reset`），另有标记事件 `log_initialized` / `data_reset`。 |
+| 环境 | 本机 macOS 26.3（arm64）、Node v22.22.2；未启动/重启用户正在运行的 DSH GUI。 |
+| 回填（真实数据副本） | 把 `~/.dsh-kanban/data.json` 只读复制到 `/tmp/dsh-kanban-v010-smoke/data.json`（副本含 45 张卡、295 条活动、13 条审批 = 12 条已决 + 1 条 pending；复制只读，本次验证未写入原文件），执行 `node scripts/dev-server.mjs --port 4610 --data /tmp/dsh-kanban-v010-smoke/data.json` → 输出 `[决策日志] 已回填 26 条历史事件`；`/decisions/meta`：`entries=26`、`skippedLines=0`、`byType` 为 13 `approval_requested` / 12 `approval_resolved` / 1 `log_initialized`、`waiting=1`、`revision=255`。 |
+| 列表接口 | `GET /decisions`：`total=26`、`filtered=26`、`waiting=1`；`limit=3` 时 `hasMore=true` 且 `nextBefore` 为有效事件 id。`state=waiting` 命中 1 条「归档触发：已完成卡片的会话如何触发归档？」（`source=backfill`、`cardStatus=needs_you`）。 |
+| meta / 导出 | `GET /decisions/meta` 200；`GET /decisions/export` 200，`content-type: application/x-ndjson; charset=utf-8`、`content-disposition: attachment; filename="decisions-20261023.jsonl"`、`content-length=52748`；下载文件与 `decisions.jsonl` 逐字节一致（`cmp` 无差异），共 26 行。 |
+| 错误码 | `type=nope`、`state=pending`、`source=seed`、`since=abc`、`cardId=bad`、`before=dec-ffffffffffff` 均返回 `400 BAD_REQUEST`。 |
+| 不重复回填 | 同一副本目录再次启动 dev-server：不再输出回填行（日志中已有 `log_initialized` 标记），`/decisions/meta` 仍为 `entries=26`；`/health` 的 `version` 为 `0.10.0`。 |
+| 回填去重 / 历史遗留 pending | 回填按确定性 `id` 去重、收口感知（已有 resolved/unresolved 不再补）；历史遗留 pending 与回填在同一个 `store.update` 事务内静默置为 `dismissed`，启动窗口 live 写不会交错，重复启动幂等；单测覆盖「先有实时事件再回填」「重复 id 分页不死循环」「遗留 pending 同步」「启动回填 + live 归档只产生一条收口」等。 |
+| 评审加固（P2） | 坏行后 seq 不重号；已有文件 append 时收紧为 0600；导出返回原始字节（invalid UTF-8 不替换）并与写队列串行；`data_reset` 与 seed demo 补请求顺序按契约记录；首启 / seed demo 的种子卡先规范化，首个生命周期即可请求审批。 |
+| 单测 | `npm test` **127/127**（`test/decisions.test.mjs` 新增 23 例；`domain` / `store` / `routes` / `tools` / `index` 各自增量）。 |
+| 真实宿主（2026-10-27 重启到 v0.11.0 后） | `/api/kanban/decisions/meta`：`exists=true`、`sizeBytes=63485`、`entries=31`、`byType={approval_requested:15, approval_resolved:15, log_initialized:1}`、`waiting=0`、`skippedLines=0`；说明恢复启动回填与实时写入在真实宿主可用。列表 / 导出 / 只读工具与「新审批提交后落两条事件」待按验收卡逐项走查。 |
+| 生效方式 | 纯服务端改动（`lib/decisions.js` 新增，`store` / `domain` / `routes` / `tools` / `index` / dev-server 接线），**重启 DSH 后生效**；前端代码未改，无需重建 `web/dist`。 |
+| 截图 | 无（后端数据能力，以命令输出与接口响应为证据）。 |
+
+## 1.22 v0.11.0（会话归档联动，2026-10-23）
+
+- 范围：卡片会话归档/恢复（详情操作 + 完成轻提示 + 停止并归档确认 + 批量/历史处理 + 已完成 7 天自动归档），会话复用不做。
+- 服务端：`node --test` **137/137**；新增 `test/session-archive.test.mjs` 10 例，覆盖适配器能力探测/`stopActivity` 透传/错误映射（`SESSION_ACTIVE`/`SESSION_NOT_FOUND`/`SESSION_ARCHIVE_UNAVAILABLE`）、单卡预检（完成态/绑定/反向依赖）、批量预检（共享会话/已归档/`completedBefore`）、HTTP 归档/恢复/批量 dryRun+执行/无宿主 501 降级与时间线活动。
+- Web：`tsc --noEmit` 0 error；`vitest run` **23 文件 / 215 例**通过（新增 `lib/sessionArchive.test.ts` 与 `api.archive.test.ts`，+2 文件/44 例）；`vite build` 通过；令牌 lint 9 个 CSS 0 错误 0 警告。
+- 真实 Chromium E2E（临时 harness：真 `lib/routes.js` + 假 `workspaceRegistry` + 假父页面桥，嵌入模式）10 项断言全过：
+  1. 完成卡归档成功（registry 归档集合包含目标会话）；
+  2. 会话行切换「已归档 / 恢复会话」；
+  3. 触发卡时间线写入 `session_archived`；
+  4. 恢复会话成功（集合移除）；
+  5. 运行中会话首次归档 → `SESSION_ACTIVE` 弹「停止并归档此会话？」，含「进行中的回合」与副作用说明；
+  6. 确认后 `stopActivity:true` 归档成功；
+  7. 共享会话被未完成卡阻塞：按钮禁用并显示「还有 1 张卡片未完成：进行中卡B」；
+  8. 有待确认项的会话禁用归档；
+  9. 已完成列「批量归档会话」dryRun 预览可归档 3 / 跳过 2（含原因）；
+  10. 批量执行后历史卡片会话进入归档集合。
+- 证据：`design/screens/session-archive-e2e-drawer.png`、`session-archive-e2e-batch-preview.png`、`session-archive-e2e-batch-done.png`。
+- 真实宿主（桌面 `0.2.1-rc.2`，2026-10-27 09:06 重启到 v0.11.0）：`GET /api/kanban/health` 返回 `version: 0.11.0`；`GET /api/kanban/sessions/archive` 返回 `available: true`（`archivedSessionIds` 已有 29 个历史归档会话）——服务端能力已生效。**下列 UI 清单待逐项走查**。
+
+### 重启后复验清单（v0.11.0）
+
+1. ✅ `GET /api/kanban/health` 返回 `version: 0.11.0`；`GET /api/kanban/sessions/archive` 返回 `available:true`（2026-10-27 实测）。
+2. 任意已完成卡详情出现「归档会话」；归档后 DSH 侧栏会话消失、行内显示「已归档 / 恢复会话」、时间线出现活动。
+3. 恢复后会话回到侧栏原位置。
+4. 运行中会话归档 → 「停止并归档」确认 → 成功。
+5. 打开/回复已归档会话时桥自动恢复（`lib/client.js`）；不再出现消息静默不处理。
+6. 已完成列「批量归档会话」dryRun/执行正常；`autoArchiveSessionsDays=7` 的历史会话在宿主可用后由定时任务归档（可用 `autoArchiveSessionsDays:0` 关闭验证）。
+7. console 0 error。
+
+## 1.23 v0.11.0（会话运行失败同步）
+
+- 范围：卡片主会话某一轮运行失败（`error` / `interrupted` / 退出账号 `aborted`）→ 时间线写 `error` 节点 + 「进行中」自动置「失败」（进「待你确认」）；同一会话下一轮正常完成 → 自动回「进行中」并保留失败记录；只同步主会话，手工置失败不自动恢复。
+- 取证：本次反馈的绑定会话第 3/4 轮 `turn/end` 为 `reason.kind=error`、`DeepSeek Messages transport failed`（`TRANSPORT`，宿主自动重试 5 次后终态失败，16:32 / 16:56 各一次）；失败期间卡片状态与时间线无任何反馈。
+- 实现：`lib/session-sync.js` 监听宿主 `session/event`（`{ global: true }`，与 DSH 自身 api-session-controller 相同订阅方式）过滤 `turn/end`；`lib/domain.js` 新增 `recordSessionTurnFailure` / `recordSessionTurnRecovered`（+`mainSessionId` / `cardsByMainSession`）；`lib/index.js` 挂载（`sessionFailureSync:false` 可关闭）；Web 无改动（时间线已支持 `error` 节点与 `failed` 样式）。
+- 单测：`node --test` **149/149**（本特性 12 例：判定口径、主会话/归档/非法输入、进行中→失败、同轮去重、非 running 只记节点、恢复回进行中、手工失败不恢复、监听器接线与容错、apply 接线集成、关闭开关）。
+- dev-server 冒烟：`node scripts/dev-server.mjs --port 4xxx` 启动正常；`/api/kanban/health` 返回 `version=0.11.0`，`/api/kanban/state` 正常出 4 列数据（该通道不覆盖宿主事件，仅确认服务端加载无回归）。
+- 真实宿主能力核对（桌面 `0.2.1-rc.2`，2026-10-27 09:06 重启到 v0.11.0）：`GET /api/kanban/health` 返回 `version: 0.11.0`，说明包含本特性的服务端已加载。
+- 宿主库级失败复验（真实 DSH 0.2.1 的 `cordis` + `dsh-session`，从桌面宿主 `app.asar` 解包）：新增 `scripts/verify-session-sync.mjs`，把插件挂到真实 cordis、用真实 `SessionStore` 创建会话并 append `turn/start` + `turn/end`，**7/7 通过**：
+  1. 失败后卡片自动置 `failed`；
+  2. 时间线写入 1 条 `error` 节点；
+  3. 节点带 `kind=session_turn_failure`、`turn=1`、`code=TRANSPORT`、原始 message；
+  4. 同一轮重复事件不重复记录（去重）；
+  5. 下一轮 `completed` 后卡片自动回 `running`；
+  6. 恢复节点写入且失败记录保留；
+  7. 插件真实注册 2 条路由 + 11 个工具（确认真加载）。
+  复跑：`DSH_HOST_MODULES=<解包目录>/dsh/node_modules node scripts/verify-session-sync.mjs`。
+- 真实 Electron 全链路：等宿主下一次自然失败时核对 `~/.dsh-kanban/data.json` 出现 `data.kind='session_turn_failure'`（修复目标即此类场景）；如需主动制造，可临时断网几秒后让某个绑定卡片的会话跑一轮。
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
 
 ```
 $ npm test
-# tests 94
-# pass 94
+# tests 149
+# pass 149
 # fail 0
-# duration_ms ~1.1s
+# duration_ms ~2.2s
 ```
 
-覆盖：`store`（原子写 / 串行队列 / revision / 损坏备份重建 / schema 迁移）、`domain`（状态列映射 / 规范化 / 种子 / 写原语）、`routes`（CRUD / move / 乐观锁 409 / 审批 resolve / comments / session link / 同源 403 / SSE 首帧 / 静态资源防穿越与 SPA fallback）、`tools`（10 个工具 schema 与 execute）、`index`（插件注册）。
+覆盖：`store`（原子写 / 串行队列 / revision / 损坏备份重建 / schema 迁移）、`domain`（状态列映射 / 规范化 / 种子 / 写原语 / 审批决策事件收集 / 会话运行失败与恢复回写）、`session-sync`（turn 失败判定口径 / 主会话过滤 / 同轮去重 / 监听器接线与容错）、`decisions`（追加格式 / 派生状态 / 筛选分页 / 坏行容忍 / 回填 / store 接线与日志失败中止）、`session-archive`（能力探测 / 预检 / 批量 / HTTP 降级 / 活动写入）、`routes`（CRUD / move / 乐观锁 409 / 审批 resolve / comments / session link / 同源 403 / SSE 首帧 / 静态资源防穿越与 SPA fallback / 决策日志与会话归档接口）、`tools`（11 个工具 schema 与 execute）、`index`（插件注册、决策日志回填、会话运行失败监听接线）。
 
 ### 2.2 Web
 
@@ -304,7 +373,7 @@ $ npm test
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
 > vite build     # dist: JS gzip ~74KB / CSS gzip ~9KB
-$ npm --prefix web run test    # vitest 20 文件 / 165 测试
+$ npm --prefix web run test    # vitest 23 文件 / 215 测试
 $ npm --prefix web run lint:tokens
 # 9 个 CSS 文件：0 error / 0 warning
 ```
@@ -419,6 +488,9 @@ npm --prefix web run test
 # 本地联调（不依赖 DSH）
 node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev/data.json
 # 浏览器打开 http://127.0.0.1:4599/dsh-kanban/
+
+# 宿主库级验证：会话运行失败同步（真实 0.2.1 cordis + dsh-session，需先从 app.asar 解包）
+DSH_HOST_MODULES=/tmp/dsh021/dsh/node_modules node scripts/verify-session-sync.mjs
 
 # 构建前端
 npm --prefix web run build

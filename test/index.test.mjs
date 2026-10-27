@@ -1,16 +1,16 @@
 // index.js：插件导出契约与 apply 接线（fake ctx 验证路由/工具注册与卸载）。
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { apply, inject, name } from '../lib/index.js'
 import { TOOL_NAMES } from '../lib/tools.js'
 import { createStore } from '../lib/store.js'
-import { createCard } from '../lib/domain.js'
+import { createCard, createSeed, normalizeStore } from '../lib/domain.js'
 import { tempDir } from './helpers.mjs'
 
 function fakeContext() {
-  const state = { routes: [], tools: [], effects: [], routeDisposers: 0, toolDisposers: 0 }
+  const state = { routes: [], tools: [], effects: [], events: new Map(), routeDisposers: 0, toolDisposers: 0 }
   const ctx = {
     logger: { info() {}, warn() {}, error() {} },
     webServer: {
@@ -26,6 +26,10 @@ function fakeContext() {
         return () => { state.toolDisposers += 1 }
       },
     },
+    on(name, handler, options) {
+      state.events.set(name, { handler, options })
+      return () => { state.events.delete(name) }
+    },
     effect(fn) { state.effects.push(fn()) },
   }
   return { ctx, state }
@@ -39,7 +43,7 @@ test('插件导出 name/inject/apply 契约', () => {
   assert.equal(typeof apply, 'function')
 })
 
-test('apply 注册两条前缀路由与 10 个工具，并种下 demo 数据', async t => {
+test('apply 注册两条前缀路由与 11 个工具，并种下 demo 数据', async t => {
   const dir = await tempDir(t)
   const { ctx, state } = fakeContext()
   apply(ctx, { dataDir: dir, seed: 'demo' })
@@ -51,10 +55,21 @@ test('apply 注册两条前缀路由与 10 个工具，并种下 demo 数据', a
   const data = JSON.parse(await readFile(join(dir, 'data.json'), 'utf8'))
   assert.equal(data.schemaVersion, 1)
   assert.equal(data.cards.length, 8)
+  // 决策日志：首次启动从 demo 数据回填（approval_requested / resolved + log_initialized 收尾）
+  const logFile = join(dir, 'decisions.jsonl')
+  assert.ok(await waitForFile(async () => {
+    try { return (await stat(logFile)).size > 0 } catch { return false }
+  }), '决策日志应在启动回填后存在')
+  const lines = (await readFile(logFile, 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+  assert.equal(lines[0].type, 'approval_requested')
+  assert.ok(lines.at(-1).counts.requested > 0)
+  assert.ok(lines.at(-1).counts.pending > 0)
+  assert.equal(lines[lines.length - 1].type, 'log_initialized')
+  assert.equal(lines[lines.length - 1].source, 'backfill')
   // 清理：按注册顺序执行 disposer，不应抛错
   for (const dispose of state.effects.reverse()) if (typeof dispose === 'function') await dispose()
   assert.equal(state.routeDisposers, 2)
-  assert.equal(state.toolDisposers, 10)
+  assert.equal(state.toolDisposers, 11)
 })
 
 test('apply 支持 seed=empty 与自定义 dataDir', async t => {
@@ -157,4 +172,99 @@ test('apply autoArchiveDays=0 关闭自动归档；默认 30 天归档 40 天前
     /自动归档：已完成超过 30 天/,
   )
   await closeEffects(defaultContext.state)
+})
+
+
+/** 预先写一份 data.json：模拟旧版本留下的「卡片已离开待你确认但审批仍 pending」。 */
+async function seedLegacyPending(dir) {
+  const seededAt = 1_700_000_000_000
+  const seed = normalizeStore(createSeed('demo', seededAt), seededAt)
+  const card = seed.cards.find(item => (item.approvals || []).some(approval => approval.status === 'pending'))
+  card.status = 'done'
+  card.updatedAt = seededAt + 1_000
+  await writeFile(join(dir, 'data.json'), JSON.stringify(seed), 'utf8')
+  return { cardId: card.id }
+}
+
+test('apply 启动时把历史遗留 pending 审批同步为 dismissed，决策日志记录未决事件', async t => {
+  const dir = await tempDir(t)
+  const { cardId } = await seedLegacyPending(dir)
+  const { ctx, state } = fakeContext()
+  apply(ctx, { dataDir: dir })
+  assert.ok(await waitForFile(async () => {
+    try {
+      const data = JSON.parse(await readFile(join(dir, 'data.json'), 'utf8'))
+      const card = data.cards.find(item => item.id === cardId)
+      return card && (card.approvals || []).every(approval => approval.status !== 'pending')
+    } catch { return false }
+  }), '历史遗留 pending 审批应被同步关闭')
+  const logLines = (await readFile(join(dir, 'decisions.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+  assert.ok(logLines.some(line => line.type === 'approval_unresolved' && line.reason === 'left_needs_you' && line.cardId === cardId))
+  assert.equal(logLines.at(-1).type, 'log_initialized')
+  await closeEffects(state)
+})
+
+test('apply 首启 demo：种子卡在首个生命周期内可直接请求审批（种子已规范化）', async t => {
+  const dir = await tempDir(t)
+  const { ctx, state } = fakeContext()
+  apply(ctx, { dataDir: dir, seed: 'demo' })
+  await flush()
+  const data = JSON.parse(await readFile(join(dir, 'data.json'), 'utf8'))
+  const target = data.cards.find(card => card.status !== 'needs_you' && (card.approvals || []).length === 0) || data.cards[0]
+  const tool = state.tools.find(item => item.name === 'kanban_request_approval')
+  const result = JSON.parse(await tool.execute({ cardId: target.id, title: '首启种子卡审批', options: ['好'] }, { agent: { id: 'agent-test-1' } }))
+  assert.equal(result.ok, true, JSON.stringify(result))
+  assert.equal(result.card.status, 'needs_you')
+  const lines = (await readFile(join(dir, 'decisions.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+  assert.ok(lines.some(line => line.type === 'approval_requested' && line.cardId === target.id))
+  await closeEffects(state)
+})
+
+test('apply 挂载 session/event 监听：turn/end 失败自动置卡片失败，成功轮自动恢复', async t => {
+  const dir = await tempDir(t)
+  const { ctx, state } = fakeContext()
+  apply(ctx, { dataDir: dir, seed: 'demo' })
+  await flush()
+  const listener = state.events.get('session/event')
+  assert.ok(listener, '缺少 session/event 监听')
+  assert.equal(listener.options.global, true)
+
+  // 通过共享 store 建一张绑定主会话的进行中卡片（apply 内部与这里拿到同一个实例）。
+  const store = createStore({ dataDir: dir })
+  const { result } = await store.update(draft => ({
+    card: createCard(draft, { title: '失败同步卡', status: 'running', sessionId: 'session-fail-sync' }, { now: Date.now() }).card,
+  }))
+  const cardId = result.card.id
+  const readCard = async () => {
+    const data = JSON.parse(await readFile(join(dir, 'data.json'), 'utf8'))
+    return { data, card: data.cards.find(item => item.id === cardId) }
+  }
+
+  await listener.handler(
+    { id: 'session-fail-sync' },
+    { type: 'turn/end', seq: 3, time: Date.now(), data: { turn: 1, reason: { kind: 'error', error: { message: 'boom', code: 'BOOM' } } } },
+  )
+  let current = await readCard()
+  assert.equal(current.card.status, 'failed')
+  const failure = current.data.activities.find(item => item.cardId === cardId && item.type === 'error')
+  assert.equal(failure.data.kind, 'session_turn_failure')
+  assert.equal(failure.data.code, 'BOOM')
+
+  await listener.handler(
+    { id: 'session-fail-sync' },
+    { type: 'turn/end', seq: 6, time: Date.now(), data: { turn: 2, reason: { kind: 'completed' } } },
+  )
+  current = await readCard()
+  assert.equal(current.card.status, 'running')
+  assert.ok(current.data.activities.some(item => item.cardId === cardId && item.data && item.data.kind === 'session_turn_recovered'))
+  await closeEffects(state)
+})
+
+test('apply sessionFailureSync=false：不挂 session/event 监听', async t => {
+  const dir = await tempDir(t)
+  const { ctx, state } = fakeContext()
+  apply(ctx, { dataDir: dir, seed: 'empty', sessionFailureSync: false })
+  await flush()
+  assert.equal(state.events.has('session/event'), false)
+  await closeEffects(state)
 })

@@ -1,10 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
-import type { Approval, Board, BoardSummary, Card, ColumnId, SessionRow, WorkspaceRow } from './types';
+import type {
+  Approval,
+  Board,
+  BoardSummary,
+  Card,
+  ColumnId,
+  SessionActivityEntry,
+  SessionRow,
+  WorkspaceRow,
+} from './types';
 import { KanbanApiError, api } from './api';
+import type { SessionArchiveBatchResult } from './api';
 import { BridgeUnavailableError, bridge, nextThemePreference, useBridgeState } from './bridge';
 import { buildNativeInbox } from './lib/nativeInbox';
 import type { NativeInboxEntry, NativeQuestionAnswer } from './lib/nativeInbox';
+import {
+  derivePendingSessionIds,
+  deriveRunningSessionIds,
+  formatTitleList,
+  isTerminalCardStatus,
+  parseBlockingCards,
+  parseSessionActivity,
+  sessionArchiveReadiness,
+} from './lib/sessionArchive';
 import { NativeAnswerModal } from './components/NativeAnswerModal';
 import type { NativeInboxProps } from './components/NativeInbox';
 import { batchCards } from './api';
@@ -56,6 +75,8 @@ import { Toolbar } from './components/Toolbar';
 import type { SyncState, ViewMode } from './components/Toolbar';
 import type { ApprovalDecision, ApprovalSubmission } from './components/ApprovalPanel';
 import type { CardActionHandlers, Placement } from './components/types';
+import { SessionArchiveBatchDialog } from './components/SessionArchiveBatchDialog';
+import { StopAndArchiveDialog } from './components/StopAndArchiveDialog';
 
 const VIEW_STORAGE_KEY = 'dsh-kanban.view';
 const EMPTY_GROUPS: ColumnGroups = { backlog: [], running: [], needs_you: [], done: [] };
@@ -90,6 +111,18 @@ interface ApprovalDraftState {
   fromColumn: ColumnId;
   busy: boolean;
   error: string | null;
+}
+
+/** 归档会话确认框的目标（卡片 + 绑定会话）。 */
+interface SessionArchiveTarget {
+  card: Card;
+  sessionId: string;
+  sessionTitle: string;
+}
+
+/** SESSION_ACTIVE 后的「停止并归档」确认目标（带宿主活动清单）。 */
+interface StopAndArchiveTarget extends SessionArchiveTarget {
+  activity: SessionActivityEntry[];
 }
 
 function readStoredView(): ViewMode {
@@ -315,6 +348,20 @@ export function App() {
 
   const sessions = bridgeState.sessions.length ? bridgeState.sessions : fallbackSessions;
 
+  // ---------------------------------------------------------- 会话归档/恢复
+  // 归档集合以宿主为准：先 GET /sessions/archive 回填，之后以 kanban:sessions 推送为准。
+  const [archivedSessionIds, setArchivedSessionIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [archiveAvailable, setArchiveAvailable] = useState(false);
+  const [archiveSessionTarget, setArchiveSessionTarget] = useState<SessionArchiveTarget | null>(null);
+  const [archiveSessionBusy, setArchiveSessionBusy] = useState(false);
+  const [stopArchiveTarget, setStopArchiveTarget] = useState<StopAndArchiveTarget | null>(null);
+  const [batchArchiveOpen, setBatchArchiveOpen] = useState(false);
+  const runningSessionIds = useMemo(() => deriveRunningSessionIds(sessions), [sessions]);
+  const pendingSessionIds = useMemo(
+    () => derivePendingSessionIds(bridgeState.nativePending.items),
+    [bridgeState.nativePending.items],
+  );
+
   // ------------------------------------------------------------------ 视图状态
   const [view, setViewState] = useState<ViewMode>(readStoredView);
   const [filters, setFilters] = useState<CardFilters>(EMPTY_FILTERS);
@@ -438,6 +485,229 @@ export function App() {
     [notify],
   );
 
+  // ---------------------------------------------------------- 会话归档/恢复
+  // 挂载时回填能力与归档集合（仅嵌入模式；旧服务端/宿主无能力时保持关闭 → 隐藏入口）
+  useEffect(() => {
+    if (!embedded) {
+      setArchiveAvailable(false);
+      setArchivedSessionIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    const startedAt = Date.now();
+    api
+      .getSessionArchiveState()
+      .then((state) => {
+        if (cancelled) return;
+        setArchiveAvailable(state.available);
+        // 推送比 HTTP 回填更新时以推送为准（避免慢响应覆盖新状态）
+        if (bridge.getState().archivedSessionIdsAt <= startedAt) {
+          setArchivedSessionIds(new Set(state.archivedSessionIds));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setArchiveAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [embedded]);
+
+  // 桥推送更新归档集合（含 kanban:ready 后的首帧推送）
+  useEffect(() => {
+    if (!embedded || bridgeState.archivedSessionIdsAt === 0) return;
+    setArchivedSessionIds(new Set(bridgeState.archivedSessionIds));
+  }, [embedded, bridgeState.archivedSessionIds, bridgeState.archivedSessionIdsAt]);
+
+  const installArchivedSessionIds = useCallback((ids: readonly string[]) => {
+    setArchivedSessionIds(new Set(ids));
+  }, []);
+
+  const sessionTitleOf = useCallback(
+    (sessionId: string) => sessions.find((session) => session.id === sessionId)?.title ?? sessionId,
+    [sessions],
+  );
+
+  const archiveErrorText = useCallback(
+    (error: unknown, fallbackKey: 'sessionArchive.archiveFailed' | 'sessionArchive.restoreFailed'): string => {
+      const code = error instanceof KanbanApiError ? error.code : '';
+      switch (code) {
+        case 'SESSION_NOT_FOUND':
+          return t('sessionArchive.notFound');
+        case 'SESSION_NOT_BOUND':
+          return t('sessionArchive.notBound');
+        case 'CARD_NOT_DONE':
+          return t('sessionArchive.cardNotDone');
+        case 'SESSION_ARCHIVE_UNAVAILABLE':
+          return t('sessionArchive.unavailable');
+        default:
+          return t(fallbackKey, { message: error instanceof Error ? error.message : String(error) });
+      }
+    },
+    [t],
+  );
+
+  /** 归档会话：默认不带 stopActivity；SESSION_ACTIVE 时转「停止并归档」二次确认。 */
+  const performArchiveSession = useCallback(
+    async (target: SessionArchiveTarget, stopActivity: boolean) => {
+      setArchiveSessionBusy(true);
+      try {
+        const result = await api.archiveCardSession(
+          target.card.id,
+          target.sessionId,
+          stopActivity ? { stopActivity: true } : {},
+        );
+        // 契约返回完整集合；缺省时兜底把本次归档的会话并入本地状态
+        installArchivedSessionIds(
+          result.archivedSessionIds.includes(target.sessionId)
+            ? result.archivedSessionIds
+            : [...result.archivedSessionIds, target.sessionId],
+        );
+        setArchiveSessionTarget(null);
+        setStopArchiveTarget(null);
+        notifyToast(t('sessionArchive.archivedToast'), 'success');
+        announce(t('sessionArchive.archivedToast'));
+        await refresh({ silent: true });
+      } catch (error) {
+        if (error instanceof KanbanApiError && error.code === 'SESSION_ACTIVE') {
+          // 运行中：M1 直接提示，M2 改为「停止并归档」二次确认（Q2 拍板）
+          const activity = parseSessionActivity(error.details.activity);
+          setArchiveSessionTarget(null);
+          setStopArchiveTarget({ ...target, activity });
+        } else if (error instanceof KanbanApiError && error.code === 'SESSION_BUSY_CARDS') {
+          const blockingCards = parseBlockingCards(error.details.blockingCards);
+          notifyToast(
+            blockingCards.length
+              ? t('sessionArchive.busyCards', {
+                  count: blockingCards.length,
+                  titles: formatTitleList(blockingCards.map((card) => card.title), lang),
+                })
+              : error.message,
+            'error',
+          );
+          setArchiveSessionTarget(null);
+          setStopArchiveTarget(null);
+          await refresh({ silent: true });
+        } else if (error instanceof KanbanApiError && error.code === 'SESSION_ARCHIVE_UNAVAILABLE') {
+          setArchiveAvailable(false);
+          setArchiveSessionTarget(null);
+          setStopArchiveTarget(null);
+          notifyToast(t('sessionArchive.unavailable'), 'error');
+        } else {
+          notifyToast(archiveErrorText(error, 'sessionArchive.archiveFailed'), 'error');
+          setArchiveSessionTarget(null);
+          setStopArchiveTarget(null);
+          await refresh({ silent: true });
+        }
+      } finally {
+        setArchiveSessionBusy(false);
+      }
+    },
+    [announce, archiveErrorText, installArchivedSessionIds, lang, notifyToast, refresh, t],
+  );
+
+  const handleArchiveSession = useCallback(
+    (card: Card, sessionId: string) => {
+      if (!embedded) return;
+      if (!archiveAvailable) {
+        notifyToast(t('sessionArchive.unavailable'), 'info');
+        return;
+      }
+      setStopArchiveTarget(null);
+      setArchiveSessionTarget({ card, sessionId, sessionTitle: sessionTitleOf(sessionId) });
+    },
+    [archiveAvailable, embedded, notifyToast, sessionTitleOf, t],
+  );
+
+  const handleUnarchiveSession = useCallback(
+    async (card: Card, sessionId: string) => {
+      try {
+        const result = await api.unarchiveCardSession(card.id, sessionId);
+        installArchivedSessionIds(result.archivedSessionIds.filter((id) => id !== sessionId));
+        notifyToast(t('sessionArchive.restoredToast'), 'success');
+        await refresh({ silent: true });
+      } catch (error) {
+        if (error instanceof KanbanApiError && error.code === 'SESSION_ARCHIVE_UNAVAILABLE') {
+          setArchiveAvailable(false);
+        }
+        notifyToast(archiveErrorText(error, 'sessionArchive.restoreFailed'), 'error');
+      }
+    },
+    [archiveErrorText, installArchivedSessionIds, notifyToast, refresh, t],
+  );
+
+  /** 卡片完成时轻提示：本地预检有可归档会话才提示，不自动执行（Q1 拍板 manual-nudge）。 */
+  const nudgeArchivableSessions = useCallback(
+    (card: Card, cards: readonly Card[]) => {
+      if (!embedded || !archiveAvailable || !isTerminalCardStatus(card.status)) return;
+      const archivable = card.sessionIds.some((sessionId) => {
+        if (archivedSessionIds.has(sessionId)) return false;
+        return sessionArchiveReadiness({
+          card,
+          sessionId,
+          cards,
+          archivedSessionIds,
+          runningSessionIds,
+          pendingSessionIds,
+          available: archiveAvailable,
+        }).archivable;
+      });
+      if (archivable) notifyToast(t('sessionArchive.nudge'), 'info');
+    },
+    [archiveAvailable, archivedSessionIds, embedded, notifyToast, pendingSessionIds, runningSessionIds, t],
+  );
+
+  /** 卡片从完成态重开（done → 其它列）后，尝试恢复其已归档的绑定会话。 */
+  const restoreArchivedSessionsFor = useCallback(
+    async (card: Card) => {
+      if (!embedded || !archiveAvailable) return;
+      const archived = card.sessionIds.filter((sessionId) => archivedSessionIds.has(sessionId));
+      let restored = 0;
+      for (const sessionId of archived) {
+        try {
+          const result = await api.unarchiveCardSession(card.id, sessionId);
+          installArchivedSessionIds(result.archivedSessionIds);
+          restored += 1;
+        } catch (error) {
+          notifyToast(archiveErrorText(error, 'sessionArchive.restoreFailed'), 'info');
+        }
+      }
+      if (restored > 0) notifyToast(t('sessionArchive.restoredToast'), 'success');
+    },
+    [archiveAvailable, archiveErrorText, archivedSessionIds, embedded, installArchivedSessionIds, notifyToast, t],
+  );
+
+  const handleStopAndArchiveConfirm = useCallback(() => {
+    if (!stopArchiveTarget) return;
+    void performArchiveSession(stopArchiveTarget, true);
+  }, [performArchiveSession, stopArchiveTarget]);
+
+  const handleBatchArchiveCompleted = useCallback(
+    (result: SessionArchiveBatchResult) => {
+      installArchivedSessionIds(result.archivedSessionIds);
+      setBatchArchiveOpen(false);
+      const count = result.archivable.length;
+      notifyToast(
+        result.skipped.length
+          ? t('sessionArchive.batchDoneSkipped', { count, skipped: result.skipped.length })
+          : t('sessionArchive.batchDone', { count }),
+        'success',
+      );
+      void refresh({ silent: true });
+    },
+    [installArchivedSessionIds, notifyToast, refresh, t],
+  );
+
+  const handleArchiveUnavailable = useCallback(() => {
+    setArchiveAvailable(false);
+    notifyToast(t('sessionArchive.unavailable'), 'info');
+  }, [notifyToast, t]);
+
+  const handleArchiveDoneSessions = useCallback(() => {
+    if (!embedded || !archiveAvailable) return;
+    setBatchArchiveOpen(true);
+  }, [archiveAvailable, embedded]);
+
   const sendToSession = useCallback(
     async (input: { text: string; sessionId?: string; cwd?: string }): Promise<{ ok: boolean; error?: string }> => {
       if (!embedded) {
@@ -453,7 +723,16 @@ export function App() {
         return { ok: true };
       } catch (error) {
         await copyText(input.text);
-        const message = error instanceof Error ? error.message : String(error);
+        // 桥层发消息前会自动恢复已归档会话；恢复失败时不静默，给出可操作提示
+        const code = error instanceof BridgeUnavailableError ? error.code : '';
+        const message =
+          code === 'SESSION_ARCHIVE_UNAVAILABLE' || code === 'SESSION_ARCHIVED'
+            ? t('sessionArchive.autoRestoreFailed', {
+                message: error instanceof Error ? error.message : String(error),
+              })
+            : error instanceof Error
+              ? error.message
+              : String(error);
         return { ok: false, error: message };
       }
     },
@@ -618,7 +897,16 @@ export function App() {
         const movedText = t('toast.moved', { column: t(`column.${column}` as I18nKey) });
         notifyToast(movedText, 'success');
         announce(movedText);
+        // 会话联动：完成时轻提示可归档；从完成态重开时尝试自动恢复已归档会话
+        const updatedCards = snapshotRef.current.cards.map((item) =>
+          item.id === result.card.id ? result.card : item,
+        );
         await refresh({ silent: true });
+        if (column === 'done' && !isTerminalCardStatus(card.status)) {
+          nudgeArchivableSessions(result.card, updatedCards);
+        } else if (isTerminalCardStatus(card.status) && column !== 'done') {
+          void restoreArchivedSessionsFor(result.card);
+        }
         const movedCard = result.card;
         if (column === 'needs_you' && !movedCard.approvals.some((approval) => approval.status === 'pending')) {
           setApprovalDraft({ card: movedCard, previous, fromColumn, busy: false, error: null });
@@ -633,7 +921,7 @@ export function App() {
         await refresh({ silent: true });
       }
     },
-    [announce, notifyToast, refresh, t],
+    [announce, nudgeArchivableSessions, notifyToast, refresh, restoreArchivedSessionsFor, t],
   );
 
   /** v1.1 待办卡「开始推进」：乐观移列 → 启动提示发送 / 独立预览仅移动；失败回滚。 */
@@ -745,7 +1033,7 @@ export function App() {
       const moveTarget = approvalMoveTarget(current, approval, submission, decision);
       if (moveTarget) setSnapshot(applyOptimisticMove(previous, card.id, moveTarget));
       try {
-        await api.resolveApproval(
+        const resolved = await api.resolveApproval(
           card.id,
           approval.id,
           submission.answers?.length
@@ -801,6 +1089,13 @@ export function App() {
             notifyToast(sessionResult.error ?? t('toast.sessionFailed'), 'error');
           }
         }
+        // 审批结果把卡片送进「已完成」时，同样给归档轻提示（Q1 manual-nudge）
+        if (moveTarget === 'done') {
+          const updatedCards = snapshotRef.current.cards.map((item) =>
+            item.id === resolved.card.id ? resolved.card : item,
+          );
+          nudgeArchivableSessions(resolved.card, updatedCards);
+        }
         await refresh({ silent: true });
       } catch (error) {
         if (moveTarget) setSnapshot(previous);
@@ -810,7 +1105,7 @@ export function App() {
         setResolvingApprovalId(null);
       }
     },
-    [announce, notifyToast, refresh, sendToSession, t],
+    [announce, nudgeArchivableSessions, notifyToast, refresh, sendToSession, t],
   );
 
   /** 把没发出去的决定补发：新建会话 → 绑定到卡片 → session.ensure。 */
@@ -873,13 +1168,15 @@ export function App() {
         await api.moveCard(card.id, 'running', { version: card.version });
         notifyToast(t('toast.reopened'), 'success');
         announce(t('toast.reopened'));
+        // 重开卡片自动恢复其已归档会话（桥层只管打开/发消息；重开由前端触发，docs/11 §4.3）
+        await restoreArchivedSessionsFor(card);
         await refresh({ silent: true });
       } catch (error) {
         notifyToast(error instanceof Error ? error.message : t('toast.moveFailed'), 'error');
         await refresh({ silent: true });
       }
     },
-    [announce, notifyToast, refresh, t],
+    [announce, notifyToast, refresh, restoreArchivedSessionsFor, t],
   );
 
   const handleBindSession = useCallback(
@@ -926,6 +1223,17 @@ export function App() {
       try {
         await bridge.request('session.open', { sessionId });
       } catch (error) {
+        // 桥层会先自动恢复已归档会话；失败时给出可操作的提示（不静默）
+        const code = error instanceof BridgeUnavailableError ? error.code : '';
+        if (code === 'SESSION_ARCHIVE_UNAVAILABLE' || code === 'SESSION_ARCHIVED') {
+          notifyToast(
+            t('sessionArchive.autoRestoreFailed', {
+              message: error instanceof Error ? error.message : String(error),
+            }),
+            'error',
+          );
+          return;
+        }
         notifyToast(error instanceof Error ? error.message : t('toast.sessionFailed'), 'error');
       }
     },
@@ -1384,6 +1692,8 @@ export function App() {
         onToggleSelection={handleToggleSelect}
         highlightedCardId={highlightCardId}
         nativeInbox={nativeInbox}
+        canArchiveSessions={embedded && archiveAvailable}
+        onArchiveDoneSessions={handleArchiveDoneSessions}
       />
     );
   })();
@@ -1507,6 +1817,11 @@ export function App() {
             onOpenSession={(sessionId) => void handleOpenSession(sessionId)}
             onSetPrimary={(card, sessionId) => void handleSetPrimary(card, sessionId)}
             onCreateSession={(card, options) => void handleCreateSession(card, options)}
+            archivedSessionIds={archivedSessionIds}
+            archiveAvailable={archiveAvailable && embedded}
+            pendingSessionIds={pendingSessionIds}
+            onArchiveSession={(card, sessionId) => handleArchiveSession(card, sessionId)}
+            onUnarchiveSession={(card, sessionId) => void handleUnarchiveSession(card, sessionId)}
           />
         ) : null}
 
@@ -1550,6 +1865,42 @@ export function App() {
             onClose={() => {
               if (!archiveBusy) setArchiveTarget(null);
             }}
+          />
+        ) : null}
+
+        {archiveSessionTarget ? (
+          <ConfirmDialog
+            title={t('sessionArchive.confirmTitle')}
+            message={t('sessionArchive.confirmBody', { title: archiveSessionTarget.sessionTitle })}
+            confirmLabel={t('sessionArchive.archive')}
+            busyLabel={t('sessionArchive.confirming')}
+            busy={archiveSessionBusy}
+            onConfirm={() => void performArchiveSession(archiveSessionTarget, false)}
+            onClose={() => {
+              if (!archiveSessionBusy) setArchiveSessionTarget(null);
+            }}
+          />
+        ) : null}
+
+        {stopArchiveTarget ? (
+          <StopAndArchiveDialog
+            sessionTitle={stopArchiveTarget.sessionTitle}
+            activity={stopArchiveTarget.activity}
+            busy={archiveSessionBusy}
+            onConfirm={handleStopAndArchiveConfirm}
+            onClose={() => {
+              if (!archiveSessionBusy) setStopArchiveTarget(null);
+            }}
+          />
+        ) : null}
+
+        {batchArchiveOpen ? (
+          <SessionArchiveBatchDialog
+            sessions={sessions}
+            cards={snapshot.cards}
+            onClose={() => setBatchArchiveOpen(false)}
+            onCompleted={handleBatchArchiveCompleted}
+            onUnavailable={handleArchiveUnavailable}
           />
         ) : null}
 

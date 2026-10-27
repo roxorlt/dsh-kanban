@@ -686,3 +686,31 @@
   font: var(--dsw-font-xxxs-11);
   overflow-wrap: anywhere;
 }
+
+/* ------------------------------------------------- 会话归档/恢复（v0.11） */
+.kb-session__row--stack {
+  flex-wrap: wrap;
+}
+
+.kb-session__reason {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-session__badge {
+  flex: none;
+}
+
+.kb-session__warn--archived {
+  align-items: flex-start;
+  padding: 6px 8px;
+}
+
+/* 归档/恢复按钮与原因说明同行时允许换行，避免 400px 抽屉里操作区溢出 */
+.kb-session__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 2px;
+}

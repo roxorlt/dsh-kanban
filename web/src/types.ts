@@ -22,8 +22,26 @@ export type ActivityType =
   | 'error'
   | 'ack'
   | 'archived'
-  | 'handoff';
+  | 'handoff'
+  | 'session_archived'
+  | 'session_unarchived';
 export type ArtifactKind = 'file' | 'link' | 'report' | 'commit' | 'image';
+
+/**
+ * 宿主会话活动（docs/11-session-archive-linkage.md §12.2，`workspace/session-activity`）。
+ * 归档运行中会话时，服务端把宿主返回的活动清单原样带回给 UI 做「停止并归档」确认。
+ */
+export type SessionActivityKind = 'turn' | 'job' | 'subagent' | 'schedule';
+
+export interface SessionActivityItem {
+  id: string;
+  label?: string;
+}
+
+export interface SessionActivityEntry {
+  kind: SessionActivityKind;
+  items?: SessionActivityItem[];
+}
 
 export interface Actor {
   kind: ActorKind;

@@ -12,7 +12,7 @@ import { KanbanCard } from './KanbanCard';
 import { NativeInbox } from './NativeInbox';
 import type { NativeInboxProps } from './NativeInbox';
 import type { CardActionHandlers, CardViewShared, Placement } from './types';
-import { IconCheckCircle, IconChevronRight, IconCircle, IconHand, IconPlus, IconSparkle } from './Icons';
+import { IconArchive, IconCheckCircle, IconChevronRight, IconCircle, IconHand, IconPlus, IconSparkle } from './Icons';
 
 interface BoardViewProps {
   board: Board;
@@ -36,6 +36,9 @@ interface BoardViewProps {
   onClearFilters: () => void;
   /** 原生待确认收件（工具授权 / Agent 提问 / 计划审批），只出现在「待你确认」列 */
   nativeInbox: NativeInboxProps;
+  /** 已完成列头「批量归档会话」入口是否可见（embedded 且宿主可用时才显示） */
+  canArchiveSessions: boolean;
+  onArchiveDoneSessions: () => void;
 }
 
 const COLUMN_TONE: Record<ColumnId, string> = {
@@ -80,6 +83,8 @@ export function BoardView({
   filtering,
   onClearFilters,
   nativeInbox,
+  canArchiveSessions,
+  onArchiveDoneSessions,
 }: BoardViewProps) {
   const { t } = useI18n();
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -176,6 +181,19 @@ export function BoardView({
             {counts[column]}
           </span>
           <span className="kb-column-head__actions">
+            {column === 'done' && canArchiveSessions ? (
+              <button
+                type="button"
+                className="kb-icon-btn"
+                aria-label={t('sessionArchive.batchAction')}
+                title={t('sessionArchive.batchAction')}
+                onClick={onArchiveDoneSessions}
+              >
+                <span className="kb-icon" aria-hidden="true">
+                  <IconArchive />
+                </span>
+              </button>
+            ) : null}
             {!mobile ? (
               <button
                 type="button"

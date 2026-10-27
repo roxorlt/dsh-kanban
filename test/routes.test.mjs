@@ -840,3 +840,177 @@ test('审批解决后卡片状态与列立即变更（HTTP）：默认回进行�
   assert.equal(bad.status, 400)
   assert.equal(bad.json.error.code, 'BAD_REQUEST')
 })
+
+test('GET /decisions：审批请求/提交落事件流、派生 state、筛选与分页', async t => {
+  const { server, dir } = await setup(t)
+
+  // 初始没有审批活动 → 空日志（回填只在插件 apply 启动时执行，这里未启用）
+  const empty = await api(server, '/api/kanban/decisions')
+  assert.equal(empty.status, 200)
+  assert.equal(empty.json.ok, true)
+  assert.deepEqual(empty.json.decisions, [])
+  assert.equal(empty.json.total, 0)
+  assert.equal(empty.json.waiting, 0)
+
+  const card = await createCard(server, { title: '决策日志接口卡', status: 'running' })
+  const ask = await api(server, `/api/kanban/cards/${card.id}/approvals`, {
+    method: 'POST', body: { title: '接口层继续吗？', detail: '上下文', options: [{ id: 'yes', label: '继续', outcome: 'running' }] },
+  })
+  assert.equal(ask.status, 200)
+
+  const waiting = await api(server, `/api/kanban/decisions?state=waiting&cardId=${card.id}`)
+  assert.equal(waiting.status, 200)
+  assert.equal(waiting.json.waiting, 1)
+  assert.equal(waiting.json.decisions.length, 1)
+  assert.equal(waiting.json.decisions[0].type, 'approval_requested')
+  assert.equal(waiting.json.decisions[0].state, 'waiting')
+  assert.equal(waiting.json.decisions[0].approval.title, '接口层继续吗？')
+  assert.equal(waiting.json.decisions[0].card.title, '决策日志接口卡')
+  // card 快照是请求前状态
+  assert.equal(waiting.json.decisions[0].card.status, 'running')
+  assert.equal(waiting.json.revision, (await api(server, '/api/kanban/health')).json.revision)
+
+  const resolved = await api(server, `/api/kanban/cards/${card.id}/approvals/${ask.json.approval.id}/resolve`, {
+    method: 'POST', body: { optionIds: ['yes'] },
+  })
+  assert.equal(resolved.status, 200)
+
+  const all = await api(server, `/api/kanban/decisions?cardId=${card.id}`)
+  assert.equal(all.json.decisions.length, 2)
+  assert.equal(all.json.decisions[0].type, 'approval_resolved')
+  assert.equal(all.json.decisions[0].decision, 'approved')
+  assert.equal(all.json.decisions[0].outcomeColumn, 'running')
+  assert.equal(all.json.decisions[0].actor.kind, 'user')
+  assert.equal(all.json.decisions[1].state, 'resolved')
+  assert.equal(all.json.decisions[1].closedAt, all.json.decisions[0].at)
+  assert.ok(all.json.decisions[0].waitedMs >= 0)
+  assert.equal(all.json.waiting, 0)
+
+  // 类型过滤 + 分页（limit=1 时 hasMore 与 nextBefore）
+  const requestedOnly = await api(server, `/api/kanban/decisions?type=approval_requested&cardId=${card.id}`)
+  assert.equal(requestedOnly.json.decisions.length, 1)
+  assert.equal(requestedOnly.json.decisions[0].type, 'approval_requested')
+  const page1 = await api(server, `/api/kanban/decisions?cardId=${card.id}&limit=1`)
+  assert.equal(page1.json.decisions.length, 1)
+  assert.equal(page1.json.hasMore, true)
+  assert.ok(page1.json.nextBefore)
+  const page2 = await api(server, `/api/kanban/decisions?cardId=${card.id}&limit=1&before=${page1.json.nextBefore}`)
+  assert.equal(page2.json.decisions.length, 1)
+  assert.equal(page2.json.hasMore, false)
+  assert.notEqual(page1.json.decisions[0].id, page2.json.decisions[0].id)
+
+  // 时间过滤：把未来当 since → 空；source=live 命中
+  const future = await api(server, `/api/kanban/decisions?since=${Date.now() + 60_000}`)
+  assert.equal(future.json.decisions.length, 0)
+  const live = await api(server, '/api/kanban/decisions?source=live')
+  assert.ok(live.json.decisions.length >= 2)
+
+  // 非法参数 → 400 BAD_REQUEST
+  for (const query of ['type=nope', 'state=pending', 'source=seed', 'since=abc', 'limit=0', 'cardId=bad', 'before=dec-ffffffffffff']) {
+    const bad = await api(server, `/api/kanban/decisions?${query}`)
+    assert.equal(bad.status, 400, query)
+    assert.equal(bad.json.error.code, 'BAD_REQUEST', query)
+  }
+
+  // 未知子路径 404、非 GET 405
+  assert.equal((await api(server, '/api/kanban/decisions/nope')).status, 404)
+  assert.equal((await api(server, '/api/kanban/decisions', { method: 'POST', body: {} })).status, 405)
+
+  // meta 与导出
+  const meta = await api(server, '/api/kanban/decisions/meta')
+  assert.equal(meta.status, 200)
+  assert.equal(meta.json.ok, true)
+  assert.equal(meta.json.file, join(dir, 'decisions.jsonl'))
+  assert.equal(meta.json.entries, 2)
+  assert.equal(meta.json.waiting, 0)
+  assert.equal(meta.json.skippedLines, 0)
+  assert.equal(meta.json.byType.approval_requested, 1)
+  assert.equal(meta.json.byType.approval_resolved, 1)
+  assert.equal(meta.json.initializedAt, undefined)
+
+  const exportRes = await api(server, '/api/kanban/decisions/export')
+  assert.equal(exportRes.status, 200)
+  assert.equal(exportRes.headers.get('content-type'), 'application/x-ndjson; charset=utf-8')
+  assert.match(exportRes.headers.get('content-disposition'), /attachment; filename="decisions-\d{8}\.jsonl"/)
+  const exported = exportRes.text.trim().split('\n').map(line => JSON.parse(line))
+  assert.equal(exported.length, 2)
+  assert.equal(exported[0].type, 'approval_requested')
+  assert.equal(exported[1].type, 'approval_resolved')
+  const head = await api(server, '/api/kanban/decisions/export', { method: 'HEAD' })
+  assert.equal(head.status, 200)
+  assert.equal(head.text, '')
+  assert.equal((await api(server, '/api/kanban/decisions/export', { method: 'POST', body: {} })).status, 405)
+})
+
+test('POST /seed：重置前把等待中的审批收口为 data_reset 未决事件，日志保留', async t => {
+  const { server } = await setup(t)
+  const card = await createCard(server, { title: '重置前待确认', status: 'running' })
+  const ask = await api(server, `/api/kanban/cards/${card.id}/approvals`, {
+    method: 'POST', body: { title: '重置前的问题', options: ['好'] },
+  })
+  assert.equal(ask.status, 200)
+  const seeded = await api(server, '/api/kanban/seed', { method: 'POST', body: { mode: 'empty' } })
+  assert.equal(seeded.status, 200)
+  const state = await api(server, '/api/kanban/state')
+  assert.equal(state.json.cards.length, 0)
+
+  const list = await api(server, '/api/kanban/decisions')
+  const types = list.json.decisions.map(entry => entry.type)
+  assert.ok(types.includes('data_reset'))
+  const reset = list.json.decisions.find(entry => entry.type === 'data_reset')
+  assert.equal(reset.mode, 'empty')
+  assert.ok(reset.before.pending >= 1) // demo 种子自带 3 条待决 + 本用例 1 条
+  assert.ok(reset.before.cards >= 1)
+  const unresolved = list.json.decisions.find(entry => entry.type === 'approval_unresolved' && entry.reason === 'data_reset')
+  assert.ok(unresolved)
+  assert.equal(unresolved.approvalId, ask.json.approval.id)
+  // 重置后等待中数为 0（请求已被未决事件关闭）
+  assert.equal(list.json.waiting, 0)
+
+  const meta = await api(server, '/api/kanban/decisions/meta')
+  assert.ok(meta.json.entries >= 3)
+  assert.equal(meta.json.exists, true)
+})
+
+test('POST /seed demo：演示审批补写请求事件、可正常提交；HEAD /decisions 与 /meta 可用', async t => {
+  const { server } = await setup(t)
+  const seeded = await api(server, '/api/kanban/seed', { method: 'POST', body: { mode: 'demo' } })
+  assert.equal(seeded.status, 200)
+
+  // 新 seed 的 3 条 pending 审批都有 requested 事件（data_reset 之后补写）
+  const requests = await api(server, '/api/kanban/decisions?type=approval_requested&source=live')
+  assert.equal(requests.json.decisions.length, 3)
+  assert.equal(requests.json.waiting, 3)
+  const reset = await api(server, '/api/kanban/decisions?type=data_reset')
+  assert.equal(reset.json.decisions.length, 1)
+  assert.equal(reset.json.decisions[0].mode, 'demo')
+
+  const state = await api(server, '/api/kanban/state')
+  const target = state.json.cards.find(card => (card.approvals || []).some(approval => approval.status === 'pending'))
+  const approval = target.approvals.find(item => item.status === 'pending')
+  const resolved = await api(server, `/api/kanban/cards/${target.id}/approvals/${approval.id}/resolve`, {
+    method: 'POST', body: { optionIds: [approval.options[0].id] },
+  })
+  assert.equal(resolved.status, 200)
+  const all = await api(server, `/api/kanban/decisions?cardId=${target.id}`)
+  const resolvedEvent = all.json.decisions.find(entry => entry.type === 'approval_resolved')
+  const requestEvent = all.json.decisions.find(entry => entry.type === 'approval_requested')
+  assert.ok(resolvedEvent && requestEvent)
+  assert.equal(resolvedEvent.requestId, requestEvent.id)
+  assert.equal(requestEvent.state, 'resolved')
+
+  // seed 后的种子卡数组已规范化：原本没有审批的卡片也能直接请求审批（此前会 TypeError 500）
+  const doneCard = state.json.cards.find(card => card.status === 'done' && !(card.approvals || []).some(item => item.status === 'pending'))
+  assert.ok(doneCard)
+  assert.ok(Array.isArray(doneCard.approvals))
+  const created = await api(server, `/api/kanban/cards/${doneCard.id}/approvals`, { method: 'POST', body: { title: 'seed 后种子卡审批', options: ['好'] } })
+  assert.equal(created.status, 200)
+
+  // HEAD：只读接口同样可用且无 body
+  const headList = await api(server, '/api/kanban/decisions', { method: 'HEAD' })
+  assert.equal(headList.status, 200)
+  assert.equal(headList.text, '')
+  const headMeta = await api(server, '/api/kanban/decisions/meta', { method: 'HEAD' })
+  assert.equal(headMeta.status, 200)
+  assert.equal(headMeta.text, '')
+})

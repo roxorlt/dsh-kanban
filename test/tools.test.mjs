@@ -1,7 +1,8 @@
-// tools.js：10 个 agent 工具的 schema 形态、只读查询、写入流程、错误 JSON、取消信号。
+// tools.js：11 个 agent 工具的 schema 形态、只读查询、写入流程、错误 JSON、取消信号。
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createTools, TOOL_NAMES } from '../lib/tools.js'
+import { resolveApproval } from '../lib/domain.js'
 import { testStore } from './helpers.mjs'
 
 const EXEC = { agent: { id: 'agent-test-1' } }
@@ -14,14 +15,14 @@ async function setup(t) {
   return { store, tools, byName }
 }
 
-test('10 个工具名字固定且 schema 形态完整', async t => {
+test('11 个工具名字固定且 schema 形态完整', async t => {
   const { tools } = await setup(t)
   assert.deepEqual(tools.map(tool => tool.name), TOOL_NAMES)
   const approvalTool = tools.find(tool => tool.name === 'kanban_request_approval')
   assert.ok(approvalTool.parameters.properties.questions)
   assert.equal(approvalTool.parameters.properties.questions.maxItems, 6)
   assert.ok(approvalTool.parameters.properties.questions.items.properties.options)
-  assert.equal(new Set(TOOL_NAMES).size, 10)
+  assert.equal(new Set(TOOL_NAMES).size, 11)
   for (const tool of tools) {
     assert.equal(tool.parameters.type, 'object', tool.name)
     assert.equal(typeof tool.parameters.properties, 'object')
@@ -334,4 +335,59 @@ test('kanban_request_approval：选项 outcome 声明提交后卡片进入的列
   // schema 里暴露枚举，agent 能按契约声明去向
   const schema = byName.get('kanban_request_approval').parameters.properties.options.items.oneOf[1].properties.outcome
   assert.deepEqual(schema.enum, ['running', 'backlog', 'done'])
+})
+
+test('kanban_decisions：只读查询决策日志、state 过滤与等待计数', async t => {
+  const { store, byName } = await setup(t)
+  const tool = byName.get('kanban_decisions')
+  assert.ok(tool, '应注册 kanban_decisions')
+  assert.ok(tool.parameters.properties.state)
+  assert.equal(tool.parameters.properties.limit.maximum, 100)
+
+  const created = parse(await byName.get('kanban_create_card').execute({ title: '决策日志工具卡', status: 'running' }, EXEC))
+  const cardId = created.card.id
+  const requested = parse(await byName.get('kanban_request_approval').execute({
+    cardId, title: '要继续吗？', detail: '上下文', options: [{ id: 'yes', label: '继续', outcome: 'running' }],
+  }, EXEC))
+  assert.equal(requested.ok, true)
+
+  // 等用户提交前：state=waiting 能看到这条请求
+  const waiting = parse(await tool.execute({ cardId, state: 'waiting' }, EXEC))
+  assert.equal(waiting.ok, true)
+  assert.equal(waiting.total, 1)
+  assert.equal(waiting.waiting, 1)
+  assert.equal(waiting.decisions.length, 1)
+  assert.equal(waiting.decisions[0].type, 'approval_requested')
+  assert.equal(waiting.decisions[0].state, 'waiting')
+  assert.equal(waiting.decisions[0].approval.title, '要继续吗？')
+  assert.equal(waiting.file, store.decisionLog.file)
+
+  // 用户提交（工具没有 resolve，直接走 domain + store.update 模拟用户在板上点选）
+  await store.update(draft => resolveApproval(draft, cardId, requested.approval.id, {
+    optionIds: ['yes'], actor: { kind: 'user', name: '你' },
+  }))
+  const resolved = parse(await tool.execute({ cardId, state: 'resolved' }, EXEC))
+  assert.equal(resolved.waiting, 0)
+  assert.equal(resolved.decisions.length, 1)
+  assert.equal(resolved.decisions[0].decision, 'approved')
+  const resolvedEvent = parse(await tool.execute({ cardId, type: 'approval_resolved' }, EXEC))
+  assert.equal(resolvedEvent.decisions.length, 1)
+  assert.equal(resolvedEvent.decisions[0].outcomeColumn, 'running')
+  assert.equal(resolvedEvent.decisions[0].requestId, resolved.decisions[0].id)
+
+  // 事件类型过滤 + since 过滤（把未来时间当 since → 空）
+  const requestedOnly = parse(await tool.execute({ cardId, type: 'approval_requested' }, EXEC))
+  assert.equal(requestedOnly.filtered, 1)
+  assert.equal(requestedOnly.total, 2) // total 是日志总条数，filtered 才是筛选命中数
+  const future = parse(await tool.execute({ cardId, since: Date.now() + 60_000 }, EXEC))
+  assert.equal(future.decisions.length, 0)
+  assert.equal(future.filtered, 0)
+
+  // 非法 type/state → 错误 JSON
+  const badType = parse(await tool.execute({ cardId, type: 'not_a_type' }, EXEC))
+  assert.equal(badType.ok, false)
+  assert.equal(badType.error.code, 'BAD_REQUEST')
+  const badState = parse(await tool.execute({ cardId, state: 'pending' }, EXEC))
+  assert.equal(badState.ok, false)
+  assert.equal(badState.error.code, 'BAD_REQUEST')
 })

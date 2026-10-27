@@ -83,3 +83,10 @@ type ParentPush =
 - 只接受同源消息；父页面对 method 做白名单，禁止透传任意函数名。
 - iframe sandbox 不设置 allow-scripts 以外的权限（同源路由本身可信）。
 - 不把 token、路径、附件字节经桥传输；`cwd` 仅来自卡片自身字段或 DSH workspace。
+
+## 7. v0.11 增量：会话归档联动
+
+- `kanban:sessions` 推送新增可选字段 `archivedSessionIds: string[]`（来自父页面 `ctx.workspaces.list` 快照的 `archivedSessionIds`）；宿主/旧版本缺失时按空数组处理。
+- 父页面订阅 `ctx.workspaces.list` 的失效通知并按既有节流重推 `kanban:sessions`（归档/恢复/置顶/工作区变化都会触发）。
+- 会话使用前自动恢复：`session.open` / `session.prompt` / `session.ensure` 在执行前检查归档集合；命中则先 `ctx.uiWorkspace.unarchiveSession(sessionId)`（幂等）再继续。恢复失败（宿主无能力/调用失败）返回 `{code:'SESSION_ARCHIVE_UNAVAILABLE'}`，**不得**把消息继续发进归档会话（会被归档闸门静默拦下）。
+- iframe 侧以 `GET /api/kanban/sessions/archive` 做首屏能力/状态回填，之后以推送为准。

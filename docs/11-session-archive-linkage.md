@@ -390,3 +390,49 @@ ctx.inject(['workspaceRegistry'], (c) => c.effect(() => {
   - `dsh/node_modules/@deepseek-ai/dsh-agent/lib/index.js`、`dsh-jobs`、`dsh-subagent`、`dsh-schedule`（`workspace/session-activity` / `session-stop` 四个 provider）
   - `dsh/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js:956-963`（pre-step reject → turn `blocked`）
 - 本机数据：`~/.dsh/sessions`（91 目录 / 173 MB，2026-10-23 统计）。
+
+---
+
+## 12. 拍板结果（2026-10-23，ap-b6a7fbe4）
+
+| # | 决定 | 落地含义 |
+| --- | --- | --- |
+| Q1 | **手动 + 卡片完成时轻提示**（manual-nudge） | 主入口仍是详情「归档会话」；卡片进入 done/canceled 时若会话可归档，发一条轻提示 toast（不自动执行） |
+| Q2 | **拒绝 + 后续加「停止并归档」确认**（refuse-confirm） | 默认拒绝运行中/有待确认会话；`SESSION_ACTIVE` 时弹二次确认，确认后以 `stopActivity:true` 重试（对齐原生文案） |
+| Q3 | **自动恢复**（auto-restore） | 打开/发消息/开始推进/重开卡片前，桥层幂等 unarchive |
+| Q4 | **全量**（all） | 实现 M1 + M2 + M3 的自动归档策略；**不做会话复用**（Q5） |
+| Q5 | **本轮不做会话复用**（no-reuse） | `M3 会话复用`取消；保留为后续卡 |
+| Q6 | **自定义：历史数据处理一下** | 增加「已完成卡片批量归档会话」：dry-run 预览 + 逐会话跳过原因 + 执行；用于一次性处理存量已完成卡片的会话 |
+
+### 12.1 派生实现细节（本轮按此执行，不再逐项确认）
+
+- **自动归档策略**：已完成/取消卡片进入终态 **7 天**后，若满足全部 R1–R7，自动归档其绑定会话；插件配置 `autoArchiveSessionsDays`（默认 7，0 关闭；每小时跑一次，与卡片 30 天自动归档并列）。宿主活动检查失败（会话在跑/有待确认）只跳过并记日志。
+- **批量/历史**：`POST /sessions/archive-batch` 支持 `dryRun`；`scope:'done'` 扫描全部 done/canceled 卡片，逐会话判定；返回 `{archivable, skipped}`；执行成功后给代表卡写时间线。
+- **版本门槛**：宿主 `workspaceRegistry.unarchiveSession` 不可用时整体隐藏入口（`available:false`），不提供不可逆归档。
+
+### 12.2 接口契约（实现基准）
+
+服务端（`lib/routes.js` + `lib/session-archive.js`）：
+
+| 接口 | 请求 | 成功 | 失败码 |
+| --- | --- | --- | --- |
+| `GET /api/kanban/sessions/archive` | – | `{ok:true, available:boolean, archivedSessionIds:string[]}` | – |
+| `POST /api/kanban/cards/:cardId/sessions/:sessionId/archive` | `{stopActivity?:boolean}` | `{ok:true, card, revision, archivedSessionIds, warning?}` | `CARD_NOT_DONE` / `SESSION_NOT_BOUND` / `SESSION_BUSY_CARDS{blockingCards}` / `SESSION_ACTIVE{activity}` / `SESSION_NOT_FOUND` / `SESSION_ARCHIVE_UNAVAILABLE` / `SESSION_ARCHIVE_FAILED` |
+| `POST /api/kanban/cards/:cardId/sessions/:sessionId/unarchive` | `{}` | `{ok:true, card, revision, archivedSessionIds}` | `SESSION_NOT_BOUND` / `SESSION_ARCHIVE_UNAVAILABLE` |
+| `POST /api/kanban/sessions/archive-batch` | `{scope:'done', cardIds?:string[], dryRun?:boolean, stopActivity?:boolean}` | `{ok:true, dryRun, archivable:[{sessionId, cardId}], skipped:[{sessionId, reason, blockingCards?, activity?, cardIds}], archivedSessionIds, revision?}` | `SESSION_ARCHIVE_UNAVAILABLE` |
+
+桥（`lib/client.js` → `web/src/bridge.ts`）：
+
+- `kanban:sessions` 推送新增 `archivedSessionIds:string[]`（来自 `ctx.workspaces.list` 快照；订阅其失效通知后再推）；
+- `session.open` / `session.prompt` / `session.ensure` 执行前调用 `ensureSessionActive(sessionId)`：在归档集合中则 `uiWorkspace.unarchiveSession` 后继续，失败返回 `SESSION_ARCHIVE_UNAVAILABLE`（不静默 prompt）。
+- Web 端 `GET /sessions/archive` 做初次能力/状态回填，之后以推送为准。
+
+活动类型（增量）：`session_archived`、`session_unarchived`（`ACTIVITY_TYPES` + web `ActivityType` + i18n `activity.*`）。
+
+## 13. 实现与验证（v0.11.0，2026-10-23）
+
+- 服务端：`lib/session-archive.js`（适配器）+ `lib/routes.js` 四个接口 + `lib/domain.js`（`sessionArchivePlan` / `batchSessionArchivePlan` / 活动）+ `lib/index.js`（`workspaceRegistry` 可选注入、`autoArchiveSessionsDays` 定时归档）。
+- 客户端桥：`lib/client.js` 推送 `archivedSessionIds`、订阅 workspace 失效通知、`session.open/prompt/ensure` 前自动恢复。
+- Web：详情会话区归档/恢复/禁用原因、完成轻提示、停止并归档确认、已完成列批量/历史处理、归档徽标与重开自动恢复（见 `web/src/lib/sessionArchive.ts`）。
+- 测试：服务端 137/137（含新增 10 例）；Web 23 文件/215 例、tsc 0、build、令牌 lint 0/0；临时 harness 真实 Chromium E2E 10 项全过（`docs/06-verification.md` §1.22）。
+- 真实宿主仍需重启 DSH 加载服务端 v0.11.0 后复验（清单见 §1.22）。

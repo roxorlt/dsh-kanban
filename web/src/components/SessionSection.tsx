@@ -2,8 +2,15 @@ import { useId, useMemo, useState } from 'react';
 import type { Card, SessionRow, WorkspaceRow } from '../types';
 import { useI18n } from '../i18n';
 import { suggestCwds } from '../lib/suggestions';
+import {
+  deriveRunningSessionIds,
+  formatTitleList,
+  isTerminalCardStatus,
+  sessionArchiveReadiness,
+  summarizeSessionArchiveBlocker,
+} from '../lib/sessionArchive';
 import { SuggestionChips } from './SuggestionChips';
-import { IconAlert, IconOpen, IconPlus, IconSession } from './Icons';
+import { IconAlert, IconArchive, IconOpen, IconPlus, IconSession } from './Icons';
 
 export interface CreateSessionOptions {
   workspaceId?: string;
@@ -27,6 +34,14 @@ interface SessionSectionProps {
   onUnbind: (sessionId: string) => void;
   onSetPrimary: (sessionId: string) => void;
   onCreateSession: (card: Card, options: CreateSessionOptions) => void;
+  /** 宿主当前已归档的会话 id（桥推送 / GET /sessions/archive） */
+  archivedSessionIds: ReadonlySet<string>;
+  /** 宿主是否提供可逆归档（R7）：false 时隐藏所有归档/恢复入口 */
+  archiveAvailable: boolean;
+  /** 有待确认项（原生 approval/question/plan）的会话 id（R6 预检） */
+  pendingSessionIds: ReadonlySet<string>;
+  onArchiveSession: (card: Card, sessionId: string) => void;
+  onUnarchiveSession: (card: Card, sessionId: string) => void;
 }
 
 /**
@@ -48,8 +63,13 @@ export function SessionSection({
   onUnbind,
   onSetPrimary,
   onCreateSession,
+  archivedSessionIds,
+  archiveAvailable,
+  pendingSessionIds,
+  onArchiveSession,
+  onUnarchiveSession,
 }: SessionSectionProps) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const selectId = useId();
   const targetGroup = useId();
   const workspaceSelectId = useId();
@@ -58,6 +78,24 @@ export function SessionSection({
   const bound = card.sessionIds.map((id) => ({ id, session: byId.get(id) }));
   const available = sessions.filter((session) => !card.sessionIds.includes(session.id));
   const runningWithoutSession = card.status === 'running' && bound.length === 0;
+  const runningSessionIds = useMemo(() => deriveRunningSessionIds(sessions), [sessions]);
+  const archivedBound = bound.filter(({ id }) => archivedSessionIds.has(id));
+  // 非完成卡片上出现已归档会话：提醒「继续前需恢复」（docs/11 §6.1）
+  const showArchivedWarning = embedded && archiveAvailable && archivedBound.length > 0 && !isTerminalCardStatus(card.status);
+
+  const blockReasonText = (readiness: ReturnType<typeof sessionArchiveReadiness>): string | null => {
+    const summary = summarizeSessionArchiveBlocker(readiness.blockers);
+    if (!summary) return null;
+    if (summary.kind === 'card') {
+      return t('sessionArchive.busyCards', {
+        count: summary.count ?? 0,
+        titles: formatTitleList(summary.titles ?? [], lang),
+      });
+    }
+    if (summary.kind === 'running') return t('sessionArchive.reasonRunning');
+    if (summary.kind === 'pending') return t('sessionArchive.reasonPending');
+    return t('sessionArchive.reasonHost');
+  };
 
   const [createOpen, setCreateOpen] = useState(false);
   const [workspaceId, setWorkspaceId] = useState(card.workspaceId ?? '');
@@ -111,6 +149,15 @@ export function SessionSection({
         </p>
       ) : null}
 
+      {showArchivedWarning ? (
+        <p className="kb-session__warn kb-session__warn--archived" role="status">
+          <span className="kb-icon" aria-hidden="true">
+            <IconAlert />
+          </span>
+          {t('sessionArchive.archivedWarning')}
+        </p>
+      ) : null}
+
       {bound.length ? (
         <>
           <p className="kb-session__summary">
@@ -121,8 +168,27 @@ export function SessionSection({
             {bound.map(({ id, session }, index) => {
               const isPrimary = index === 0;
               const selectedTarget = (targetSessionId ?? card.sessionIds[0]) === id;
+              const archived = archivedSessionIds.has(id);
+              const pending = pendingSessionIds.has(id);
+              const running = session?.running ?? runningSessionIds.has(id);
+              const readiness = sessionArchiveReadiness({
+                card,
+                sessionId: id,
+                cards,
+                archivedSessionIds,
+                runningSessionIds,
+                pendingSessionIds,
+                available: archiveAvailable,
+              });
+              // 归档入口只在「完成/取消」卡片上渲染（docs/11 §6.1：未完成时不渲染，避免误解）
+              const showArchive = embedded && archiveAvailable && readiness.cardTerminal && !archived;
+              const showRestore = embedded && archiveAvailable && archived;
+              const blockReason = showArchive && !readiness.archivable ? blockReasonText(readiness) : null;
               return (
-                <li className={`kb-session__row${selectedTarget ? ' kb-session__row--target' : ''}`} key={id}>
+                <li
+                  className={`kb-session__row${selectedTarget ? ' kb-session__row--target' : ''}${blockReason ? ' kb-session__row--stack' : ''}`}
+                  key={id}
+                >
                   <span className="kb-icon kb-session__icon" aria-hidden="true">
                     <IconSession />
                   </span>
@@ -132,10 +198,18 @@ export function SessionSection({
                       <span className="kb-tag kb-session__primary">{t('drawer.primarySession')}</span>
                     ) : null}
                   </span>
-                  <span className={`kb-pill${session?.running ? ' kb-pill--business' : ''}`}>
-                    <span className={`kb-dot kb-dot--${session?.running ? 'business' : 'tertiary'}`} aria-hidden="true" />
-                    {session?.running ? t('drawer.running') : t('drawer.idle')}
-                  </span>
+                  {archived ? (
+                    <span className="kb-pill kb-session__badge">
+                      <span className="kb-dot kb-dot--tertiary" aria-hidden="true" />
+                      {t('sessionArchive.archived')}
+                    </span>
+                  ) : (
+                    <span className={`kb-pill${running ? ' kb-pill--business' : ''}`}>
+                      <span className={`kb-dot kb-dot--${running ? 'business' : 'tertiary'}`} aria-hidden="true" />
+                      {running ? t('drawer.running') : t('drawer.idle')}
+                    </span>
+                  )}
+                  {pending ? <span className="kb-pill kb-pill--warn">{t('sessionArchive.pendingBadge')}</span> : null}
                   {embedded ? (
                     <span className="kb-session__actions">
                       <button
@@ -159,6 +233,30 @@ export function SessionSection({
                           {t('drawer.setPrimary')}
                         </button>
                       ) : null}
+                      {showArchive ? (
+                        <button
+                          type="button"
+                          className="kb-btn kb-btn--sm kb-btn--ghost"
+                          disabled={busy || !readiness.archivable}
+                          title={blockReason ?? undefined}
+                          onClick={() => onArchiveSession(card, id)}
+                        >
+                          <span className="kb-icon" aria-hidden="true">
+                            <IconArchive />
+                          </span>
+                          {t('sessionArchive.archive')}
+                        </button>
+                      ) : null}
+                      {showRestore ? (
+                        <button
+                          type="button"
+                          className="kb-btn kb-btn--sm kb-btn--outline"
+                          disabled={busy}
+                          onClick={() => onUnarchiveSession(card, id)}
+                        >
+                          {t('sessionArchive.unarchive')}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="kb-btn kb-btn--sm kb-btn--ghost"
@@ -169,6 +267,7 @@ export function SessionSection({
                       </button>
                     </span>
                   ) : null}
+                  {blockReason ? <p className="kb-session__reason">{blockReason}</p> : null}
                 </li>
               );
             })}
@@ -222,7 +321,10 @@ export function SessionSection({
               </option>
               {available.map((session) => (
                 <option key={session.id} value={session.id}>
-                  {session.title} {session.running ? `· ${t('drawer.running')}` : ''}
+                  {session.title}
+                  {session.running ? ` · ${t('drawer.running')}` : ''}
+                  {archivedSessionIds.has(session.id) ? ` · ${t('sessionArchive.archived')}` : ''}
+                  {pendingSessionIds.has(session.id) ? ` · ${t('sessionArchive.pendingBadge')}` : ''}
                 </option>
               ))}
             </select>

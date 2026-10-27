@@ -211,18 +211,24 @@ sequenceDiagram
 | 文件 | 职责 |
 | --- | --- |
 | `lib/client.js` | 客户端插件：侧栏入口、`main` 全屏面板、iframe 桥（主题/会话/面板切换/原生待确认聚合） |
-| `lib/index.js` | 服务端插件入口：数据目录、路由注册、工具注册、SSE 广播 |
-| `lib/store.js` | `~/.dsh-kanban/data.json` 原子写、串行队列、乐观锁、revision |
-| `lib/domain.js` | 状态/列映射、默认看板、种子数据、节点/审批构造 |
-| `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`） |
-| `lib/tools.js` | 10 个 `kanban_*` agent 工具 |
+| `lib/index.js` | 服务端插件入口：数据目录、路由注册、工具注册、SSE 广播、决策日志首次回填 |
+| `lib/store.js` | `~/.dsh-kanban/data.json` 原子写、串行队列、乐观锁、revision；决策日志写入顺序的编排 |
+| `lib/decisions.js` | 决策日志：`decisions.jsonl` 的只追加读写、派生状态、分页/筛选、回填与导出（v0.10） |
+| `lib/domain.js` | 状态/列映射、默认看板、种子数据、节点/审批构造；审批请求/提交/未决事件收集 |
+| `lib/session-archive.js` | 宿主会话归档适配器：包装 DSH `workspaceRegistry` 的可逆归档、能力探测与错误码（v0.11） |
+| `lib/session-sync.js` | 会话运行失败同步：监听宿主 `session/event` 的 `turn/end`，失败/恢复回写卡片（v0.11） |
+| `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`）、决策日志与会话归档接口 |
+| `lib/tools.js` | 11 个 `kanban_*` agent 工具 |
 | `web/` | 看板 UI（React + Vite），构建产物 `web/dist` 由服务端直接服务 |
 | `web/src/lib/nativeInbox.ts` | 原生待确认的纯函数：风险分档、文案解析、计划审批派生、会话/卡片关联、排序 |
 | `web/src/components/NativeInbox.tsx` | 「待你确认」列顶部的收件区（来源徽标/风险/作答入口） |
 | `web/src/components/NativeAnswerModal.tsx` | 多题作答表单与计划审批弹窗 |
 | `skills/manage-kanban/` | 教 agent 使用看板的工作流技能 |
 | `scripts/dev-server.mjs` | 不依赖 DSH 的联调服务器 |
-| `docs/contracts/` | 冻结契约（数据模型 / HTTP / 桥 / 原生待确认收件） |
+| `scripts/verify-session-sync.mjs` | 宿主库级验证：用真实 0.2.1 `cordis` + `dsh-session` 驱动插件，验证会话失败/恢复同步（v0.11） |
+| `docs/contracts/` | 冻结契约（数据模型 / HTTP / 桥 / 原生待确认收件 / 决策日志） |
+
+决策日志的写入顺序（v0.10）：`store.update()` 在同一个事务里**先追加 `decisions.jsonl`（`fsync`）、再原子写 `data.json`**。因此日志可能领先数据（数据写失败时多一条未完成操作的记录），但不会少记；日志写失败会中止本次操作（`DECISION_LOG_IO`），`data.json` 不提交。首次启用（日志文件不存在 / 为空 / 没有 `log_initialized` 标记）由 `lib/index.js` / `scripts/dev-server.mjs` 在启动时从 `data.json` 回填一次，已有标记则跳过（回填按确定性 id 去重、收口感知，不重复补已有关闭事件）。回填与「历史遗留 pending 审批静默置 dismissed」放在**同一个 `store.update` 事务**里执行：store 写队列天然串行，启动窗口内的 live 写不会与回填交错；若没有回填与遗留需要处理则跳过该次写，避免无谓 revision 变更。字段与事件语义见 `docs/contracts/05-decision-log.md`。
 
 ## 7. 安全与权限
 
@@ -249,6 +255,8 @@ sequenceDiagram
 | 原生项已在别处作答 / 宿主撤回 | 下一次推送自动消失；看板作答返回 `PENDING_NOT_FOUND` / `PENDING_UNANSWERABLE`，提示"已在别处处理"并保留 toast |
 | 原生提问回答通道未就绪（`channel=none`） | 看板禁用提交并提示去会话内作答，不伪造结果 |
 | 并发写冲突 | 卡片 `version` 乐观锁，409 返回最新卡片，UI 合并后重试 |
+| 会话某一轮运行失败（断网 / 模型错误 / 进程中断 / 退出账号） | 监听宿主 `session/event` 的 `turn/end`：时间线写 `error` 节点（轮次/原因/错误码）；卡片「进行中」自动置「失败」进「待你确认」；同一会话下一轮正常完成自动回「进行中」并保留失败记录（v0.11）；手工置失败不自动恢复 |
+| 插件启动前已发生的失败 | 不追溯回填（事件订阅只覆盖运行期）；如需历史以 `sessionQuery` 按需读取（后续可加） |
 
 ## 9. 扩展路线
 
@@ -277,7 +285,7 @@ sequenceDiagram
 
 - **看板范围**：单看板跨项目；项目是卡片上的逻辑分组字段，不等于 workspace。
 - **审批收件箱（v0.10 已合并）**：「待你确认」列 = 业务审批卡片 + 原生待确认区（工具授权 / Agent 提问 / 计划审批）。原生项只镜像宿主的 `uiSession` 投影，作答仍走宿主 pending 对象（`answer` / `dismiss`），与原生 composer 共用同一条结算与审计；来源徽标 + 风险三档（高/中/低，tip 显示依据）。每会话只镜像宿主投影里的最高优先级一项；`ask_user_question` 的草稿仍以原生 composer 为准。
-- **失败/受阻**：仍在「待你确认」列；需要原因、重试入口与升级路径。
+- **失败/受阻**：仍在「待你确认」列；需要原因、重试入口与升级路径。会话运行失败（v0.11，按用户确认）自动把「进行中」卡片置「失败」并写时间线节点；同一会话下一轮成功后自动回「进行中」并保留失败记录；人工置失败不自动恢复。
 - **多会话**：v1 回复进主会话；v1.1 增加回复目标选择器（mockup 已加入状态）。
 - **handoff（交接摘要）**：M2 增加字段，用于会话归档后从卡片续接。
 - **通知**：只对 `needs_you` 做提醒，不做全量通知。

@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import type { HostInfo, SessionRow, WorkspaceRow } from './types';
 import type { NativePendingItem, NativeQuestionAnswer } from './lib/nativeInbox';
+import { normalizeSessionIdList } from './lib/sessionArchive';
 
 export type BridgeMethod =
   | 'app.info'
@@ -79,7 +80,14 @@ interface ResponseMessage {
 
 type ParentPush =
   | { type: 'kanban:theme'; version: 1; mode: 'light' | 'dark'; tokens: Record<string, string> }
-  | { type: 'kanban:sessions'; version: 1; sessions: SessionRow[]; current: string | null }
+  | {
+      type: 'kanban:sessions';
+      version: 1;
+      sessions: SessionRow[];
+      current: string | null;
+      /** 宿主归档集合（docs/11 §5.3）；旧宿主不推送该字段 */
+      archivedSessionIds?: string[];
+    }
   | { type: 'kanban:visibility'; version: 1; visible: boolean }
   | {
       type: 'kanban:pending';
@@ -133,6 +141,13 @@ export interface BridgeState {
   themeSource: 'host' | 'local';
   /** 原生待确认收件（工具授权 / Agent 提问 / 计划审批） */
   nativePending: NativePendingState;
+  /**
+   * 宿主当前已归档的会话 id（docs/11 §5.3）。旧宿主没有该字段时保持空数组；
+   * 归档/恢复动作以服务端 HTTP 响应先行回填，收到推送后以推送为准。
+   */
+  archivedSessionIds: string[];
+  /** 最近一次收到 kanban:sessions（含 archivedSessionIds）的时间；0 表示还没收到过 */
+  archivedSessionIdsAt: number;
 }
 
 export class BridgeUnavailableError extends Error {
@@ -181,6 +196,8 @@ class KanbanBridge {
     themeMode: 'light',
     themeSource: readThemeSource(),
     nativePending: { support: false, items: [], at: 0 },
+    archivedSessionIds: [],
+    archivedSessionIdsAt: 0,
   };
 
   private listeners = new Set<(state: BridgeState) => void>();
@@ -326,7 +343,13 @@ class KanbanBridge {
         break;
       }
       case 'kanban:sessions': {
-        this.setState({ sessions: data.sessions, currentSessionId: data.current });
+        // 首帧推送（kanban:ready 之后）与后续推送走同一条解析路径。
+        this.setState({
+          sessions: data.sessions,
+          currentSessionId: data.current,
+          archivedSessionIds: normalizeSessionIdList(data.archivedSessionIds),
+          archivedSessionIdsAt: Date.now(),
+        });
         break;
       }
       case 'kanban:pending': {

@@ -57,6 +57,14 @@ interface DetailDrawerProps {
   onOpenSession: (sessionId: string) => void;
   onSetPrimary: (card: Card, sessionId: string) => void;
   onCreateSession: (card: Card, options: CreateSessionOptions) => void;
+  /** 宿主当前已归档的会话 id */
+  archivedSessionIds: ReadonlySet<string>;
+  /** 宿主是否提供可逆归档（false 时隐藏归档/恢复入口） */
+  archiveAvailable: boolean;
+  /** 有待确认项的会话 id（原生 approval/question/plan） */
+  pendingSessionIds: ReadonlySet<string>;
+  onArchiveSession: (card: Card, sessionId: string) => void;
+  onUnarchiveSession: (card: Card, sessionId: string) => void;
 }
 
 const FOCUSABLE =
@@ -99,6 +107,11 @@ export function DetailDrawer({
   onOpenSession,
   onSetPrimary,
   onCreateSession,
+  archivedSessionIds,
+  archiveAvailable,
+  pendingSessionIds,
+  onArchiveSession,
+  onUnarchiveSession,
 }: DetailDrawerProps) {
   const { t, lang } = useI18n();
   const titleId = useId();
@@ -509,6 +522,11 @@ export function DetailDrawer({
               onUnbind={(sessionId) => onUnbindSession(card, sessionId)}
               onSetPrimary={(sessionId) => onSetPrimary(card, sessionId)}
               onCreateSession={onCreateSession}
+              archivedSessionIds={archivedSessionIds}
+              archiveAvailable={archiveAvailable}
+              pendingSessionIds={pendingSessionIds}
+              onArchiveSession={onArchiveSession}
+              onUnarchiveSession={onUnarchiveSession}
             />
           </section>
 

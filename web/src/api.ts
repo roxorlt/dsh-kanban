@@ -9,10 +9,12 @@ import type {
   ColumnId,
   KanbanState,
   Priority,
+  SessionActivityEntry,
   SessionRow,
   Status,
 } from './types';
 import type { CardFilters } from './lib/filter';
+import { normalizeSessionIdList } from './lib/sessionArchive';
 
 /** 契约里的错误码集合（未知 code 也按字符串处理）。 */
 export type ApiErrorCode =
@@ -26,20 +28,42 @@ export type ApiErrorCode =
   | 'FORBIDDEN_ORIGIN'
   | 'CONFLICT'
   | 'INTERNAL'
-  | 'NETWORK';
+  | 'NETWORK'
+  // ---- 会话归档/恢复（docs/11 §12.2）----
+  | 'CARD_NOT_DONE'
+  | 'SESSION_NOT_BOUND'
+  | 'SESSION_NOT_FOUND'
+  | 'SESSION_BUSY_CARDS'
+  | 'SESSION_ACTIVE'
+  | 'SESSION_ARCHIVE_UNAVAILABLE'
+  | 'SESSION_ARCHIVE_FAILED';
+
+/** 错误响应里附带的业务字段（服务端 `...extra` 原样带回）。 */
+export interface ApiErrorDetails {
+  /** VERSION_CONFLICT 时服务端回传的最新卡片 */
+  card?: Card;
+  /** SESSION_BUSY_CARDS：仍未完成的绑定卡片 */
+  blockingCards?: Array<{ id: string; title: string; status: string }>;
+  /** SESSION_ACTIVE：宿主返回的活动清单（turn/job/subagent/schedule） */
+  activity?: SessionActivityEntry[];
+  [key: string]: unknown;
+}
 
 export class KanbanApiError extends Error {
   readonly code: ApiErrorCode | string;
   readonly status: number;
+  /** 错误响应里除 `ok` / `error` 外的业务字段。 */
+  readonly details: ApiErrorDetails;
   /** VERSION_CONFLICT 时服务端回传的最新卡片，供 UI 合并。 */
   readonly card?: Card;
 
-  constructor(code: ApiErrorCode | string, message: string, status = 0, card?: Card) {
+  constructor(code: ApiErrorCode | string, message: string, status = 0, details: ApiErrorDetails = {}) {
     super(message);
     this.name = 'KanbanApiError';
     this.code = code;
     this.status = status;
-    this.card = card;
+    this.details = details;
+    this.card = details.card;
   }
 }
 
@@ -120,6 +144,18 @@ interface ErrEnvelope {
   ok: false;
   error?: { code?: string; message?: string };
   card?: Card;
+  [extra: string]: unknown;
+}
+
+/** 从错误响应里拆出业务字段（card / blockingCards / activity 等）。 */
+export function extractErrorDetails(payload: unknown): ApiErrorDetails {
+  if (!payload || typeof payload !== 'object') return {};
+  const details: ApiErrorDetails = {};
+  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    if (key === 'ok' || key === 'error') continue;
+    details[key] = value;
+  }
+  return details;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<Envelope<T>> {
@@ -151,7 +187,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<Envelope<T>
       err?.code ?? 'INTERNAL',
       err?.message ?? `HTTP ${response.status}`,
       response.status,
-      (payload as ErrEnvelope | null)?.card,
+      extractErrorDetails(payload),
     );
   }
   if (!payload || typeof payload !== 'object' || (payload as OkEnvelope).ok !== true) {
@@ -236,6 +272,82 @@ export interface HealthPayload {
 
 /** state 响应在冻结契约之外可能附带 activities（时间线）；两者都容忍。 */
 export type StatePayload = KanbanState & { activities?: Activity[] };
+
+// ------------------------------------------------------------ 会话归档/恢复（docs/11 §12.2）
+
+/** GET /sessions/archive：宿主是否提供可逆归档 + 当前归档集合。 */
+export interface SessionArchiveState {
+  available: boolean;
+  archivedSessionIds: string[];
+}
+
+/** 单卡归档/恢复的成功响应。 */
+export interface SessionArchiveResult {
+  card: Card;
+  revision: number;
+  archivedSessionIds: string[];
+  /** 归档成功但时间线活动写入失败时的服务端警告（不阻塞 UI） */
+  warning?: string;
+}
+
+export interface SessionArchiveBatchItem {
+  sessionId: string;
+  /** 代表卡（写时间线用） */
+  cardId: string;
+  /** 该会话绑定到的全部已完成卡（服务端一并返回） */
+  cardIds: string[];
+}
+
+export interface SessionArchiveBatchSkippedItem {
+  sessionId: string;
+  cardId?: string;
+  cardIds?: string[];
+  /** 服务端原因：already_archived / blocking_cards / running / missing / failed 等 */
+  reason: string;
+  blockingCards?: Array<{ id: string; title: string; status: string }>;
+  activity?: unknown[];
+  message?: string;
+}
+
+export interface SessionArchiveBatchResult {
+  dryRun: boolean;
+  /** 宿主是否提供可逆归档（服务端回填，便于前端同步隐藏入口） */
+  available?: boolean;
+  archivable: SessionArchiveBatchItem[];
+  skipped: SessionArchiveBatchSkippedItem[];
+  archivedSessionIds: string[];
+  revision?: number;
+}
+
+export interface ArchiveCardSessionOptions {
+  /** 会话仍在运行时的用户二次确认后置 true：先停活再归档（会丢弃排队输入/删除定时任务） */
+  stopActivity?: boolean;
+}
+
+export interface ArchiveSessionsBatchInput {
+  scope: 'done';
+  cardIds?: Iterable<string>;
+  dryRun?: boolean;
+  stopActivity?: boolean;
+}
+
+function normalizeArchivedSessionIds(value: unknown): string[] {
+  return normalizeSessionIdList(value);
+}
+
+function normalizeArchiveResult(result: {
+  card: Card;
+  revision?: number;
+  archivedSessionIds?: string[];
+  warning?: string;
+}): SessionArchiveResult {
+  return {
+    card: normalizeCard(result.card),
+    revision: result.revision ?? 0,
+    archivedSessionIds: normalizeArchivedSessionIds(result.archivedSessionIds),
+    ...(typeof result.warning === 'string' && result.warning ? { warning: result.warning } : {}),
+  };
+}
 
 async function getActivities(
   cardId: string,
@@ -371,6 +483,81 @@ export const api = {
       `/cards/${encodeURIComponent(cardId)}/session/${encodeURIComponent(sessionId)}`,
       { method: 'DELETE' },
     ).then((result) => ({ ...result, card: normalizeCard(result.card) })),
+
+  /** 会话归档状态与宿主能力（嵌入模式下挂载时回填，之后以桥推送为准）。 */
+  getSessionArchiveState: async (): Promise<SessionArchiveState> => {
+    const result = await request<{ available?: boolean; archivedSessionIds?: string[] }>('/sessions/archive');
+    return {
+      available: result.available === true,
+      archivedSessionIds: normalizeArchivedSessionIds(result.archivedSessionIds),
+    };
+  },
+
+  /** 从某张已完成卡归档其绑定会话；运行中会话首次调用会得到 SESSION_ACTIVE。 */
+  archiveCardSession: (
+    cardId: string,
+    sessionId: string,
+    options: ArchiveCardSessionOptions = {},
+  ): Promise<SessionArchiveResult> =>
+    request<{ card: Card; revision?: number; archivedSessionIds?: string[]; warning?: string }>(
+      `/cards/${encodeURIComponent(cardId)}/sessions/${encodeURIComponent(sessionId)}/archive`,
+      { method: 'POST', body: JSON.stringify(options.stopActivity === true ? { stopActivity: true } : {}) },
+    ).then(normalizeArchiveResult),
+
+  /** 恢复（取消归档）某张卡绑定的会话；宿主幂等。 */
+  unarchiveCardSession: (cardId: string, sessionId: string): Promise<SessionArchiveResult> =>
+    request<{ card: Card; revision?: number; archivedSessionIds?: string[]; warning?: string }>(
+      `/cards/${encodeURIComponent(cardId)}/sessions/${encodeURIComponent(sessionId)}/unarchive`,
+      { method: 'POST', body: '{}' },
+    ).then(normalizeArchiveResult),
+
+  /** 已完成卡片的批量/历史会话归档；`dryRun` 先预览 archivable / skipped。 */
+  archiveSessionsBatch: async (input: ArchiveSessionsBatchInput): Promise<SessionArchiveBatchResult> => {
+    const cardIds = input.cardIds ? [...input.cardIds] : [];
+    const result = await request<{
+      dryRun?: boolean;
+      available?: boolean;
+      archivable?: SessionArchiveBatchItem[];
+      skipped?: SessionArchiveBatchSkippedItem[];
+      archivedSessionIds?: string[];
+      revision?: number;
+    }>('/sessions/archive-batch', {
+      method: 'POST',
+      body: JSON.stringify({
+        scope: input.scope,
+        ...(cardIds.length ? { cardIds } : {}),
+        ...(input.dryRun ? { dryRun: true } : {}),
+        ...(input.stopActivity ? { stopActivity: true } : {}),
+      }),
+    });
+    return {
+      dryRun: result.dryRun === true,
+      ...(typeof result.available === 'boolean' ? { available: result.available } : {}),
+      archivable: Array.isArray(result.archivable)
+        ? result.archivable
+            .filter((item) => item && typeof item.sessionId === 'string')
+            .map((item) => ({
+              sessionId: item.sessionId,
+              cardId: item.cardId ?? (item.cardIds?.[0] ?? ''),
+              cardIds: Array.isArray(item.cardIds)
+                ? item.cardIds.filter((id): id is string => typeof id === 'string')
+                : item.cardId
+                  ? [item.cardId]
+                  : [],
+            }))
+        : [],
+      skipped: Array.isArray(result.skipped)
+        ? result.skipped
+            .filter((item) => item && typeof item.sessionId === 'string')
+            .map((item) => ({
+              ...item,
+              reason: typeof item.reason === 'string' ? item.reason : 'failed',
+            }))
+        : [],
+      archivedSessionIds: normalizeArchivedSessionIds(result.archivedSessionIds),
+      ...(typeof result.revision === 'number' ? { revision: result.revision } : {}),
+    };
+  },
 
   ack: (cardId: string): Promise<{ revision: number }> =>
     request<{ revision: number }>(`/cards/${encodeURIComponent(cardId)}/ack`, { method: 'POST', body: '{}' }),

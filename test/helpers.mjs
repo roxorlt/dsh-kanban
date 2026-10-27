@@ -20,9 +20,9 @@ export async function testStore(t, options = {}) {
   return { store, dir }
 }
 
-export async function startServer(t, { store, staticRoot } = {}) {
+export async function startServer(t, { store, staticRoot, sessionArchive } = {}) {
   await store.ready()
-  const routes = createRoutes({ store, staticRoot, version: '0.0.0-test' })
+  const routes = createRoutes({ store, staticRoot, version: '0.0.0-test', ...(sessionArchive ? { sessionArchive } : {}) })
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url || '/', 'http://localhost')

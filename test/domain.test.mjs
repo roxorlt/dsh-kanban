@@ -922,13 +922,20 @@ test('审批提交后的迁移边界：仍有 pending 审批/不在待你确认�
   const last = resolveApproval(draft, running.id, b.approval.id, { optionIds: ['option-1'], actor: user, now: FIXED_NOW + 3 })
   assert.equal(last.card.status, 'running')
 
-  // 卡片被拖去其它列（不在待你确认列）：提交审批不改状态
+  // 卡片被拖去其它列：未提交的审批随卡片离开「待你确认」而关闭（dismissed + 决策日志未决事件）
   const moved = findCardByStatus(draft, 'backlog')
   const ask = requestApproval(draft, moved.id, { title: '继续吗？', options: ['继续'] }, { now: FIXED_NOW + 4 })
   moveCard(draft, moved.id, { column: 'done', now: FIXED_NOW + 5 })
-  const stayed = resolveApproval(draft, moved.id, ask.approval.id, { optionIds: ['option-1'], actor: user, now: FIXED_NOW + 6 })
-  assert.equal(stayed.card.status, 'done')
-  assert.equal(stayed.statusActivity, undefined)
+  assert.equal(moved.status, 'done')
+  const parkedApproval = moved.approvals.find(item => item.id === ask.approval.id)
+  assert.equal(parkedApproval.status, 'dismissed')
+  assert.equal(parkedApproval.resolvedAt, FIXED_NOW + 5)
+  assert.ok((draft.__decisions || []).some(event => event.type === 'approval_unresolved'
+    && event.approvalId === ask.approval.id && event.reason === 'left_needs_you'))
+  assert.throws(
+    () => resolveApproval(draft, moved.id, ask.approval.id, { optionIds: ['option-1'], actor: user, now: FIXED_NOW + 6 }),
+    error => error.code === 'CONFLICT',
+  )
 
   // 受阻/失败卡（列在待你确认但不是 needs_you）：提交审批保持原状态，等人处理
   const blocked = moved
@@ -995,4 +1002,118 @@ test('审批选项 outcome：严格创建校验非法值、宽松读取丢弃坏
   assert.equal(loaded.options[0].outcome, 'done')
   assert.equal(loaded.options[1].outcome, undefined)
   assert.equal(loaded.options[2].outcome, undefined)
+})
+
+test('决策日志事件：请求/提交/归档/重置/裁剪的埋点与快照', () => {
+  const draft = seedDraft()
+  const user = { kind: 'user', name: '你' }
+  const card = findCardByStatus(draft, 'running')
+
+  // 请求：卡片上下文 + 完整审批快照 + 会话
+  linkSession(draft, card.id, { sessionId: 'session-abc', now: FIXED_NOW + 1 })
+  const ask = requestApproval(draft, card.id, {
+    title: '要不要继续？',
+    detail: '影响面说明',
+    options: [{ id: 'yes', label: '继续', description: '直接推进', tone: 'primary', outcome: 'running' }, { id: 'no', label: '停止', tone: 'danger' }],
+  }, { now: FIXED_NOW + 2 })
+  const requested = (draft.__decisions || []).find(event => event.type === 'approval_requested' && event.approvalId === ask.approval.id)
+  assert.ok(requested)
+  assert.equal(requested.source, 'live')
+  assert.equal(requested.boardId, DEFAULT_BOARD_ID)
+  assert.equal(requested.cardId, card.id)
+  assert.equal(requested.sessionId, 'session-abc')
+  assert.equal(requested.actor.kind, 'agent')
+  assert.equal(requested.card.title, card.title)
+  assert.equal(requested.card.status, 'running') // 请求前状态
+  assert.equal(requested.approval.detail, '影响面说明')
+  assert.equal(requested.approval.options[0].description, '直接推进')
+  assert.equal(requested.approval.options[0].outcome, 'running')
+
+  // 提交：决定、选项、等待时长、落列；后端在写盘时补 requestId（domain 事件里没有）
+  const resolved = resolveApproval(draft, card.id, ask.approval.id, { optionIds: ['yes'], actor: user, now: FIXED_NOW + 2 + 90_000 })
+  const resolvedEvent = (draft.__decisions || []).find(event => event.type === 'approval_resolved' && event.approvalId === ask.approval.id)
+  assert.ok(resolvedEvent)
+  assert.equal(resolvedEvent.source, 'live')
+  assert.equal(resolvedEvent.decision, 'approved')
+  assert.equal(resolvedEvent.actor.kind, 'user')
+  assert.deepEqual(resolvedEvent.resolution.optionIds, ['yes'])
+  assert.deepEqual(resolvedEvent.resolution.labels, ['继续'])
+  assert.equal(resolvedEvent.waitedMs, 90_000)
+  assert.equal(resolvedEvent.outcomeColumn, 'running')
+  assert.equal(resolvedEvent.card.status, 'needs_you') // 提交时刻、移列前
+  assert.equal(resolved.statusActivity.data.column, 'running')
+
+  // 归档：pending 审批置 dismissed 并记 archived 未决事件
+  const archiveCardTarget = findCardByStatus(draft, 'needs_you')
+  const archiveAsk = requestApproval(draft, archiveCardTarget.id, { title: '归档前的问题', options: ['好'] }, { now: FIXED_NOW + 3 })
+  archiveCard(draft, archiveCardTarget.id, { actor: user, now: FIXED_NOW + 4 })
+  const archivedApproval = archiveCardTarget.approvals.find(item => item.id === archiveAsk.approval.id)
+  assert.equal(archivedApproval.status, 'dismissed')
+  assert.equal(archivedApproval.resolvedAt, FIXED_NOW + 4)
+  const archivedUnresolved = (draft.__decisions || []).find(event => event.type === 'approval_unresolved' && event.approvalId === archiveAsk.approval.id)
+  assert.ok(archivedUnresolved)
+  assert.equal(archivedUnresolved.reason, 'archived')
+  assert.equal(archivedUnresolved.waitedMs, 1)
+
+  // seed 重置：再建一条等待中的审批，重置时收口为 data_reset 并写标记
+  const resetCard = findCardByStatus(draft, 'backlog')
+  const resetAsk = requestApproval(draft, resetCard.id, { title: '重置前的问题', options: ['好'] }, { now: FIXED_NOW + 5 })
+  applySeedMode(draft, 'empty', FIXED_NOW + 6)
+  const resetEvent = (draft.__decisions || []).find(event => event.type === 'data_reset')
+  assert.ok(resetEvent)
+  assert.equal(resetEvent.mode, 'empty')
+  assert.equal(resetEvent.actor.kind, 'system')
+  assert.ok(resetEvent.before.pending >= 1)
+  const resetUnresolved = (draft.__decisions || []).find(event => event.type === 'approval_unresolved' && event.approvalId === resetAsk.approval.id)
+  assert.ok(resetUnresolved)
+  assert.equal(resetUnresolved.reason, 'data_reset')
+  assert.equal(draft.cards.length, 0)
+
+  // 非审批操作不产生决策事件
+  const quiet = seedDraft()
+  const quietCard = findCardByStatus(quiet, 'running')
+  patchCard(quiet, quietCard.id, { currentAction: '写代码', progress: { step: 1, total: 3 } }, { now: FIXED_NOW + 7 })
+  moveCard(quiet, quietCard.id, { column: 'done', now: FIXED_NOW + 8 })
+  completeCard(quiet, quietCard.id, { result: '完成', now: FIXED_NOW + 9 })
+  ackCard(quiet, quietCard.id, { now: FIXED_NOW + 10 })
+  assert.equal(quiet.__decisions, undefined)
+})
+
+test('离开待你确认的三条路径（batchMove / completeCard / patchCard status）都收口 pending 审批', () => {
+  const draft = seedDraft()
+  const user = { kind: 'user', name: '你' }
+  const pick = (approvalId) => (draft.__decisions || []).filter(event => event.approvalId === approvalId)
+
+  // batchMove：needs_you → done
+  const card1 = findCardByStatus(draft, 'running')
+  const ask1 = requestApproval(draft, card1.id, { title: '批量移走吗？', options: ['好'] }, { now: FIXED_NOW + 1 })
+  batchMove(draft, [card1.id], 'done', { actor: user, now: FIXED_NOW + 2 })
+  assert.equal(card1.status, 'done')
+  assert.equal(card1.approvals.find(item => item.id === ask1.approval.id).status, 'dismissed')
+  const events1 = pick(ask1.approval.id)
+  assert.ok(events1.some(event => event.type === 'approval_unresolved' && event.reason === 'left_needs_you'))
+
+  // completeCard：needs_you → done
+  const card2 = findCardByStatus(draft, 'backlog')
+  const ask2 = requestApproval(draft, card2.id, { title: '直接完成吗？', options: ['好'] }, { now: FIXED_NOW + 3 })
+  completeCard(draft, card2.id, { result: '完成', actor: user, now: FIXED_NOW + 4 })
+  assert.equal(card2.approvals.find(item => item.id === ask2.approval.id).status, 'dismissed')
+  assert.ok(pick(ask2.approval.id).some(event => event.type === 'approval_unresolved' && event.reason === 'left_needs_you'))
+
+  // patchCard status：needs_you → running
+  const card3 = findCardByStatus(draft, 'failed')
+  const ask3 = requestApproval(draft, card3.id, { title: '绕过确认吗？', options: ['好'] }, { now: FIXED_NOW + 5 })
+  patchCard(draft, card3.id, { status: 'running' }, { actor: user, now: FIXED_NOW + 6 })
+  assert.equal(card3.status, 'running')
+  assert.equal(card3.approvals.find(item => item.id === ask3.approval.id).status, 'dismissed')
+  assert.ok(pick(ask3.approval.id).some(event => event.type === 'approval_unresolved' && event.reason === 'left_needs_you'))
+})
+
+test('requestApproval 对缺少 approvals 数组的原始种子卡也能工作（首个生命周期防御）', () => {
+  const raw = createSeed('demo', FIXED_NOW)
+  const card = raw.cards.find(item => item.approvals === undefined)
+  assert.ok(card, 'demo 种子应存在没有 approvals 字段的卡片')
+  const result = requestApproval(raw, card.id, { title: '原始种子卡能审批吗？', options: ['能'] }, { now: FIXED_NOW + 1 })
+  assert.equal(result.card.approvals.length, 1)
+  assert.ok((raw.__decisions || []).some(event => event.type === 'approval_requested' && event.approvalId === result.approval.id))
 })
