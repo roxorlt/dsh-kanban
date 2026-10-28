@@ -18,6 +18,10 @@ import type {
   GitSummaryUnavailableReason,
   GitSummaryUpstream,
   GitUnavailableReason,
+  GitWorkspaceRepo,
+  GitWorkspacesResult,
+  GitWorkspaceUnavailable,
+  GitWorkspaceWorktree,
   KanbanState,
   Priority,
   SessionActivityEntry,
@@ -459,6 +463,79 @@ export function normalizeGitSummaries(raw: unknown): Record<string, GitSummary> 
   return summaries;
 }
 
+function normalizeNullableCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function normalizeWorkspaceWorktree(raw: unknown): GitWorkspaceWorktree | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const worktree = raw as Partial<GitWorkspaceWorktree>;
+  if (typeof worktree.path !== 'string' || !worktree.path) return null;
+  const sha = typeof worktree.sha === 'string' ? worktree.sha : '';
+  return {
+    path: worktree.path,
+    branch: typeof worktree.branch === 'string' ? worktree.branch : null,
+    detached: worktree.detached === true,
+    sha,
+    shortSha: typeof worktree.shortSha === 'string' && worktree.shortSha ? worktree.shortSha : sha.slice(0, 7),
+    isMain: worktree.isMain === true,
+    isCurrent: worktree.isCurrent === true,
+    aheadOfBase: normalizeNullableCount(worktree.aheadOfBase),
+    behindOfBase: normalizeNullableCount(worktree.behindOfBase),
+    dirty: worktree.dirty === true,
+    ...(Array.isArray(worktree.dirs)
+      ? { dirs: worktree.dirs.filter((dir): dir is string => typeof dir === 'string' && Boolean(dir.trim())) }
+      : {}),
+  };
+}
+
+function normalizeWorkspaceRepo(raw: unknown): GitWorkspaceRepo | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const repo = raw as Partial<GitWorkspaceRepo>;
+  if (typeof repo.root !== 'string' || !repo.root) return null;
+  const worktrees = Array.isArray(repo.worktrees)
+    ? repo.worktrees.map(normalizeWorkspaceWorktree).filter((item): item is GitWorkspaceWorktree => item !== null)
+    : [];
+  if (!worktrees.length) return null;
+  const root = repo.root;
+  return {
+    root,
+    name: typeof repo.name === 'string' && repo.name ? repo.name : root.split('/').filter(Boolean).pop() ?? root,
+    commonDir: typeof repo.commonDir === 'string' ? repo.commonDir : '',
+    mainBranch: typeof repo.mainBranch === 'string' ? repo.mainBranch : null,
+    worktrees,
+  };
+}
+
+function normalizeWorkspaceUnavailable(raw: unknown): GitWorkspaceUnavailable | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const item = raw as Partial<GitWorkspaceUnavailable>;
+  if (typeof item.dir !== 'string' || !item.dir) return null;
+  return {
+    dir: item.dir,
+    reason: normalizeGitSummaryReason(item.reason),
+    ...(typeof item.message === 'string' && item.message ? { message: item.message } : {}),
+  };
+}
+
+/**
+ * 容错归一化工作区地图（`POST /git/workspaces`）。
+ * repos 缺省 []；单条非法仓库/工作副本直接丢弃；disabled 仅接受显式 true。
+ */
+export function normalizeGitWorkspaces(raw: unknown): GitWorkspacesResult {
+  if (!raw || typeof raw !== 'object') return { repos: [], unavailable: [], disabled: false };
+  const payload = raw as Partial<GitWorkspacesResult>;
+  const repos = Array.isArray(payload.repos)
+    ? payload.repos.map(normalizeWorkspaceRepo).filter((repo): repo is GitWorkspaceRepo => repo !== null)
+    : [];
+  const unavailable = Array.isArray(payload.unavailable)
+    ? payload.unavailable
+        .map(normalizeWorkspaceUnavailable)
+        .filter((item): item is GitWorkspaceUnavailable => item !== null)
+    : [];
+  return { repos, unavailable, disabled: payload.disabled === true };
+}
+
 /**
  * 容错归一化 git 上下文：服务端字段缺失时不让抽屉渲染崩溃。
  * 数组缺失 → 空数组（图退化为空、组件整块隐藏）；available 缺失 → 按不可用处理。
@@ -799,6 +876,18 @@ export const api = {
       body: JSON.stringify({ dirs }),
     });
     return normalizeGitSummaries(result.summaries);
+  },
+
+  /**
+   * v0.16 工作区地图（「工作区」视图，docs/contracts/02-http-api.md §12）：
+   * `dirs` 1–32 个卡片 cwd；返回按仓库聚合的工作副本与不可用项，网络/HTTP 错误向上抛。
+   */
+  getGitWorkspaces: async (dirs: string[]): Promise<GitWorkspacesResult> => {
+    const result = await request<Partial<GitWorkspacesResult>>('/git/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({ dirs }),
+    });
+    return normalizeGitWorkspaces(result);
   },
 
   ack: (cardId: string): Promise<{ revision: number }> =>

@@ -8,6 +8,7 @@ import './styles/base.css';
 import './styles/app.css';
 import './styles/board.css';
 import './styles/list.css';
+import './styles/workspaces.css';
 import './styles/drawer.css';
 import './styles/modal.css';
 import './styles/inbox.css';

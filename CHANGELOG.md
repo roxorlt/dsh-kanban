@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.16.0 — 2026-10-28
+
+### 新增：「工作区」视图（方案 3 调整版，按仓库分块）+ 提交图 hover 高亮泳道
+
+- 背景：用户确认「先方案 3、后方案 2」；同时把 hover 高亮泳道从 demo 落进正式功能，并按设计规范复核交互样式。看板跨项目/跨 cwd，所以工作区视图按**仓库分块**，而不是全局扁平表。
+- 服务端（`lib/git.js` / `lib/routes.js`）：新增 **`POST /api/kanban/git/workspaces`**（契约 02 §12 / 06 §4.7）——按 `git-common-dir` 去重仓库；每仓库返回 `worktrees[]`（路径 / 分支 / detached / sha / 是否主工作副本 / isCurrent / 相对主线 ahead-behind / `dirty`）+ `mainBranch`；工作副本上限 12（主工作副本与请求目录所在副本优先）；`dirty` = `git status --porcelain --untracked-files=no`；**每个工作副本额外返回 `dirs[]`**（本次请求中落在该副本的 cwd 原文，解决 `/tmp` ↔ realpath 前缀不一致导致卡片归错组）；只读、按仓库缓存 8s/64、允许集合=未归档卡片 cwd、失败目录进 `unavailable`。
+- Web（新增「工作区」视图）：「看板 / 列表 / **工作区**」第三视图（`ViewMode` 扩展 + `dsh-kanban.view` 持久化兼容旧值；工作区视图只读，进入时退出选择模式）。`WorkspaceView`：顶部摘要 `N 个仓库 · M 个工作副本 · K 张卡片在运行`；按仓库分块（仓库名 + 根路径 + 工作副本/卡片数）；每个工作副本一行（纯 CSS 文件夹图标 + 等宽分支名 + 主工作树/当前/有未保存改动/干净徽标 + 相对主线 `多 N · 少 M` / `与主线一致` + 相对仓库根路径 + 关联卡片 mini 列表[点击打开详情] + 绑定会话数）；无 cwd / 不可用 / 未匹配卡片进「未指定」块；空态与 disabled 兜底。`useWorkspaces`：cwd 去重、400ms 防抖、≤32/批、15s 缓存、20s 可见刷新、失败静默保留旧数据；纯 util `groupCardsByWorktree` **优先用服务端 `dirs[]` 精确归组**、退回最长前缀。
+- 提交图 hover 高亮（正式功能，v0.16）：悬停任意提交行或图例项 → 该泳道同色的连线/提交点/合并双环/ref 徽标保持，其它泳道透明度降到 `0.18`（180ms 过渡），图例同色项高亮（名称 `label-primary`+600）、其余 0.45；移开恢复。不改布局、无点击/跳转；`prefers-reduced-motion: reduce` 去掉过渡；颜色只用 alias 令牌（8 色泳道变量）。交互规范写入 `docs/03-design-system.md` §7.22（另新增 §7.23 工作区视图规范）。
+- 顺带：`docs/03` §7.22/§7.23 补齐设计规范；契约 `06` 升 v0.5（§4.7 工作区地图 + §5 hover 约定）、`02` 增 §12。
+- 测试：服务端 `node --test` **192/192**（新增 11：collectGitWorkspaces 与路由，含去重/多 worktree/dirty/12 上限/forbidden/缓存/TTL/405）+ 新增 dirs 映射与符号链接用例；Web `vitest` **27 文件 / 273 测试**（新增 13：分组/批次/会话计数/归一化）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning。
+- 验证（dev-server + 真实仓库/演示仓库数据）：工作区视图 2 个仓库 / 10 个工作副本 / 卡片正确归组（主仓库 1 卡、演示仓库 3 卡、未指定 3 卡），dirty 标记正确；点击 mini 卡片打开详情；390 竖屏无横向溢出、亮/暗正常、console error 0 / 4xx 0。hover：真实仓库 48 行图上悬停后 120 条非本泳道线淡出、24 条保持、图例同步高亮、移开恢复（截图 `docs/assets/screens/git-workspaces-*.png`、`git-workline-hover-*.png`；验证 docs/06 §1.32）。
+- 生效方式：含服务端改动（`lib/git.js` / `lib/routes.js`），需**合入主线并重启 DSH**；`web/dist` 已重建。hover 高亮是纯前端，刷新即可；工作区视图需要重启后的新接口。
+- 已知限制：工作区视图受当前筛选影响（与看板/列表一致）；每仓库最多 12 个工作副本；`dirty` 不统计未跟踪文件；卡片无 cwd / 非 git 归「未指定」；未做点击工作副本跳转/清理等写操作（只读）。
+- 分支：`feat/workspace-view`（基于 `9acf3f0`）。
+
 ## v0.15.0 — 2026-10-28
 
 ### 新增：卡片 / 列表「工作线」徽标（方案 1，派生式不落卡片字段）

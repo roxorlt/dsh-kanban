@@ -57,6 +57,7 @@ import { doneCardsOf } from './lib/listGroups';
 import type { ListGroupBy } from './lib/listGroups';
 import { applyPage, EMPTY_FEED } from './lib/activities';
 import { useWorklineStatuses } from './lib/useWorklineStatuses';
+import { useWorkspaces } from './lib/useWorkspaces';
 import type { ActivityFeed } from './lib/activities';
 import { useMediaQuery } from './lib/useMediaQuery';
 import { useRealtime } from './lib/useRealtime';
@@ -71,6 +72,7 @@ import { DetailDrawer } from './components/DetailDrawer';
 import { EmptyState, ErrorState, SkeletonBoard } from './components/feedback';
 import { HelpDialog } from './components/HelpDialog';
 import { ListView } from './components/ListView';
+import { WorkspaceView } from './components/WorkspaceView';
 import { ToastRegion, useToasts } from './components/Toast';
 import { Toolbar } from './components/Toolbar';
 import type { SyncState, ViewMode } from './components/Toolbar';
@@ -128,7 +130,11 @@ interface StopAndArchiveTarget extends SessionArchiveTarget {
 
 function readStoredView(): ViewMode {
   try {
-    return localStorage.getItem(VIEW_STORAGE_KEY) === 'list' ? 'list' : 'board';
+    const stored = localStorage.getItem(VIEW_STORAGE_KEY);
+    // 兼容旧值：只认这三个视图，其它（含 null）回落到看板
+    if (stored === 'list') return 'list';
+    if (stored === 'workspaces') return 'workspaces';
+    return 'board';
   } catch {
     return 'board';
   }
@@ -388,6 +394,12 @@ export function App() {
   const handleViewChange = useCallback((next: ViewMode) => {
     setViewState(next);
     storeView(next);
+    // 工作区视图只读：进入时退出选择模式，避免批量操作条悬空
+    if (next === 'workspaces') {
+      setSelectionMode(false);
+      setSelectedIds(EMPTY_SELECTION);
+      setActiveCardId(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -411,6 +423,8 @@ export function App() {
   const filteredCards = useMemo(() => filterCards(snapshot.cards, filters), [snapshot.cards, filters]);
   // 卡片「工作线」徽标：按 cwd 去重批量探测（轻量摘要，不看 graph）
   const worklineStatuses = useWorklineStatuses(filteredCards);
+  // 「工作区」视图：按仓库/工作副本聚合（同样按 cwd 去重批量探测）
+  const workspaceState = useWorkspaces(filteredCards);
   const groups = useMemo(
     () => (snapshot.board ? groupCardsByColumn(filteredCards, snapshot.board.cardOrder) : EMPTY_GROUPS),
     [filteredCards, snapshot.board],
@@ -1652,6 +1666,15 @@ export function App() {
     if (!snapshot.board) {
       return <EmptyState title={t('empty.board')} hint={t('empty.boardHint')} />;
     }
+    if (view === 'workspaces') {
+      return (
+        <WorkspaceView
+          cards={filteredCards}
+          workspaces={workspaceState}
+          onOpenCard={actions.onOpenDetail}
+        />
+      );
+    }
     if (view === 'list') {
       return (
         <ListView
@@ -1737,7 +1760,7 @@ export function App() {
           selectionMode={selectionMode}
           onToggleSelection={handleToggleSelectionMode}
         />
-        {selectionMode ? (
+        {selectionMode && view !== 'workspaces' ? (
           <SelectionBar
             count={selectedIds.size}
             visibleCount={visibleCardIds.length}

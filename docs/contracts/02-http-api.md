@@ -28,6 +28,7 @@
 | POST | `/api/kanban/cards/:id/move` | `{column, version?, beforeId?, afterId?}` → `{ok, card, revision}`；设置对应代表 status 并更新 cardOrder |
 | GET | `/api/kanban/cards/:id/git?cwd=` | 卡片执行目录的 git 上下文（只读派生，不落库），见 §10 → `{ok, git, revision}`；不可用时仍是 200 + `git.available:false` |
 | POST | `/api/kanban/git/summaries` | 批量 git 摘要（卡片徽标用，轻量无 graph/提交列表），见 §11 → `{ok, summaries, revision}` |
+| POST | `/api/kanban/git/workspaces` | 按仓库聚合的工作区地图（工作区视图用），见 §12 → `{ok, repos, unavailable, revision}` |
 | GET | `/api/kanban/cards/:id/activities?limit=&before=` | 单卡时间线（倒序，默认 30，上限 100）。`before` 为上一页最后一条 activity id，用于「加载更早」；返回 `{ok, activities, hasMore, nextBefore}`。`/state` 不内嵌全量时间线 |
 | POST | `/api/kanban/cards/:id/comments` | `{text, actor?}` → `{ok, activity, card, revision}`（UI 提交后由客户端桥把同一文本发到主会话） |
 | POST | `/api/kanban/cards/:id/approvals` | 二选一：单题 `{title, detail, options[], multiSelect?, sessionId?}`；多题 `{questions:[{header?,question,multiSelect?,options[]}], detail?, sessionId?}` → `{ok, approval, card, revision}`；卡片 status→`needs_you`；多题时每题独立单选/多选。选项可带 `outcome: 'running'\|'backlog'\|'done'` 声明「选中后卡片进哪一列」（v0.9.5），非法值 400 |
@@ -246,3 +247,28 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
   ```
   不可用：`{ "available": false, "reason": "no_cwd" | "missing" | "not_git" | "no_commits" | "timeout" | "error" | "forbidden" }`。
 - 性能与缓存：不做 graph / 提交列表采集（每条 6–8 条只读命令）；服务端按 realpath **缓存 10s / 最多 128 条**；前端可按仓库聚合、TTL 15s 复用。
+
+## 12. 工作区地图（v0.16 增量，「工作区」视图用）
+
+看板跨项目、跨 cwd，工作区视图按**仓库**聚合展示所有工作副本（worktree）与卡片归属。
+
+- `POST /api/kanban/git/workspaces`
+- body：`{ "dirs": ["/绝对路径", ...] }`，1–32 个（卡片 `cwd`，允许重复；与 §11 相同的允许集合规则：原样（trim）等于未归档卡片 cwd，其余项进 `unavailable`）。
+- 200：
+  ```jsonc
+  { "ok": true, "revision": 12,
+    "repos": [
+      { "root": "/repo", "name": "repo", "commonDir": "/repo/.git",
+        "mainBranch": "main",
+        "worktrees": [
+          { "path": "/repo", "branch": "main", "detached": false, "sha": "…", "shortSha": "…",
+            "isMain": true, "isCurrent": true,
+            "aheadOfBase": 0, "behindOfBase": 0,     // 相对 mainBranch；无法计算时 null
+            "dirty": false,                           // git status --porcelain --untracked-files=no 非空
+            "dirs": ["/repo"] }                       // 本次请求中落在该工作副本的 dir 原文（前端精确归组，解决 /tmp ↔ realpath 前缀不一致）
+        ] } ],
+    "unavailable": [ { "dir": "/tmp/x", "reason": "not_git" } ] }
+  ```
+- 规则：按 `git-common-dir` 去重仓库；每仓库最多返回 12 个工作副本（多余丢弃，不报错）；`mainBranch` 探测不到时 null（此时 ahead/behind 均为 null）；只读、不 fetch。
+- 缓存：按仓库 root realpath 缓存 8s / 上限 64 条。
+- 前端把卡片按 `cwd` 归到其工作副本：**优先用 `worktrees[].dirs` 里的原文精确匹配**，匹配不到再退回最长前缀；无 cwd / 不可用的卡片归「未指定」组。

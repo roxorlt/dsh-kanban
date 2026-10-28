@@ -48,6 +48,7 @@ web/
       forkGraph.ts            # 详情「分支 / 工作树」Fork 风格多泳道布局（种子泳道、状态机、汇入/出弯、8 色、路径省略）
       worklineSummary.ts      # 「工作线」结论（位置 / 与主线 / 与线上 / 计数），详情与卡片徽标共用（v0.14.1/v0.15）
       useWorklineStatuses.ts  # 看板批量工作线摘要（cwd 去重、防抖、15s 缓存、20s 可见刷新）（v0.15）
+      useWorkspaces.ts        # 「工作区」视图数据：按仓库聚合、dirs 精确归组、15s 缓存（v0.16）
       useCardGit.ts           # 打开卡片按需拉 Git 上下文（?cwd= 候选会话目录 + 4s LRU 缓存 + 失败静默）
     components/               # Toolbar/FilterMenu/BoardView/ListView/KanbanCard/DetailDrawer/
                               # ApprovalPanel/Timeline/Composer/SessionSection/Modal/Toast/Icons…
@@ -89,6 +90,8 @@ web/
   「回复/审批目标」下拉（默认主会话，设为主会话后默认目标跟随），回复与审批决定都发到该会话。
 - **详情抽屉头部（v0.7.2）**：首行是 kicker + 标题（左）与编辑/归档/关闭（右）；摘要独占第二行，
   宽度与正文内容一致（右边缘与 chips / 元数据对齐），长摘要不再被 138px 操作簇挤成窄列。
+- **「工作区」视图（v0.16）**：工具栏第三个视图，按仓库分块列工作副本 / 卡片 / 会话 / 未保存改动；只读；点击 mini 卡片打开详情。数据走 `POST /git/workspaces`（服务端按仓库 8s 缓存；前端 15s 缓存 + 20s 可见刷新），卡片按服务端 `dirs[]` 精确归组。查看板/列表/工作区三视图持久化在 `dsh-kanban.view`（旧值兼容）。
+- **提交图 hover 高亮（v0.16）**：详情抽屉展开的提交图，悬停行或图例项 → 同色泳道保持、其它淡出，图例同步高亮；180ms 过渡，`prefers-reduced-motion` 关闭；无布局/点击变化。
 - **卡片「工作线」徽标（v0.15）**：看板卡片与列表行在摘要下方显示 `工作线 feat/x · 多 3 · 未同步`（仅非主线 feature 显示；无 cwd / 非 git 不显示；失败灰色「未知」）。数据走 `POST /git/summaries`（服务端只允许看板卡片 cwd、10s 缓存），前端按 cwd 去重批量拉取、15s 缓存、20s 可见刷新。
 - **工作线（v0.14.1，人话版）**：详情抽屉默认展示一句话总结（在哪条工作线、比主线多/少多少、线上是否同步）+ 关键事实表；原 Fork 风格多泳道图与多工作树列表折叠进「提交图」按钮（默认收起，点击展开）。纯函数 `worklineSummary.ts` 负责把 git 数据翻译成结论；v0.14 的 Fork 图渲染保持不变。
 - **分支 / 工作树（v0.14，Fork 风格，折叠在「提交图」里）**：详情抽屉「结果」之后、「审批」之前新增只读区块：chips（当前分支 / 工作树 / 远端跟踪 `origin/xxx ↑N ↓M`）+
