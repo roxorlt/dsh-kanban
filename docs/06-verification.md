@@ -519,6 +519,7 @@
 | Web（仅前端） | 每个仓库块头加展开/收起箭头按钮：`aria-expanded` + `aria-controls`、箭头 -90°/0° 旋转（180ms、`prefers-reduced-motion` 关闭）、`:focus-visible` 2px 业务蓝；收起保留仓库名/路径/计数 +「已收起 · N 个工作副本 · 点左侧箭头展开」；展开恢复工作副本列表；状态写 `localStorage`（`dsh-kanban.workspaces.collapsed`，解析容错、不可用时静默降级）；块头 hover 底 `interactive-bg-hover`，不使用字号/字重突变，无布局跳动 |
 | 单测 | Web `vitest` 27 文件 / 273 例（无回归）、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning；服务端无改动（192/192 不变） |
 | 真实宿主验收（Playwright 直连 60252，v0.16.0 服务端 + v0.16.1 前端） | 切「工作区」→ 仓库块箭头可点击：收起后工作副本列表隐藏、提示显示、`aria-expanded=false`；再点展开恢复；刷新页面后仍保持收起（localStorage 生效）；亮/暗与 390 竖屏正常、console error 0 |
+| 截图 | `docs/assets/screens/git-workspaces-collapsed-light.png` / `-dark.png` / `-portrait.png`（收起后保留块头计数与提示） |
 | 生效方式 | 纯前端改动，**已合入 main，刷新看板即生效，无需重启 DSH** |
 | 分支 | `feat/workspace-view`（v0.16.1 追加提交，基于 v0.16.0 主线） |
 
