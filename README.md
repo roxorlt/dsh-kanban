@@ -39,7 +39,8 @@
 
 ## 已验证
 
-- 服务端 `node --test`：**216/216 通过**（v0.13 12 + v0.14 8 + v0.15 11 + v0.16 11 + v0.17 清理 14 + v0.18 回收站 10）；Web `tsc` + Vite 构建通过，vitest 27 文件 / 313 测试，令牌 lint 10 CSS 0 error / 0 warning。
+- 服务端 `node --test`：**216/216 通过**（v0.13 12 + v0.14 8 + v0.15 11 + v0.16 11 + v0.17 清理 14 + v0.18 回收站 10）；Web `tsc` + Vite 构建通过，vitest 28 文件 / 346 测试，令牌 lint 10 CSS 0 error / 0 warning。
+- v0.19.0 绑定会话选择器：抽屉里的原生下拉框换成选择器浮层——**默认只列卡片所属工作区的会话**（按 workspaceId → cwd → 已绑定会话推断），一屏选完；可切「所有工作区」按工作区分组、组头折叠、搜索（标题 / 会话 ID / cwd / 工作区名与路径）；行内短会话 ID + 状态徽标，工作区注册表兜底行 +「按会话 ID 绑定」。隔离 harness（真 `lib/routes.js` + 真同源父页面桥 + Chromium 1440×900 / 390×844）**25 项断言全过**、console 0 error / 4xx 0，截图 `docs/assets/screens/session-picker-*.png`（docs/06 §1.36）。纯前端改动，**合入 main 后刷新看板即生效**。
 - v0.18.0 回收站恢复 + P1 工作区体验：清理写 manifest，回收站列表/恢复（分支已删按 sha 重建）/彻底删除，旧条目不可恢复；「没有远端（从未推送）」+ 未合并删除分支风险提示；运行中会话所在工作副本禁止清理；卡片预览前 5、排序、筛选范围开关、最近提交相对时间、空闲工作副本收起。dev-server + 演示仓库验证恢复链路与页面渲染；截图 `docs/assets/screens/git-workspaces-v018-light.png`、`git-workspaces-trash-*.png`（docs/06 §1.35）。含服务端改动，**已合入主线（merge `3274a01`），重启 DSH 后生效**。
 - v0.17.0 工作副本清理（Phase A+B）：工作副本行状态徽标（合并/远端/改动）+ 清理按钮与原因禁用；两段确认清理，目录软删除到 `~/.dsh-kanban/trash`（7 天），已合并分支可删、未合并需 danger 确认；服务端 `/git/worktrees/cleanup` 全套校验（主副本/卡片占用/脏/未合并/分支占用）。dev-server + 演示仓库验证安全清理、危险清理、trash/branch 状态与预期一致；截图 `docs/assets/screens/git-workspaces-cleanup-*.png`。
 - v0.16.0「工作区」视图 + 提交图 hover 高亮：工作区视图按仓库分块列工作副本/卡片/会话/未保存改动（服务端 `/git/workspaces` 按仓库缓存、`dirs[]` 精确归组解决 realpath 前缀问题）；hover 悬停提交行或图例项高亮同色泳道、其它淡出（180ms、reduced-motion 关闭、无布局变化）。含服务端改动，**已合入主线（merge `aeb5ba4`），重启 DSH 后生效**（hover 为纯前端，刷新即可）。dev-server + 真实/演示仓库验证：2 仓库/10 工作副本/卡片归组与 dirty 正确、点击 mini 卡片开详情、390 竖屏无溢出；hover 120 条淡出/24 条保持/图例同步；console 0 error / 4xx 0（截图 `docs/assets/screens/git-workspaces-*.png`、`git-workline-hover-*.png`，见 docs/06 §1.32）。

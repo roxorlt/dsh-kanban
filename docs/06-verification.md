@@ -550,6 +550,19 @@
 | 生效方式 | 含服务端改动，**已合入 main（merge `3274a01`），需重启 DSH 后生效**；回收站 `~/.dsh-kanban/trash`（7 天自动清理） |
 | 分支 | `feat/workspace-polish`（基于 `90a55b3`），**已合入 main（merge `3274a01`）**；版本 0.18.0；合入后自测 216/216、313 例通过 |
 
+## 1.36 v0.19.0（绑定会话选择器：默认本工作区 + 分组折叠 + 搜索，2026-10-28）
+
+| 项 | 结果 |
+|---|---|
+| 用户问题（卡片 `card-d60ae026`） | ① 绑定会话选项应按工作区分组；② 太长，可按工作区折叠展开；③ 为什么选不到 rea L2 的会话？补充：「好像只列出本工作区下的会话就行了」 |
+| ③ 排查结论 | 下拉框数据源是宿主会话列表、无工作区过滤；`rea L2` 会话 `session-b423633c-…` 在宿主列表 + 工作区注册表里都存在，但选项只显示标题（「阅读交接文件并规划未完成工作」，不含工作区字样），原生 select 平铺上百条且无搜索 → 无法定位；已绑定当前卡片的会话被排除，易被误认为缺失 |
+| Web 实现 | 新增 `components/SessionPicker.tsx` + `lib/sessionPicker.ts`；默认范围「本工作区」（workspaceId → cwd 最长前缀 → 已绑定会话推断），可切「所有工作区」（工作区分组 + 折叠 + 打开时展开卡片所属工作区）；搜索匹配标题/会话 ID/cwd/工作区名/路径；行内短 ID + 状态徽标；工作区注册表兜底行；底部「按会话 ID 绑定」；Esc/外点/滚动关闭、焦点归还 |
+| 测试 | 服务端 **216/216**（无改动）；Web **28 文件 / 346 例**（+33：分组顺序/无归属/排除已绑定/折叠默认/搜索（标题·工作区名·路径·ID·cwd）/范围推断（workspaceId·cwd·绑定会话·注册表）/注册表兜底/短 ID）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning |
+| 真实浏览器验收（隔离 harness：真 `lib/routes.js` + 隔离 data.json + 同源父页面桥替身 + Chromium 1440×900 DPR2 / 390×844） | **25/25 断言全过**、console error 0 / 4xx 0：绑定区原生 `<select>` 已消失、触发器「选择会话」；默认「本工作区」只列 rea L2 的 2 条（真会话 + 注册表兜底行）、无分组头、计数「2 个会话」；切「所有工作区」6 组顺序正确、rea L2 默认展开、其余折叠；搜 `rea` 只剩该组、搜「交接」命中 1 条；组头折叠/再展开行数正确；点会话后浮层关闭、抽屉出现该会话、服务端 `sessionIds` 写入；移动端浮层不超视口、范围切换可见 |
+| 截图 | `docs/assets/screens/session-picker-scoped.png`（默认本工作区）、`session-picker-grouped.png`（所有工作区分组）、`session-picker-search.png`（搜索）、`session-picker-mobile-390.png`（390 底部弹层） |
+| 生效方式 | 纯前端改动（含 `web/dist` 重新构建），**合入 main 后刷新看板即生效，无需重启 DSH** |
+| 分支 | `feat/session-picker`（基于 `8e6a808`）；版本 0.19.0 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
@@ -569,14 +582,14 @@ $ npm test
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
 > vite build     # dist: JS gzip ~113KB / CSS gzip ~14KB
-$ npm --prefix web run test    # vitest 25 文件 / 249 测试（含 gitGraph 24 例）
+$ npm --prefix web run test    # vitest 28 文件 / 346 测试（含 sessionPicker 33 例）
 $ npm --prefix web run lint:tokens
 # 9 个 CSS 文件：0 error / 0 warning
 ```
 
 ### 2.3 令牌规范
 
-`dsh-ui-spec` 的 `lint-tokens.mjs` 对 9 个 CSS 文件 0 error / 0 warning；`design/lint` 抽出的 mockup 组件样式同样 0/0。
+`dsh-ui-spec` 的 `lint-tokens.mjs` 对 10 个 CSS 文件 0 error / 0 warning；`design/lint` 抽出的 mockup 组件样式同样 0/0。
 
 ## 3. 端到端验证
 

@@ -31,7 +31,7 @@ type ParentResponse =
 | --- | --- | --- | --- |
 | `app.info` | – | `{locale:'zh'|'en', themeMode:'light'|'dark', dshVersion?:string, panelVisible:boolean}` | 启动握手后调用 |
 | `sessions.list` | – | `{sessions: SessionRow[], current: string|null}` | 供卡片绑定会话选择器；`SessionRow` 含 `cwd`（v0.7） |
-| `workspaces.list` | – | `{workspaces: WorkspaceRow[]}` | v0.7：DSH 左侧工作区（`workspaceId/title/path/sessionIds`），用于新建卡片的项目/cwd/会话建议与回填 |
+| `workspaces.list` | – | `{workspaces: WorkspaceRow[]}` | v0.7：DSH 左侧工作区（`workspaceId/title/path/sessionIds`），用于新建卡片的项目/cwd/会话建议与回填；v0.19 起也是绑定会话选择器的工作区分组 / 默认范围来源（无新增桥字段） |
 | `sessions.refresh` | – | `{sessions, current}` | 手动刷新 |
 | `session.open` | `{sessionId}` | `{ok:true}` | 选中会话并切到对话面板（父页面调 `ctx.layout.selectPanel(null)`） |
 | `session.create` | `{cwd?, workspaceId?, title?}` | `{sessionId}` | 新建会话（不自动打开） |
@@ -42,6 +42,8 @@ type ParentResponse =
 | `toast` | `{text, tone?:'info'|'success'|'error'}` | `{ok:true}` | 可选：让父页面用 DSH 风格提示；MVP 允许 iframe 自绘 |
 
 `SessionRow`：`{ id: string; title: string; running: boolean; updatedAt: number; workspaceId?: string; cwd?: string }`。
+
+> v0.19 绑定会话选择器：默认只列「卡片所属工作区」的会话（workspaceId → cwd 最长前缀 → 已绑定会话推断），工作区归属优先看 `workspaces.list` 的 `sessionIds`、其次按 `cwd` 前缀匹配；`sessions` 列表没给出但工作区注册表里有的会话会补兜底行。
 
 `WorkspaceRow`：`{ workspaceId: string; title: string; path: string; sessionIds: string[]; updatedAt?: number }`。
 

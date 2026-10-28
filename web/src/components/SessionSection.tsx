@@ -10,6 +10,7 @@ import {
   summarizeSessionArchiveBlocker,
 } from '../lib/sessionArchive';
 import { SuggestionChips } from './SuggestionChips';
+import { SessionPicker } from './SessionPicker';
 import { IconAlert, IconArchive, IconOpen, IconPlus, IconSession } from './Icons';
 
 export interface CreateSessionOptions {
@@ -68,12 +69,10 @@ export function SessionSection({
   onUnarchiveSession,
 }: SessionSectionProps) {
   const { t, lang } = useI18n();
-  const selectId = useId();
   const workspaceSelectId = useId();
   const cwdInputId = useId();
   const byId = new Map(sessions.map((session) => [session.id, session]));
   const bound = card.sessionIds.map((id) => ({ id, session: byId.get(id) }));
-  const available = sessions.filter((session) => !card.sessionIds.includes(session.id));
   const runningWithoutSession = card.status === 'running' && bound.length === 0;
   const runningSessionIds = useMemo(() => deriveRunningSessionIds(sessions), [sessions]);
   const archivedBound = bound.filter(({ id }) => archivedSessionIds.has(id));
@@ -282,33 +281,18 @@ export function SessionSection({
       {!embedded ? <p className="kb-session__hint">{t('drawer.standaloneSessionHint')}</p> : null}
 
       {embedded ? (
-        <div className="kb-session__bind">
-          <label className="kb-session__select-label" htmlFor={selectId}>
-            {t('drawer.bindSession')}
-          </label>
+        <div className="kb-session__bind" role="group" aria-label={t('drawer.bindSession')}>
+          <span className="kb-session__select-label">{t('drawer.bindSession')}</span>
           <div className="kb-session__bind-row">
-            <select
-              id={selectId}
-              className="kb-select"
-              value=""
-              disabled={busy || !available.length}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (value) onBind(value);
-              }}
-            >
-              <option value="" disabled>
-                {available.length ? t('drawer.selectSession') : t('drawer.sessionPickerEmpty')}
-              </option>
-              {available.map((session) => (
-                <option key={session.id} value={session.id}>
-                  {session.title}
-                  {session.running ? ` · ${t('drawer.running')}` : ''}
-                  {archivedSessionIds.has(session.id) ? ` · ${t('sessionArchive.archived')}` : ''}
-                  {pendingSessionIds.has(session.id) ? ` · ${t('sessionArchive.pendingBadge')}` : ''}
-                </option>
-              ))}
-            </select>
+            <SessionPicker
+              card={card}
+              sessions={sessions}
+              workspaces={workspaces}
+              archivedSessionIds={archivedSessionIds}
+              pendingSessionIds={pendingSessionIds}
+              busy={busy}
+              onBind={onBind}
+            />
             <button
               type="button"
               className="kb-btn kb-btn--sm kb-btn--outline kb-session__create"
