@@ -1,4 +1,4 @@
-# 卡片 Git 上下文契约 v0.5（v0.13~v0.15 见下；v0.16 工作区地图 + 提交图 hover 高亮，2026-10-28）
+# 卡片 Git 上下文契约 v0.6（v0.13~v0.16 见下；v0.17 工作副本清理判定与软删除，2026-10-28）
 
 > 目标：卡片详情抽屉能直观看到「这张卡片的工作目录落在哪个分支 / 哪个工作树（worktree）上，与主分支、远端是什么关系」，
 > 呈现方式参照 Fork 等 Git 客户端的泳道提交图。
@@ -239,6 +239,12 @@ GET /api/kanban/cards/:cardId/git[?cwd=<绝对路径>]
 - **`truncated`**：`git rev-list --count <refs…>` 减去返回条数；`graph.commits` 最多 48 条，超出只计数不返回。
 - `refs[].sha` **不保证**出现在 `commits` 里（老分支 tip 可能被 48 条上限截掉）：前端对这类 ref 只在图例/工作树列表展示，不分配泳道。
 - 示例场景：当前分支与 main、origin/main、其他工作树分支同时出现在一张图里；合并提交有 2 个父 sha；`refsTruncated > 0` 表示还有引用没画进来。
+
+### 4.8 工作副本清理（Phase A 信息 + Phase B 软删除，v0.17）
+
+- 信息层（Phase A）：`/git/workspaces` 的每个 worktree 增 `mergedIntoBase` / `upstream` / `modifiedCount` / `untrackedCount` / `locked` / `prunable` / `lastCommitAt`；前端据此显示「已并入主线 / 还没并入（多 N）」「已同步线上 / 有未推送 / 无远端」「有未保存改动 / 有未跟踪文件」「可安全清理或不可清理原因」。
+- 清理（Phase B）：仅非主工作副本且没有被未归档卡片使用时可执行；脏或未合并需用户在**二次危险确认**里明确 `confirmLoss`；服务端把目录移入 `~/.dsh-kanban/trash`（保留 7 天，可补救），再 `git worktree prune`；可选择同时删除本地分支（已合并 `-d`，未合并需二次确认后 `-D`）。接口契约见 02 §13。
+- 安全底线：绝不删除主工作副本；不使用 `--force` 删目录（用移入回收站替代）；不在存在未归档卡片 cwd 时删除；任何删除都有二次确认与回收站兜底。
 
 ### 4.7 工作区地图（`POST /git/workspaces`，v0.16）
 

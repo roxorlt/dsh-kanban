@@ -8,7 +8,7 @@
  *
  * 同时导出纯 util（分组 / 去重 / 会话计数）供单测，不依赖 DOM。
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import type { Card, GitWorkspaceRepo, GitWorkspacesResult, GitWorkspaceUnavailable, GitWorkspaceWorktree } from '../types';
 
@@ -219,16 +219,236 @@ export function groupCardsByWorktree(
   };
 }
 
+/** 工作副本合并状态：unknown = 旧服务端/无法计算（UI 不显示，避免谎报）。 */
+export type WorktreeMergeState = 'merged' | 'unmerged' | 'unknown';
+/** 工作副本远端状态：unknown = 旧服务端没有该字段。 */
+export type WorktreeRemoteState = 'no-upstream' | 'synced' | 'unpushed' | 'behind' | 'diverged' | 'unknown';
+/** 工作副本改动状态。 */
+export type WorktreeChangesState = 'modified' | 'untracked' | 'clean';
+
+export interface WorktreeStatusInfo {
+  merge: WorktreeMergeState;
+  /** 未并入主线的处数（mergedIntoBase=false 时取 aheadOfBase，否则 0） */
+  aheadMain: number;
+  remote: WorktreeRemoteState;
+  upstreamAhead: number;
+  upstreamBehind: number;
+  changes: WorktreeChangesState;
+  modifiedCount: number;
+  untrackedCount: number;
+}
+
+type WorktreeStatusInput = Pick<
+  GitWorkspaceWorktree,
+  'aheadOfBase' | 'mergedIntoBase' | 'upstream' | 'modifiedCount' | 'untrackedCount' | 'dirty'
+>;
+
+/**
+ * Phase A 状态分类（契约 §12 v0.17 / 06 §4.8）：
+ * 合并状态 / 远端状态 / 改动状态，组件按状态选 i18n 短语。
+ * 旧服务端缺字段时按「unknown」处理（远端）或用 aheadOfBase / dirty 兼容推断（合并 / 改动）。
+ */
+export function worktreeStatusInfo(worktree: WorktreeStatusInput): WorktreeStatusInfo {
+  const merge: WorktreeMergeState =
+    worktree.mergedIntoBase === true
+      ? 'merged'
+      : worktree.mergedIntoBase === false
+        ? 'unmerged'
+        : worktree.mergedIntoBase === null
+          ? 'unknown'
+          : // 旧服务端兼容：用 aheadOfBase 推断
+            worktree.aheadOfBase === null || worktree.aheadOfBase === undefined
+            ? 'unknown'
+            : worktree.aheadOfBase === 0
+              ? 'merged'
+              : 'unmerged';
+
+  const aheadMain = Math.max(0, worktree.aheadOfBase ?? 0);
+  const upstream = worktree.upstream;
+  let remote: WorktreeRemoteState;
+  if (upstream === undefined) remote = 'unknown';
+  else if (upstream === null) remote = 'no-upstream';
+  else if (upstream.ahead > 0 && upstream.behind > 0) remote = 'diverged';
+  else if (upstream.ahead > 0) remote = 'unpushed';
+  else if (upstream.behind > 0) remote = 'behind';
+  else remote = 'synced';
+
+  const modifiedCount = Math.max(0, worktree.modifiedCount ?? (worktree.dirty === true ? 1 : 0));
+  const untrackedCount = Math.max(0, worktree.untrackedCount ?? 0);
+  const changes: WorktreeChangesState =
+    modifiedCount > 0 ? 'modified' : untrackedCount > 0 ? 'untracked' : 'clean';
+
+  return {
+    merge,
+    aheadMain,
+    remote,
+    upstreamAhead: Math.max(0, upstream?.ahead ?? 0),
+    upstreamBehind: Math.max(0, upstream?.behind ?? 0),
+    changes,
+    modifiedCount,
+    untrackedCount,
+  };
+}
+
+/** Phase A 状态短语（组件层直接 t(key, params)；测试用它验证状态 → 文案映射）。 */
+export interface WorktreeStatusBadge {
+  kind: 'merge' | 'remote' | 'changes';
+  /** i18n key（workspace.*） */
+  key: string;
+  params?: Record<string, number>;
+}
+
+/**
+ * 按 Phase A 分类生成行内状态短语列表（顺序：合并 → 远端 → 改动）。
+ * unknown 状态不生成短语（不谎报）；diverged 会给出「没推送」+「线上落后」两条。
+ */
+export function worktreeStatusBadges(worktree: WorktreeStatusInput): WorktreeStatusBadge[] {
+  const status = worktreeStatusInfo(worktree);
+  const badges: WorktreeStatusBadge[] = [];
+  if (status.merge === 'merged') badges.push({ kind: 'merge', key: 'workspace.mergedIntoMain' });
+  else if (status.merge === 'unmerged') {
+    badges.push({ kind: 'merge', key: 'workspace.notMerged', params: { count: Math.max(1, status.aheadMain) } });
+  }
+
+  switch (status.remote) {
+    case 'no-upstream':
+      badges.push({ kind: 'remote', key: 'workspace.remoteNone' });
+      break;
+    case 'synced':
+      badges.push({ kind: 'remote', key: 'workspace.remoteSynced' });
+      break;
+    case 'unpushed':
+      badges.push({ kind: 'remote', key: 'workspace.unpushed', params: { count: status.upstreamAhead } });
+      break;
+    case 'behind':
+      badges.push({ kind: 'remote', key: 'workspace.remoteBehind', params: { count: status.upstreamBehind } });
+      break;
+    case 'diverged':
+      badges.push({ kind: 'remote', key: 'workspace.unpushed', params: { count: status.upstreamAhead } });
+      badges.push({ kind: 'remote', key: 'workspace.remoteBehind', params: { count: status.upstreamBehind } });
+      break;
+    default:
+      break; // unknown：旧服务端没有远端信息，不显示
+  }
+
+  if (status.changes === 'modified') badges.push({ kind: 'changes', key: 'workspace.dirty' });
+  else if (status.changes === 'untracked') badges.push({ kind: 'changes', key: 'workspace.untracked' });
+  else badges.push({ kind: 'changes', key: 'workspace.clean' });
+
+  return badges;
+}
+
+/** 清理按钮被禁用的原因（null = 可清理）。 */
+export type WorktreeCleanupBlocked = 'main' | 'running' | 'in-use' | null;
+
+export interface WorktreeCleanupCheck {
+  /** 是否可点「清理」（主工作副本 / 锁定 / 有卡片占用时不可点） */
+  canCleanup: boolean;
+  blocked: WorktreeCleanupBlocked;
+  cardCount: number;
+  runningCardCount: number;
+  /** 安全可清理：可清理 && 已并入主线 && 干净（不弹第二层危险确认） */
+  safe: boolean;
+  /** 需要第二层危险确认：可清理但未合并或有未保存改动 */
+  needsDangerConfirm: boolean;
+}
+
+type WorktreeCleanupInput = Pick<
+  GitWorkspaceWorktree,
+  'isMain' | 'mergedIntoBase' | 'aheadOfBase' | 'modifiedCount' | 'untrackedCount' | 'dirty'
+> & { cards: readonly Card[] };
+
+/**
+ * 清理判定（纯函数，契约 §12/§13）：
+ * 非主工作副本 + 没被未归档卡片占用 + 没有卡片在跑 才允许清理；
+ * 允许但「未并入主线 / 有改动」时需要第二层危险确认。
+ */
+export function evaluateWorktreeCleanup(worktree: WorktreeCleanupInput): WorktreeCleanupCheck {
+  const cards = worktree.cards;
+  const runningCardCount = cards.filter((card) => card.status === 'running').length;
+  let blocked: WorktreeCleanupBlocked = null;
+  if (worktree.isMain) blocked = 'main';
+  else if (runningCardCount > 0) blocked = 'running';
+  else if (cards.length > 0) blocked = 'in-use';
+
+  const status = worktreeStatusInfo(worktree);
+  const canCleanup = blocked === null;
+  const dirty = status.changes !== 'clean';
+  const unmerged = status.merge === 'unmerged';
+  return {
+    canCleanup,
+    blocked,
+    cardCount: cards.length,
+    runningCardCount,
+    safe: canCleanup && !dirty && !unmerged,
+    needsDangerConfirm: canCleanup && (dirty || unmerged),
+  };
+}
+
+/** 清理接口错误码（契约 §13；前端兼容服务端把 code 放 error.code 或 details.reason 两种形态）。 */
+export const CLEANUP_ERROR_CODES = [
+  'WORKTREE_MAIN',
+  'WORKTREE_IN_USE',
+  'WORKTREE_DIRTY',
+  'WORKTREE_UNMERGED',
+  'BRANCH_MAIN',
+  'BRANCH_IN_USE',
+  'TRASH_MOVE_FAILED',
+  'WORKTREE_PRUNE_FAILED',
+  'BRANCH_DELETE_FAILED',
+  'NOT_FOUND',
+] as const;
+
+export type CleanupErrorReason = (typeof CLEANUP_ERROR_CODES)[number] | 'unknown';
+
+/**
+ * 从任意错误对象里提取清理错误码（KanbanApiError 的 `code`、`details.reason`，或 body 里的 `reason`）。
+ * 认不出时返回 'unknown'（UI 用兜底文案）。
+ */
+export function cleanupErrorReason(error: unknown): CleanupErrorReason {
+  if (!error || typeof error !== 'object') return 'unknown';
+  const record = error as { code?: unknown; reason?: unknown; details?: unknown };
+  const details =
+    record.details && typeof record.details === 'object'
+      ? (record.details as { reason?: unknown; code?: unknown })
+      : null;
+  const candidates = [record.code, details?.reason, details?.code, record.reason];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    if ((CLEANUP_ERROR_CODES as readonly string[]).includes(candidate)) {
+      return candidate as CleanupErrorReason;
+    }
+  }
+  return 'unknown';
+}
+
+/** 这些错误表示服务端要求用户明确接受丢失风险（前端应升级到第二层危险确认）。 */
+export function cleanupErrorNeedsLossConfirm(error: unknown): boolean {
+  const reason = cleanupErrorReason(error);
+  return reason === 'WORKTREE_DIRTY' || reason === 'WORKTREE_UNMERGED';
+}
+
+export interface WorkspacesController extends WorkspacesState {
+  /** 手动刷新（清理成功等写操作后调用；会清掉当前目录集合的缓存并重新请求） */
+  reload: () => void;
+}
+
 /**
  * 加载「工作区」视图数据。失败静默（保留已有结果），不阻塞视图。
  * @param cards 当前视图的卡片（内部只保留未归档且有 cwd 的）
  */
-export function useWorkspaces(cards: readonly Card[]): WorkspacesState {
+export function useWorkspaces(cards: readonly Card[]): WorkspacesController {
   const cwds = useMemo(() => collectWorkspaceCwds(cards), [cards]);
   const cwdKey = cwds.join('\u0000');
   const cwdsRef = useRef(cwds);
   cwdsRef.current = cwds;
   const [state, setState] = useState<WorkspacesState>(EMPTY_WORKSPACES);
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => {
+    const dirs = cwdsRef.current;
+    if (dirs.length) cache.delete(cacheKeyFor(dirs));
+    setReloadToken((token) => token + 1);
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -300,7 +520,7 @@ export function useWorkspaces(cards: readonly Card[]): WorkspacesState {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [cwdKey]);
+  }, [cwdKey, reloadToken]);
 
-  return state;
+  return { ...state, reload };
 }

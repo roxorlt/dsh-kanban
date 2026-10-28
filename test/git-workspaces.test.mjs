@@ -98,6 +98,14 @@ test('collectGitWorkspaces：多 dir 同仓库去重 + linked worktree 的 isMai
     dirty: false,
     // 请求目录→工作副本的精确映射（原文），供前端归组（含符号链接写法的目录）
     dirs: [repo, join(repo, 'sub')],
+    // v0.17 Phase A 增量字段
+    mergedIntoBase: true,
+    upstream: null,
+    modifiedCount: 0,
+    untrackedCount: 0, // sub/ 是空目录，git 不统计空目录
+    locked: false,
+    prunable: false,
+    lastCommitAt: '2026-01-01T00:00:02+00:00',
   })
   assert.equal(featRow.path, realWtFeat)
   assert.equal(featRow.branch, 'feat/x')
@@ -109,6 +117,14 @@ test('collectGitWorkspaces：多 dir 同仓库去重 + linked worktree 的 isMai
   assert.equal(featRow.behindOfBase, 1)
   assert.equal(featRow.dirty, false)
   assert.deepEqual(featRow.dirs, [wtFeat, join(wtFeat, 'sub2')])
+  // v0.17 Phase A 增量字段
+  assert.equal(featRow.mergedIntoBase, false)
+  assert.equal(featRow.upstream, null)
+  assert.equal(featRow.modifiedCount, 0)
+  assert.equal(featRow.untrackedCount, 0) // sub2/ 是空目录，git 不统计空目录
+  assert.equal(featRow.locked, false)
+  assert.equal(featRow.prunable, false)
+  assert.equal(featRow.lastCommitAt, '2026-01-01T00:00:03+00:00')
 
   // 符号链接写法：请求 dir 原文与 git 返回的 realpath 不一致，也要能映射到工作副本
   const alias = join(root, 'alias-repo')

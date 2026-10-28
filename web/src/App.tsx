@@ -1672,6 +1672,7 @@ export function App() {
           cards={filteredCards}
           workspaces={workspaceState}
           onOpenCard={actions.onOpenDetail}
+          onNotify={actions.onNotify}
         />
       );
     }

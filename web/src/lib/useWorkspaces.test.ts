@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { Card, GitWorkspaceRepo, GitWorkspaceWorktree } from '../types';
-import { normalizeGitWorkspaces } from '../api';
+import { normalizeCleanupResult, normalizeGitWorkspaces } from '../api';
 import {
   chunkWorkspaceDirs,
+  cleanupErrorNeedsLossConfirm,
+  cleanupErrorReason,
   collectWorkspaceCwds,
   countBoundSessions,
+  evaluateWorktreeCleanup,
   groupCardsByWorktree,
   mergeWorkspaceResults,
+  worktreeStatusBadges,
+  worktreeStatusInfo,
 } from './useWorkspaces';
 
 function makeCard(id: string, overrides: Partial<Card> = {}): Card {
@@ -213,5 +218,303 @@ describe('normalizeGitWorkspaces', () => {
     expect(normalizeGitWorkspaces(null).disabled).toBe(false);
     expect(normalizeGitWorkspaces(null).repos).toEqual([]);
     expect(normalizeGitWorkspaces(null).unavailable).toEqual([]);
+  });
+});
+
+// ---------------------------------------------- v0.17 Phase A / Phase B
+
+/** 清理判定入参：工作副本字段 + 已归组的 cards。 */
+function cleanupInput(
+  overrides: Partial<GitWorkspaceWorktree> & { cards?: Card[] } = {},
+): GitWorkspaceWorktree & { cards: Card[] } {
+  return { ...makeWorktree('/repo/.worktrees/feat-x'), cards: [], ...overrides };
+}
+
+describe('worktreeStatusInfo / worktreeStatusBadges', () => {
+  it('已并入 + 已同步 + 干净 → 三条中性/成功短语', () => {
+    const worktree = makeWorktree('/repo/.worktrees/feat-x', {
+      mergedIntoBase: true,
+      upstream: { ref: 'origin/main', ahead: 0, behind: 0 },
+      modifiedCount: 0,
+      untrackedCount: 0,
+    });
+    expect(worktreeStatusInfo(worktree)).toMatchObject({
+      merge: 'merged',
+      aheadMain: 0,
+      remote: 'synced',
+      changes: 'clean',
+      modifiedCount: 0,
+      untrackedCount: 0,
+    });
+    expect(worktreeStatusBadges(worktree)).toEqual([
+      { kind: 'merge', key: 'workspace.mergedIntoMain' },
+      { kind: 'remote', key: 'workspace.remoteSynced' },
+      { kind: 'changes', key: 'workspace.clean' },
+    ]);
+  });
+
+  it('未并入（多 N）+ 没有远端 + 有未保存改动', () => {
+    const worktree = makeWorktree('/repo/.worktrees/feat-x', {
+      aheadOfBase: 3,
+      mergedIntoBase: false,
+      upstream: null,
+      modifiedCount: 2,
+      untrackedCount: 1,
+    });
+    expect(worktreeStatusInfo(worktree)).toMatchObject({
+      merge: 'unmerged',
+      aheadMain: 3,
+      remote: 'no-upstream',
+      changes: 'modified',
+    });
+    expect(worktreeStatusBadges(worktree)).toEqual([
+      { kind: 'merge', key: 'workspace.notMerged', params: { count: 3 } },
+      { kind: 'remote', key: 'workspace.remoteNone' },
+      { kind: 'changes', key: 'workspace.dirty' },
+    ]);
+  });
+
+  it('远端分叉（未推送 + 线上落后）与未跟踪文件', () => {
+    const worktree = makeWorktree('/repo/.worktrees/feat-x', {
+      mergedIntoBase: true,
+      upstream: { ref: 'origin/feat-x', ahead: 2, behind: 4 },
+      modifiedCount: 0,
+      untrackedCount: 3,
+    });
+    expect(worktreeStatusInfo(worktree)).toMatchObject({
+      remote: 'diverged',
+      upstreamAhead: 2,
+      upstreamBehind: 4,
+      changes: 'untracked',
+    });
+    expect(worktreeStatusBadges(worktree).map((badge) => badge.key)).toEqual([
+      'workspace.mergedIntoMain',
+      'workspace.unpushed',
+      'workspace.remoteBehind',
+      'workspace.untracked',
+    ]);
+  });
+
+  it('old server 兼容：缺 mergedIntoBase 用 aheadOfBase 推断，缺 upstream 不显示远端，dirty 兜底为有改动', () => {
+    const oldServer = makeWorktree('/repo/.worktrees/feat-x', {
+      aheadOfBase: 0,
+      // mergedIntoBase / upstream / modifiedCount / untrackedCount 均缺失
+      dirty: true,
+    });
+    expect(worktreeStatusInfo(oldServer)).toMatchObject({ merge: 'merged', remote: 'unknown', changes: 'modified' });
+    expect(worktreeStatusBadges(oldServer)).toEqual([
+      { kind: 'merge', key: 'workspace.mergedIntoMain' },
+      { kind: 'changes', key: 'workspace.dirty' },
+    ]);
+  });
+
+  it('mergedIntoBase=null（探测不到主线）不显示合并短语', () => {
+    const worktree = makeWorktree('/repo/.worktrees/feat-x', {
+      mergedIntoBase: null,
+      aheadOfBase: null,
+      upstream: { ref: 'origin/feat-x', ahead: 0, behind: 0 },
+      modifiedCount: 0,
+      untrackedCount: 0,
+    });
+    expect(worktreeStatusInfo(worktree).merge).toBe('unknown');
+    expect(worktreeStatusBadges(worktree).map((badge) => badge.kind)).toEqual(['remote', 'changes']);
+  });
+});
+
+describe('evaluateWorktreeCleanup', () => {
+  const mergedClean = {
+    mergedIntoBase: true,
+    upstream: { ref: 'origin/main', ahead: 0, behind: 0 },
+    modifiedCount: 0,
+    untrackedCount: 0,
+    dirty: false,
+  };
+
+  it('主工作副本不可清理', () => {
+    const check = evaluateWorktreeCleanup(cleanupInput({ ...mergedClean, isMain: true }));
+    expect(check).toMatchObject({ canCleanup: false, blocked: 'main', safe: false, needsDangerConfirm: false });
+  });
+
+  it('有运行中卡片 → 不可清理（原因：有卡片在跑）', () => {
+    const check = evaluateWorktreeCleanup(
+      cleanupInput({ ...mergedClean, cards: [makeCard('running', { status: 'running' })] }),
+    );
+    expect(check).toMatchObject({
+      canCleanup: false,
+      blocked: 'running',
+      cardCount: 1,
+      runningCardCount: 1,
+    });
+  });
+
+  it('有未归档卡片占用 → 不可清理（原因：有 N 张卡片在用）', () => {
+    const check = evaluateWorktreeCleanup(
+      cleanupInput({ ...mergedClean, cards: [makeCard('a'), makeCard('b')] }),
+    );
+    expect(check).toMatchObject({ canCleanup: false, blocked: 'in-use', cardCount: 2, runningCardCount: 0 });
+  });
+
+  it('干净且已并入 → 安全可清理（不需要危险确认）', () => {
+    expect(evaluateWorktreeCleanup(cleanupInput(mergedClean))).toMatchObject({
+      canCleanup: true,
+      blocked: null,
+      safe: true,
+      needsDangerConfirm: false,
+    });
+  });
+
+  it('未并入 → 可清理但需要第二层危险确认', () => {
+    const check = evaluateWorktreeCleanup(
+      cleanupInput({ mergedIntoBase: false, aheadOfBase: 4, modifiedCount: 0, untrackedCount: 0 }),
+    );
+    expect(check).toMatchObject({ canCleanup: true, blocked: null, safe: false, needsDangerConfirm: true });
+  });
+
+  it('有未保存改动 / 未跟踪文件 → 需要危险确认', () => {
+    expect(
+      evaluateWorktreeCleanup(cleanupInput({ mergedIntoBase: true, modifiedCount: 2, untrackedCount: 0 }))
+        .needsDangerConfirm,
+    ).toBe(true);
+    expect(
+      evaluateWorktreeCleanup(cleanupInput({ mergedIntoBase: true, modifiedCount: 0, untrackedCount: 3 }))
+        .needsDangerConfirm,
+    ).toBe(true);
+  });
+});
+
+describe('cleanupErrorReason', () => {
+  it('兼容 error.code / details.reason / body.reason 三种形态', () => {
+    expect(cleanupErrorReason({ code: 'WORKTREE_DIRTY' })).toBe('WORKTREE_DIRTY');
+    expect(cleanupErrorReason({ code: 'CONFLICT', details: { reason: 'WORKTREE_IN_USE' } })).toBe('WORKTREE_IN_USE');
+    expect(cleanupErrorReason({ reason: 'BRANCH_IN_USE' })).toBe('BRANCH_IN_USE');
+  });
+
+  it('认不出的错误码归 unknown（UI 用兜底文案），非对象也安全', () => {
+    expect(cleanupErrorReason({ code: 'WHATEVER' })).toBe('unknown');
+    expect(cleanupErrorReason(null)).toBe('unknown');
+    expect(cleanupErrorReason('WORKTREE_UNMERGED')).toBe('unknown');
+  });
+
+  it('WORKTREE_DIRTY / WORKTREE_UNMERGED 表示需要 confirmLoss（升级危险确认）', () => {
+    expect(cleanupErrorNeedsLossConfirm({ code: 'WORKTREE_DIRTY' })).toBe(true);
+    expect(cleanupErrorNeedsLossConfirm({ details: { reason: 'WORKTREE_UNMERGED' } })).toBe(true);
+    expect(cleanupErrorNeedsLossConfirm({ code: 'WORKTREE_IN_USE' })).toBe(false);
+    expect(cleanupErrorNeedsLossConfirm({ code: 'TRASH_MOVE_FAILED' })).toBe(false);
+  });
+
+  it('服务端额外错误码（prune/删分支失败/目标不存在）也能识别', () => {
+    expect(cleanupErrorReason({ code: 'WORKTREE_PRUNE_FAILED' })).toBe('WORKTREE_PRUNE_FAILED');
+    expect(cleanupErrorReason({ code: 'BRANCH_DELETE_FAILED' })).toBe('BRANCH_DELETE_FAILED');
+    expect(cleanupErrorReason({ code: 'NOT_FOUND' })).toBe('NOT_FOUND');
+  });
+});
+
+describe('normalizeGitWorkspaces v0.17 字段', () => {
+  it('归一化 Phase A 新字段', () => {
+    const result = normalizeGitWorkspaces({
+      repos: [
+        {
+          root: '/repo',
+          worktrees: [
+            {
+              path: '/repo/.worktrees/feat-x',
+              mergedIntoBase: false,
+              upstream: { ref: 'origin/feat-x', ahead: 2, behind: -1 },
+              modifiedCount: 3,
+              untrackedCount: 5,
+              locked: true,
+              prunable: false,
+              lastCommitAt: '2026-10-28T17:01:26+08:00',
+            },
+          ],
+        },
+      ],
+    });
+    expect(result.repos[0]?.worktrees[0]).toMatchObject({
+      mergedIntoBase: false,
+      upstream: { ref: 'origin/feat-x', ahead: 2, behind: 0 },
+      modifiedCount: 3,
+      untrackedCount: 5,
+      locked: true,
+      prunable: false,
+      lastCommitAt: '2026-10-28T17:01:26+08:00',
+    });
+  });
+
+  it('旧服务端缺字段时保持 undefined（前端据此显示「未知」而不谎报）', () => {
+    const worktree = normalizeGitWorkspaces({
+      repos: [{ root: '/repo', worktrees: [{ path: '/repo' }] }],
+    }).repos[0]?.worktrees[0];
+    expect(worktree?.mergedIntoBase).toBeUndefined();
+    expect(worktree?.upstream).toBeUndefined();
+    expect(worktree?.modifiedCount).toBeUndefined();
+    expect(worktree?.untrackedCount).toBeUndefined();
+    expect(worktree?.locked).toBeUndefined();
+  });
+
+  it('upstream=null（没有远端）保留 null；非法 upstream 归 null', () => {
+    const [noRemote, broken] = normalizeGitWorkspaces({
+      repos: [
+        {
+          root: '/repo',
+          worktrees: [
+            { path: '/repo/.worktrees/a', upstream: null },
+            { path: '/repo/.worktrees/b', upstream: { ahead: 1 } },
+          ],
+        },
+      ],
+    }).repos[0]!.worktrees;
+    expect(noRemote?.upstream).toBeNull();
+    expect(broken?.upstream).toBeNull();
+  });
+});
+
+describe('normalizeCleanupResult', () => {
+  it('归一化清理结果并对缺省值兜底', () => {
+    expect(normalizeCleanupResult(null)).toEqual({
+      repoRoot: '',
+      worktreePath: '',
+      trashedTo: '',
+      branchName: null,
+      branchDeleted: false,
+      trashRetentionDays: 7,
+    });
+    expect(
+      normalizeCleanupResult({
+        repoRoot: '/repo',
+        worktreePath: '/repo/.worktrees/feat-x',
+        trashedTo: '/Users/x/.dsh-kanban/trash/20261028-repo-feat-x',
+        branchName: 'feat/x',
+        branchDeleted: true,
+        trashRetentionDays: 7,
+      }),
+    ).toEqual({
+      repoRoot: '/repo',
+      worktreePath: '/repo/.worktrees/feat-x',
+      trashedTo: '/Users/x/.dsh-kanban/trash/20261028-repo-feat-x',
+      branchName: 'feat/x',
+      branchDeleted: true,
+      trashRetentionDays: 7,
+    });
+  });
+
+  it('branchName 缺失归 null、非法 retention 回落 7 天', () => {
+    const result = normalizeCleanupResult({ branchName: null, branchDeleted: false, trashRetentionDays: 0 });
+    expect(result.branchName).toBeNull();
+    expect(result.trashRetentionDays).toBe(7);
+  });
+});
+
+describe('groupCardsByWorktree · dirs 精确归组（v0.17 契约）', () => {
+  it('优先用 worktrees[].dirs 原文精确匹配，其次才用最长前缀', () => {
+    const repo = makeRepo('/repo', [
+      makeWorktree('/repo/.worktrees/feat-x', { branch: 'feat/x', dirs: ['/tmp/linked-x'] }),
+    ]);
+    const groups = groupCardsByWorktree(
+      [makeCard('linked', { cwd: '/tmp/linked-x' }), makeCard('nested', { cwd: '/repo/.worktrees/feat-x/src' })],
+      [repo],
+    );
+    expect(groups.repos[0]?.worktrees[0]?.cards.map((card) => card.id)).toEqual(['linked', 'nested']);
+    expect(groups.unassigned).toEqual([]);
   });
 });
