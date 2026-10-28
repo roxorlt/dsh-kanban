@@ -496,6 +496,20 @@
 | 生效方式 | 含服务端改动（`lib/git.js` / `lib/routes.js`），**已合入主线（merge `e1fbe81`），重启 DSH 后生效**；`web/dist` 已重建；hover demo 为静态 HTML 可直接打开 |
 | 分支 | `feat/workline-badges`（基于 v0.14.1 主线 `226aa01`），**已合入 main（merge `e1fbe81`）**；版本号 0.15.0；合入后自测 181/181、260 例通过 |
 
+## 1.32 v0.16.0（「工作区」视图按仓库分块 + 提交图 hover 高亮泳道，2026-10-28）
+
+| 项 | 结果 |
+|---|---|
+| 背景 | 用户确认「先方案 3、后方案 2」；并将 hover 高亮泳道从 demo 落进正式功能，按设计规范复核交互样式（`docs/03-design-system.md` 增 §7.22 / §7.23） |
+| 服务端 | 新增 `POST /api/kanban/git/workspaces`（契约 02 §12 / 06 §4.7）：按 `git-common-dir` 去重仓库；每仓库 `mainBranch` + `worktrees[]`（path/branch/detached/sha/主工作副本/isCurrent/ahead-behind 相对主线/`dirty`）；工作副本上限 12（主工作副本与请求目录所在副本优先）；`dirty` = `git status --porcelain --untracked-files=no`；**每个工作副本返回 `dirs[]`**（本次请求落在该副本的 cwd 原文，解决 `/tmp` ↔ realpath 前缀不一致的归组问题）；只读、按仓库缓存 8s/64、允许集合=未归档卡片 cwd、失败目录进 `unavailable` |
+| Web | 新增第三视图「工作区」（`ViewMode` 扩展 + 持久化兼容旧值；只读，进入时退出选择模式）：`WorkspaceView` 按仓库分块（仓库头 + 工作副本行：纯 CSS 文件夹图标、分支、主工作树/当前/有未保存改动/干净、相对主线 `多 N · 少 M`/`与主线一致`、相对仓库根路径、关联卡片 mini 列表[点击开详情]、会话数）；未归属卡片进「未指定」；空态/disabled 兜底。`useWorkspaces`：cwd 去重、400ms 防抖、≤32/批、15s 缓存、20s 可见刷新、失败保留旧数据；`groupCardsByWorktree` 优先用 `dirs[]` 精确归组、退回最长前缀。提交图 `ForkGraph` 增加 hover：行/图例项悬停 → 同色泳道保持、其它 0.18（180ms 过渡、reduced-motion 关闭），图例同色高亮；不改布局/无点击 |
+| 设计规范 | `docs/03-design-system.md` 新增 §7.22「数据图表 hover 高亮」（触发/表现/过渡/不改什么/实现口径/可访问性/原型）与 §7.23「工作区视图」（入口/块头/工作副本行/未指定/数据/密度响应式）；契约 06 升 v0.5（§4.7 + §5 hover） |
+| 单测 | 服务端 `node --test` **192/192**（v0.16 新增 11：工作区地图采集与路由，含去重/多 worktree/dirty/12 上限/forbidden/缓存命中与 TTL/400 矩阵/405；另补 `dirs[]` 映射与符号链接归组断言）；Web `vitest` **27 文件 / 273 测试**（新增 13：分组/批次/会话计数/归一化）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 10 CSS 0 error / 0 warning |
+| 真实浏览器验收（dev-server + 真实仓库/演示仓库数据；1440×900 DPR2 / 390×844，亮/暗） | 工作区视图：2 个仓库 / 10 个工作副本；主仓库 1 卡、演示仓库 3 卡正确归组（修复前因 `/tmp` ↔ `/private/tmp` 前缀不一致全落「未指定」，现按 `dirs[]` 精确归组）、未指定 3 卡（无 cwd / 非 git / 目录不存在）；dirty 标记（当前工作副本）正确；点击 mini 卡片打开详情；390 竖屏 `documentElement.scrollWidth==390` 无溢出；console error 0 / pageerror 0 / 4xx 0。hover：真实仓库 48 行图上悬停 → 120 条非本泳道线 opacity 0.18、24 条保持、图例对应分支 `is-active`、移开恢复全部可见；亮/暗正常 |
+| 截图 | `docs/assets/screens/git-workspaces-light.png` / `-dark.png` / `-portrait.png` / `-drawer.png`；`git-workline-hover-light.png` / `-dark.png`；另有设计原型 `design/branch-awareness/screens/workspace-view-*.png`、`hover-product-light.png` |
+| 生效方式 | 含服务端改动（`lib/git.js` / `lib/routes.js`），需**合入主线并重启 DSH**；`web/dist` 已重建。hover 高亮纯前端，刷新即可；工作区视图需要新接口（重启后生效） |
+| 分支 | `feat/workspace-view`（基于 v0.15.0 主线 `9acf3f0`）；版本号 0.16.0 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
@@ -709,3 +723,9 @@ node --test test/*.test.mjs                # 181/181（含 test/git-summary.test
 npm --prefix web run build                 # 重建 web/dist
 # dev-server 打开看板即可看卡片徽标（需要先起独立 dev-server；徽标走 POST /api/kanban/git/summaries）
 # hover 高亮 demo：直接用浏览器打开 design/branch-awareness/hover-lane-demo.html
+
+# v0.16.0 工作区视图 / hover 高亮复跑
+npm --prefix web run test                  # 27 文件 / 273 例
+node --test test/*.test.mjs                # 192/192（含 test/git-workspaces.test.mjs 11 例）
+npm --prefix web run build                 # 重建 web/dist
+# 打开看板 → 工具栏切「工作区」；hover 详情抽屉里展开的提交图任意行看图例同步高亮

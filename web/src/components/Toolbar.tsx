@@ -11,6 +11,7 @@ import {
   IconBoard,
   IconCheck,
   IconClose,
+  IconFolder,
   IconGlobe,
   IconHelp,
   IconList,
@@ -20,7 +21,7 @@ import {
   IconSun,
 } from './Icons';
 
-export type ViewMode = 'board' | 'list';
+export type ViewMode = 'board' | 'list' | 'workspaces';
 export type SyncState = 'connected' | 'connecting' | 'reconnecting' | 'standalone';
 
 interface ToolbarProps {
@@ -104,6 +105,7 @@ export function Toolbar({
   const views: { id: ViewMode; icon: ReactNode; key: I18nKey }[] = [
     { id: 'board', icon: <IconBoard />, key: 'app.viewBoard' },
     { id: 'list', icon: <IconList />, key: 'app.viewList' },
+    { id: 'workspaces', icon: <IconFolder />, key: 'app.viewWorkspaces' },
   ];
   const syncLabel =
     syncState === 'standalone'
@@ -143,7 +145,7 @@ export function Toolbar({
       </div>
 
         <div className="kb-topbar-actions">
-        <div className="kb-seg" role="tablist" aria-label={t('app.viewBoard')}>
+        <div className="kb-seg kb-viewseg" role="tablist" aria-label={t('app.viewBoard')}>
           {views.map((entry) => (
             <button
               key={entry.id}
@@ -269,6 +271,7 @@ export function Toolbar({
           ) : null}
         </div>
 
+        {view === 'workspaces' ? null : (
         <button
           type="button"
           className={`kb-btn kb-btn--sm ${selectionMode ? 'kb-btn--primary' : 'kb-btn--outline'} kb-select-btn`}
@@ -280,6 +283,7 @@ export function Toolbar({
           </span>
           {selectionMode ? t('selection.exit') : t('selection.enter')}
         </button>
+        )}
 
         <div className="kb-toolbar-spacer" />
 

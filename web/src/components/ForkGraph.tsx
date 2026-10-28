@@ -6,8 +6,11 @@
  * - 主体：固定最大高度、内部滚动的多泳道提交图；行高 22、列宽 14（泳道 > 8 时 12）。
  *   每行先画连线（同泳道竖直、跨泳道平滑三次贝塞尔），再画圆点
  *   （合并提交双环、HEAD 加深外环），右侧 ref 徽标 + subject 单行省略 + 短 sha。
+ * - hover 交互（v0.16）：悬停任意提交行或图例项时，同色泳道的线/点/ref 徽标保持高亮，其余淡出；
+ *   移开恢复。纯展示，不改变布局、无点击/跳转。
  * - 纯展示：不可点击、无展开；完整 sha / 作者 / 时间放原生 title。
  */
+import { useState } from 'react';
 import { useI18n } from '../i18n';
 import type { ForkGraphLayout, ForkGraphRefInfo, ForkGraphRow, ForkGraphSegment } from '../lib/forkGraph';
 import { FORK_GRAPH_COMPACT_LANE_COUNT } from '../lib/forkGraph';
@@ -100,15 +103,21 @@ interface ForkGraphRowViewProps {
   row: ForkGraphRow;
   width: number;
   graphWidth: number;
+  /** 悬停该行时把泳道颜色（调色板序号）上抛；离开时 null */
+  onHoverLane: (color: number | null) => void;
 }
 
-function ForkGraphRowView({ row, width, graphWidth }: ForkGraphRowViewProps) {
+function ForkGraphRowView({ row, width, graphWidth, onHoverLane }: ForkGraphRowViewProps) {
   const { t, lang } = useI18n();
   const commit = row.commit;
   const dotX = laneX(row.dot.lane, width);
   const detailTitle = `${commit.sha}\n${commit.authorName}\n${formatDateTime(commit.committedAt, lang)}`;
   return (
-    <li className="kb-git__fork-row">
+    <li
+      className="kb-git__fork-row"
+      onMouseEnter={() => onHoverLane(row.dot.color)}
+      onMouseLeave={() => onHoverLane(null)}
+    >
       <span className="kb-git__fork-graph" style={{ width: graphWidth }}>
         <svg
           className="kb-git__fork-svg"
@@ -172,16 +181,23 @@ interface ForkGraphProps {
   worktreeBranches: ReadonlySet<string>;
 }
 
-/** 引用图例 + Fork 风格多泳道提交图 + 截断提示。 */
+/** 引用图例 + Fork 风格多泳道提交图 + 截断提示；hover 行/图例时高亮同色泳道。 */
 export function ForkGraph({ layout, worktreeBranches }: ForkGraphProps) {
   const { t } = useI18n();
+  const [activeColor, setActiveColor] = useState<number | null>(null);
   const width = laneWidthFor(layout.laneCount);
   const graphWidth = layout.laneCount * width + GRAPH_PADDING * 2;
   return (
-    <div className="kb-git__fork">
+    <div className="kb-git__fork" data-active-color={activeColor === null ? undefined : activeColor}>
       <div className="kb-git__fork-legend" role="list" aria-label={t('git.legendLabel')}>
         {layout.refs.map((ref) => (
-          <span className="kb-git__fork-legend-item" role="listitem" key={`${ref.kind}:${ref.name}`}>
+          <span
+            className={`kb-git__fork-legend-item${activeColor !== null && ref.color === activeColor ? ' kb-git__fork-legend-item--active' : ''}`}
+            role="listitem"
+            key={`${ref.kind}:${ref.name}`}
+            onMouseEnter={() => setActiveColor(ref.color)}
+            onMouseLeave={() => setActiveColor(null)}
+          >
             <span
               className={`kb-git__fork-legend-dot kb-git__fork-c${ref.color}${
                 ref.kind === 'remote' ? ' kb-git__fork-legend-dot--hollow' : ''
@@ -212,7 +228,13 @@ export function ForkGraph({ layout, worktreeBranches }: ForkGraphProps) {
           aria-label={t('git.graphAria', { commits: layout.rows.length, refs: layout.refs.length })}
         >
           {layout.rows.map((row) => (
-            <ForkGraphRowView key={row.commit.sha} row={row} width={width} graphWidth={graphWidth} />
+            <ForkGraphRowView
+              key={row.commit.sha}
+              row={row}
+              width={width}
+              graphWidth={graphWidth}
+              onHoverLane={setActiveColor}
+            />
           ))}
         </ol>
       </div>

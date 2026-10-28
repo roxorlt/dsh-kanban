@@ -496,3 +496,50 @@ export interface GitSummaryUnavailable {
 }
 
 export type GitSummary = GitSummaryAvailable | GitSummaryUnavailable;
+
+// ------------------------------------------------ 工作区地图（v0.16，POST /git/workspaces）
+// 按仓库聚合工作副本（worktree）与卡片归属；docs/contracts/02-http-api.md §12。
+
+export interface GitWorkspaceWorktree {
+  path: string;
+  branch: string | null;
+  detached: boolean;
+  sha: string;
+  shortSha: string;
+  /** 仓库主工作副本（git worktree list 第一项） */
+  isMain: boolean;
+  /** 本次采集目录所在工作副本 */
+  isCurrent: boolean;
+  /** 相对主分支的处数；无法计算时 null */
+  aheadOfBase: number | null;
+  behindOfBase: number | null;
+  /** 有未提交改动（git status --porcelain --untracked-files=no 非空） */
+  dirty: boolean;
+  /** 本次请求中落在该工作副本的 dir 原文（前端精确归组；旧服务端没有该字段） */
+  dirs?: string[];
+}
+
+export interface GitWorkspaceRepo {
+  /** 仓库主工作副本根（realpath） */
+  root: string;
+  /** 仓库名（主工作副本目录名） */
+  name: string;
+  commonDir: string;
+  /** 探测不到主分支时 null（此时 aheadOfBase/behindOfBase 均为 null） */
+  mainBranch: string | null;
+  worktrees: GitWorkspaceWorktree[];
+}
+
+export interface GitWorkspaceUnavailable {
+  dir: string;
+  reason: GitSummaryUnavailableReason;
+  message?: string | null;
+}
+
+export interface GitWorkspacesResult {
+  repos: GitWorkspaceRepo[];
+  /** 无法探测的 cwd（不在允许集合 / 非 git / 失败） */
+  unavailable: GitWorkspaceUnavailable[];
+  /** 服务端是否关闭了 git 功能（可选兜底字段） */
+  disabled?: boolean;
+}

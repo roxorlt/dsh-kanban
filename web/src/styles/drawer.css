@@ -777,6 +777,92 @@
 .kb-git__fork-c6 { --kb-fork-color: var(--kb-git-lane-6); }
 .kb-git__fork-c7 { --kb-fork-color: var(--kb-git-lane-7); }
 
+
+/* 提交图 hover：悬停提交行/图例项 → 同色泳道保持，其它淡出（v0.16）。
+   纯视觉高亮：不改布局、不加边框、不改变可点击性。 */
+.kb-git__fork-legend-item {
+  transition: opacity var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-git__fork-legend-item--active .kb-git__fork-legend-name {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.kb-git__fork-seg,
+.kb-git__fork-dot,
+.kb-git__fork-merge-ring,
+.kb-git__fork-ref-dot {
+  transition: opacity var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-git__fork[data-active-color] .kb-git__fork-legend-item {
+  opacity: 0.45;
+}
+
+.kb-git__fork[data-active-color] .kb-git__fork-legend-item--active {
+  opacity: 1;
+}
+.kb-git__fork[data-active-color="0"] .kb-git__fork-seg:not(.kb-git__fork-c0),
+.kb-git__fork[data-active-color="0"] .kb-git__fork-dot:not(.kb-git__fork-c0),
+.kb-git__fork[data-active-color="0"] .kb-git__fork-merge-ring:not(.kb-git__fork-c0),
+.kb-git__fork[data-active-color="0"] .kb-git__fork-ref-dot:not(.kb-git__fork-c0) {
+  opacity: 0.18;
+}
+.kb-git__fork[data-active-color="1"] .kb-git__fork-seg:not(.kb-git__fork-c1),
+.kb-git__fork[data-active-color="1"] .kb-git__fork-dot:not(.kb-git__fork-c1),
+.kb-git__fork[data-active-color="1"] .kb-git__fork-merge-ring:not(.kb-git__fork-c1),
+.kb-git__fork[data-active-color="1"] .kb-git__fork-ref-dot:not(.kb-git__fork-c1) {
+  opacity: 0.18;
+}
+.kb-git__fork[data-active-color="2"] .kb-git__fork-seg:not(.kb-git__fork-c2),
+.kb-git__fork[data-active-color="2"] .kb-git__fork-dot:not(.kb-git__fork-c2),
+.kb-git__fork[data-active-color="2"] .kb-git__fork-merge-ring:not(.kb-git__fork-c2),
+.kb-git__fork[data-active-color="2"] .kb-git__fork-ref-dot:not(.kb-git__fork-c2) {
+  opacity: 0.18;
+}
+.kb-git__fork[data-active-color="3"] .kb-git__fork-seg:not(.kb-git__fork-c3),
+.kb-git__fork[data-active-color="3"] .kb-git__fork-dot:not(.kb-git__fork-c3),
+.kb-git__fork[data-active-color="3"] .kb-git__fork-merge-ring:not(.kb-git__fork-c3),
+.kb-git__fork[data-active-color="3"] .kb-git__fork-ref-dot:not(.kb-git__fork-c3) {
+  opacity: 0.18;
+}
+.kb-git__fork[data-active-color="4"] .kb-git__fork-seg:not(.kb-git__fork-c4),
+.kb-git__fork[data-active-color="4"] .kb-git__fork-dot:not(.kb-git__fork-c4),
+.kb-git__fork[data-active-color="4"] .kb-git__fork-merge-ring:not(.kb-git__fork-c4),
+.kb-git__fork[data-active-color="4"] .kb-git__fork-ref-dot:not(.kb-git__fork-c4) {
+  opacity: 0.18;
+}
+.kb-git__fork[data-active-color="5"] .kb-git__fork-seg:not(.kb-git__fork-c5),
+.kb-git__fork[data-active-color="5"] .kb-git__fork-dot:not(.kb-git__fork-c5),
+.kb-git__fork[data-active-color="5"] .kb-git__fork-merge-ring:not(.kb-git__fork-c5),
+.kb-git__fork[data-active-color="5"] .kb-git__fork-ref-dot:not(.kb-git__fork-c5) {
+  opacity: 0.18;
+}
+.kb-git__fork[data-active-color="6"] .kb-git__fork-seg:not(.kb-git__fork-c6),
+.kb-git__fork[data-active-color="6"] .kb-git__fork-dot:not(.kb-git__fork-c6),
+.kb-git__fork[data-active-color="6"] .kb-git__fork-merge-ring:not(.kb-git__fork-c6),
+.kb-git__fork[data-active-color="6"] .kb-git__fork-ref-dot:not(.kb-git__fork-c6) {
+  opacity: 0.18;
+}
+.kb-git__fork[data-active-color="7"] .kb-git__fork-seg:not(.kb-git__fork-c7),
+.kb-git__fork[data-active-color="7"] .kb-git__fork-dot:not(.kb-git__fork-c7),
+.kb-git__fork[data-active-color="7"] .kb-git__fork-merge-ring:not(.kb-git__fork-c7),
+.kb-git__fork[data-active-color="7"] .kb-git__fork-ref-dot:not(.kb-git__fork-c7) {
+  opacity: 0.18;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kb-git__fork-seg,
+  .kb-git__fork-dot,
+  .kb-git__fork-merge-ring,
+  .kb-git__fork-ref-dot,
+  .kb-git__fork-legend-item {
+    transition: none;
+  }
+}
+
+
 /* 人话版：一句话总结 + 关键事实表 + 提交图折叠 */
 .kb-git__summary {
   margin: 0;

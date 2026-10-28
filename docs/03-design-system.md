@@ -536,6 +536,29 @@ flowchart LR
 - **对齐基准**：圆点中心对齐标题 / label 首行的 `line-height` 中线，误差 ≤0.5px；选项 description 的 `padding-left: 19px`（13px 控件 + 6px gap）与 label 文本左边缘对齐。
 - **验收**：1440 / 1280 / 1200 / 1100 / 1028 / 900 / 390 × 亮暗：三列首卡状态点偏差 ≤0.5px；审批选项换行 0 个、圆点与 label 首行偏差 0px；选项盒无溢出；列头图标保持 0 偏差。
 
+### 7.22 数据图表 hover 高亮（v0.16）
+
+提交图这类「同色 = 同一工作线」的数据图，hover 是唯一的交互，必须克制、可逆、不改变布局：
+
+- **触发**：悬停任意提交行 **或** 图例项；二者双向联动（悬停图例也能高亮泳道，方便先认颜色再看线）。
+- **表现**：该泳道颜色的连线、提交点、合并双环、ref 徽标保持原样；其它泳道元素透明度降到 `0.18`；图例中同色项保持 100%（名称改 `label-primary` + 600），其它图例项降到 `0.45`。行本身沿用既有 hover 底（`interactive-bg-hover`）。
+- **过渡**：`opacity var(--kb-dur) var(--kb-ease-out)`（180ms）；`prefers-reduced-motion: reduce` 时关闭过渡，直接切换。
+- **不改的东西**：不加边框/阴影/位移、不改变行高与列宽、不改变可点击性（图仍是只读，无点击/跳转）。
+- **实现口径**：颜色一律 alias 令牌 + 8 色泳道变量；高亮通过根节点 `data-active-color` 属性 + 每色 4 条 `:not()` 选择器实现（不引入逐元素 JS 计算样式）；触屏无 hover 时不影响功能。
+- **可访问性**：高亮只是视觉辅助，不承载信息独占；`aria-hidden` 的 SVG 不参与读屏，图例名称与 ref 徽标仍可读。
+- **原型与验收**：`design/branch-awareness/hover-lane-demo.html`（真实数据可交互 demo）；上线后与 demo 行为一致。
+
+### 7.23 工作区视图（v0.16）
+
+看板是跨项目、跨执行目录的单板，因此「工作区」视图按**仓库**分块，而不是一张全局扁平表：
+
+- **入口**：工具栏视图切换「看板 / 列表 / 工作区」第三项；选择持久化到 `dsh-kanban.view`（旧值 `board`/`list` 保持可用，非法值回退看板）。
+- **块头**：仓库名 + 根路径（等宽小字，末两段，`title` 全路径）+ 工作副本数/卡片数/进行中数；按仓库逐个渲染，块间 12px。
+- **工作副本行**：文件夹图标（纯 CSS）→ 分支（等宽，detached 显示「游离 HEAD」）→ 徽标（主工作树 / 当前 / 有未保存改动 / 干净）→ 相对主线（`多 N` / `少 N` / `与主线一致`，无主分支时不显示）→ 路径末两段（`title` 全路径）；行内下方是关联卡片 mini 列表（状态点 + 标题，整行可点打开详情）+ 绑定会话数。
+- **未指定**：无 `cwd`、非 git、探测失败的卡片归「未指定」块（卡片仍可打开详情），不隐藏、不谎报归属。
+- **数据**：`POST /api/kanban/git/workspaces`（服务端按仓库缓存 8s；前端 400ms 防抖 + 15s 缓存 + 20s 可见刷新）；只读，无写操作。
+- **密度与响应式**：一行 40px 左右；390 竖屏单列、路径省略、卡片标题单行省略；沿用发丝线与 alias 令牌。
+
 ## 8. 无障碍与国际化
 
 - 文案全部走 locale 字典（含 `aria-label`、placeholder、Toast、空态、计数标签）；建议 key：`kanban.header.unarchived`、`kanban.header.needsCount`、`kanban.session.runningCount`、`kanban.approval.*`、`kanban.approval.submitAll`、`kanban.approval.questionIndex`、`kanban.session.primary`、`kanban.list.groupBy.*`、`kanban.done.showAll`、`kanban.dirty.confirm`、`kanban.theme.follow|light|dark`、`kanban.action.details`。
