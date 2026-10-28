@@ -463,8 +463,8 @@
 | 真实数据验收（Chromium 1440×900 DPR2 / 390×844，亮/暗，**26 项断言全 PASS**） | 数据 = ① 本仓库真实数据（10 refs / 40 提交 / 3 个合并提交 / 4 个工作树，`refsTruncated=1` → 图例「还有 1 个引用」）；② 多分支演示仓库（`node scripts/demo-git-repo.mjs --root /tmp/git-viz-verify/env`：5 分支 / 2 合并 / 3 工作树 / 18 提交，`origin/main` 与本地分叉、`feat/long` 长分支）。断言：区块出现；图例 ≥10 refs 且含 HEAD / main / origin/main / 工作树分支；提交行 40（真实）/ 18（演示）；合并双环 3 / 2；HEAD 外环 1；8 色 / 7 色全部出现；内部滚动 `scrollHeight 880 > clientHeight 320`；多工作树 4 / 3 行且当前高亮；抽屉与底部弹层无横向溢出；非 git / 无 cwd / 目录不存在三种卡区块整块隐藏；**console error 0、pageerror 0、4xx 0** |
 | 主干颜色修复（联调发现） | 初版在真实数据上当前分支（main/HEAD，lane0 蓝）的主干历史在中段被 `origin/main`（lane1 绿）接管、颜色由蓝变绿，与图例不符。改为「第一父一律沿用当前泳道，父提交行再汇入并释放多余泳道」后，33 行 first-parent 主干全部保持 lane0/color0，捞入段出现在第 4 / 11 / 17 行；laneCount 仍 8（无多余列）。新增 2 例单测覆盖（主干颜色稳定、多泳道期望同一父可达） |
 | 截图 | `docs/assets/screens/git-fork-graph-light.png`（真实仓库多泳道图）、`git-fork-graph-dark.png`、`git-fork-graph-detail-light.png`（合并/分叉曲线细节）、`git-fork-graph-worktree-light.png`（多工作树卡片）、`git-fork-board-light.png` / `git-fork-board-dark.png`（1440 看板 + 抽屉）、`git-fork-graph-portrait.png`（390 竖屏）、`git-fork-graph-hidden-nogit.png`（非 git 卡片：区块隐藏、无报错） |
-| 生效方式 | 含服务端改动（`lib/git.js`），需**合入主线并重启 DSH**；`web/dist` 已重建（v0.14.0），刷新看板即生效前端。旧服务端无 `graph` 字段时前端整块隐藏，其余功能不受影响 |
-| 分支 | `feat/fork-graph-viz`（基于 `e27dd98`，与主工作区并行会话隔离，未合入主线）；v0.13.0 已由并行会话合入主线（`97ad6da` / `e27dd98`） |
+| 生效方式 | 含服务端改动（`lib/git.js`），**已合入主线（`3d9e755`），需重启 DSH 后生效**；`web/dist` 已重建（v0.14.0）。旧服务端无 `graph` 字段时前端整块隐藏，其余功能不受影响 |
+| 分支 | `feat/fork-graph-viz`（基于 `e27dd98`，与主工作区并行会话隔离）；**已合入主线 merge `3d9e755`**（合入前先把 main `5278d6c` 合进分支并解决 README / docs 06 文档冲突，v0.14 章节顺延为 §1.29）；合入后自测 170/170、241 例、tsc/build/令牌 lint 通过 |
 | 已知限制 | 最多 10 条引用 / 48 个提交（更早历史与多余引用给「还有 N 个」提示）、远端只识别 `origin`、打开详情时的快照（4s 缓存）不自动刷新、只读无搜索/过滤/展开交互；`origin/main` 这类指向主干祖先的引用在图上只作为 ref 徽标出现、不单独画线 |
 
 ## 2. 自动化测试

@@ -13,7 +13,7 @@
 - 验证：真实数据 = 本仓库（10 refs / 40 提交 / 3 个合并 / 4 个工作树）+ 多分支演示仓库（`node scripts/demo-git-repo.mjs`：5 分支 / 2 合并 / 3 工作树 / 18 提交，含 `origin/main` 分叉与 `feat/long` 长分支）；Chromium 1440×900 DPR2 / 390×844、亮/暗共 **26 项 Playwright 断言全过**、console error 0 / pageerror 0 / 4xx 0、无横向溢出；主干颜色经真实数据核对修复（修复前 main 主干在中段被 origin/main 的泳道接管由蓝变绿，修复后 33 行全部 lane0/color0）。证据 `docs/assets/screens/git-fork-*.png`（8 张），验证记录 `docs/06-verification.md` §1.29。
 - 生效方式：含服务端改动（`lib/git.js`），需**合入主线并重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。
 - 已知限制：最多 10 条引用 / 48 个提交（更早历史提示「还有 N 个」）、远端只识别 `origin`、打开详情时的快照（4s 缓存）不自动刷新、无搜索/过滤交互。
-- 分支：`feat/fork-graph-viz`（基于 `e27dd98`，与主工作区并行会话隔离）；v0.13.0 已由并行会话合入主线（`97ad6da` / `e27dd98`），本版待合入。
+- 分支：`feat/fork-graph-viz`（基于 `e27dd98`，与主工作区并行会话隔离）；v0.13.0 已由并行会话合入主线（`97ad6da` / `e27dd98`），本版已合入主线（merge `3d9e755`），合入后 170/170、241 例、tsc/build/令牌 lint 通过。
 
 ## v0.13.0 — 2026-10-27
 
