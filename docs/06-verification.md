@@ -507,7 +507,8 @@
 | 单测 | 服务端 `node --test` **192/192**（v0.16 新增 11：工作区地图采集与路由，含去重/多 worktree/dirty/12 上限/forbidden/缓存命中与 TTL/400 矩阵/405；另补 `dirs[]` 映射与符号链接归组断言）；Web `vitest` **27 文件 / 273 测试**（新增 13：分组/批次/会话计数/归一化）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 10 CSS 0 error / 0 warning |
 | 真实浏览器验收（dev-server + 真实仓库/演示仓库数据；1440×900 DPR2 / 390×844，亮/暗） | 工作区视图：2 个仓库 / 10 个工作副本；主仓库 1 卡、演示仓库 3 卡正确归组（修复前因 `/tmp` ↔ `/private/tmp` 前缀不一致全落「未指定」，现按 `dirs[]` 精确归组）、未指定 3 卡（无 cwd / 非 git / 目录不存在）；dirty 标记（当前工作副本）正确；点击 mini 卡片打开详情；390 竖屏 `documentElement.scrollWidth==390` 无溢出；console error 0 / pageerror 0 / 4xx 0。hover：真实仓库 48 行图上悬停 → 120 条非本泳道线 opacity 0.18、24 条保持、图例对应分支 `is-active`、移开恢复全部可见；亮/暗正常 |
 | 截图 | `docs/assets/screens/git-workspaces-light.png` / `-dark.png` / `-portrait.png` / `-drawer.png`；`git-workline-hover-light.png` / `-dark.png`；另有设计原型 `design/branch-awareness/screens/workspace-view-*.png`、`hover-product-light.png` |
-| 生效方式 | 含服务端改动（`lib/git.js` / `lib/routes.js`），**已合入主线（merge `aeb5ba4`），重启 DSH 后生效**；`web/dist` 已重建。hover 高亮纯前端，刷新即可；工作区视图需要新接口（重启后生效） |
+| 真实宿主复验（2026-10-28 用户重启后，端口 60252） | `/api/kanban/health` → **version 0.16.0**、revision 418；`/dsh-kanban/` 返回 dist `index-mXGBYiKw.js` / `index-WCQB2KVJ.css` 与 main `web/dist` 一致。真实宿主 UI（Playwright 直连）：① 临时卡（cwd=worktree）徽标正确显示「工作线 feat/workspace-view · 已并入主线 · 未同步」，验收后已归档；② 「工作区」视图 = **1 个仓库 · 7 个工作副本 · 1 张卡片在运行**，主工作副本挂 27 张真实卡、临时卡正确归到 `feat/workspace-view` 工作副本；③ 详情抽屉展开提交图后悬停行 → 同泳道保持、其它 143 条淡出、图例同步高亮（activeColor 7）、移开恢复；全程 console error 0 / pageerror 0 / 4xx 0。证据 `docs/assets/screens/git-*.png`（realhost 系列）；`POST /git/summaries`、`POST /git/workspaces` 在真实宿主均 200 |
+| 生效方式 | 含服务端改动（`lib/git.js` / `lib/routes.js`），**已合入主线（merge `aeb5ba4`），重启 DSH 后生效（已重启验证，health=0.16.0）**；`web/dist` 已重建。hover 高亮纯前端，刷新即可；工作区视图需要新接口（已生效） |
 | 分支 | `feat/workspace-view`（基于 v0.15.0 主线 `9acf3f0`），**已合入 main（merge `aeb5ba4`）**；版本号 0.16.0；合入后自测 192/192、273 例通过 |
 
 ## 2. 自动化测试
