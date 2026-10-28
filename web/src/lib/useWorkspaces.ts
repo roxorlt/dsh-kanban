@@ -348,7 +348,7 @@ export function worktreeStatusBadges(worktree: WorktreeStatusInput): WorktreeSta
 }
 
 /** 清理按钮被禁用的原因（null = 可清理）。 */
-export type WorktreeCleanupBlocked = 'main' | 'session' | 'running' | 'in-use' | null;
+export type WorktreeCleanupBlocked = 'locked' | 'main' | 'session' | 'running' | 'in-use' | null;
 
 export interface WorktreeCleanupCheck {
   /** 是否可点「清理」（主工作副本 / 有会话或卡片占用时不可点） */
@@ -366,7 +366,7 @@ export interface WorktreeCleanupCheck {
 
 type WorktreeCleanupInput = Pick<
   GitWorkspaceWorktree,
-  'path' | 'isMain' | 'mergedIntoBase' | 'aheadOfBase' | 'modifiedCount' | 'untrackedCount' | 'dirty'
+  'path' | 'isMain' | 'locked' | 'mergedIntoBase' | 'aheadOfBase' | 'modifiedCount' | 'untrackedCount' | 'dirty'
 > & { cards: readonly Card[] };
 
 export interface WorktreeCleanupOptions {
@@ -399,9 +399,9 @@ function cwdInsidePath(cwd: string, path: string): boolean {
 
 /**
  * 清理判定（纯函数，契约 §12/§13）：
- * 非主工作副本 + 没有运行中会话 / 卡片在跑 + 没被未归档卡片占用 才允许清理；
+ * 没被 git 锁定 + 非主工作副本 + 没有运行中会话 / 卡片在跑 + 没被未归档卡片占用 才允许清理；
  * 允许但「未并入主线 / 有改动」时需要第二层危险确认。
- * 阻塞原因优先级：主工作副本 > 有会话在跑 > 有卡片在跑 > 有卡片占用。
+ * 阻塞原因优先级：已锁定 > 主工作副本 > 有会话在跑 > 有卡片在跑 > 有卡片占用。
  */
 export function evaluateWorktreeCleanup(
   worktree: WorktreeCleanupInput,
@@ -413,7 +413,8 @@ export function evaluateWorktreeCleanup(
     cwdInsidePath(cwd.trim(), worktree.path),
   ).length;
   let blocked: WorktreeCleanupBlocked = null;
-  if (worktree.isMain) blocked = 'main';
+  if (worktree.locked === true) blocked = 'locked';
+  else if (worktree.isMain) blocked = 'main';
   else if (runningSessionCount > 0) blocked = 'session';
   else if (runningCardCount > 0) blocked = 'running';
   else if (cards.length > 0) blocked = 'in-use';
@@ -616,6 +617,16 @@ export function formatLastCommitRelative(
   const at = parseCommitTimestamp(value);
   if (at === null) return null;
   return formatRelative(at, now, lang);
+}
+
+/** prune 接口错误码（契约 §15：PRUNE_FAILED / NOT_FOUND / BAD_REQUEST）。 */
+export const PRUNE_ERROR_CODES = ['PRUNE_FAILED', 'NOT_FOUND', 'BAD_REQUEST'] as const;
+
+export type PruneErrorReason = (typeof PRUNE_ERROR_CODES)[number] | 'unknown';
+
+/** 从任意错误对象提取，认不出返回 'unknown'（UI 用兜底文案）。 */
+export function pruneErrorReason(error: unknown): PruneErrorReason {
+  return (extractErrorCode(error, PRUNE_ERROR_CODES) as PruneErrorReason | null) ?? 'unknown';
 }
 
 export interface WorkspacesController extends WorkspacesState {

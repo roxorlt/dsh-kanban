@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Card, GitWorkspaceRepo, GitWorkspaceWorktree } from '../types';
-import { normalizeCleanupResult, normalizeGitTrash, normalizeGitWorkspaces, normalizeTrashRestore } from '../api';
+import {
+  normalizeCleanupResult,
+  normalizeGitTrash,
+  normalizeGitWorkspaces,
+  normalizePruneResult,
+  normalizeTrashRestore,
+} from '../api';
 import {
   chunkWorkspaceDirs,
   cleanupErrorNeedsLossConfirm,
@@ -14,6 +20,7 @@ import {
   mergeWorkspaceResults,
   parseCommitTimestamp,
   previewWorkspaceCards,
+  pruneErrorReason,
   selectWorkspaceCards,
   sortRepoGroups,
   sortWorktreeGroups,
@@ -814,5 +821,105 @@ describe('normalizeGitTrash / normalizeTrashRestore', () => {
       restoredTo: '',
       branch: null,
     });
+  });
+});
+
+// ------------------------------------------------ v0.20 复制/锁定/失效记录/截断
+
+describe('evaluateWorktreeCleanup · locked（v0.20）', () => {
+  const mergedClean = {
+    mergedIntoBase: true,
+    modifiedCount: 0,
+    untrackedCount: 0,
+    dirty: false,
+  };
+
+  it('locked 的工作副本不可清理，原因优先级最高（含主工作副本）', () => {
+    expect(evaluateWorktreeCleanup(cleanupInput({ ...mergedClean, locked: true }))).toMatchObject({
+      canCleanup: false,
+      blocked: 'locked',
+      safe: false,
+    });
+    expect(
+      evaluateWorktreeCleanup(cleanupInput({ ...mergedClean, locked: true, isMain: true })).blocked,
+    ).toBe('locked');
+    expect(
+      evaluateWorktreeCleanup(cleanupInput({ ...mergedClean, locked: true }), {
+        sessionCwds: ['/repo/.worktrees/feat-x'],
+      }).blocked,
+    ).toBe('locked');
+  });
+
+  it('未 locked 时行为不变（主副本 / 会话 / 卡片仍按原优先级）', () => {
+    expect(evaluateWorktreeCleanup(cleanupInput({ ...mergedClean, isMain: true })).blocked).toBe('main');
+    expect(
+      evaluateWorktreeCleanup(cleanupInput(mergedClean), { sessionCwds: ['/repo/.worktrees/feat-x'] })
+        .blocked,
+    ).toBe('session');
+  });
+});
+
+describe('pruneErrorReason', () => {
+  it('识别 PRUNE_FAILED / NOT_FOUND / BAD_REQUEST（含 details.reason 形态）', () => {
+    expect(pruneErrorReason({ code: 'PRUNE_FAILED' })).toBe('PRUNE_FAILED');
+    expect(pruneErrorReason({ code: 'ERROR', details: { reason: 'NOT_FOUND' } })).toBe('NOT_FOUND');
+    expect(pruneErrorReason({ reason: 'BAD_REQUEST' })).toBe('BAD_REQUEST');
+  });
+
+  it('认不出/非对象归 unknown', () => {
+    expect(pruneErrorReason({ code: 'WHAT' })).toBe('unknown');
+    expect(pruneErrorReason(null)).toBe('unknown');
+    expect(pruneErrorReason('PRUNE_FAILED')).toBe('unknown');
+  });
+});
+
+describe('normalizeGitWorkspaces · 截断字段（v0.20）', () => {
+  it('归一化 worktreeCount / truncatedWorktrees', () => {
+    const repo = normalizeGitWorkspaces({
+      repos: [
+        {
+          root: '/repo',
+          worktreeCount: 14,
+          truncatedWorktrees: 2,
+          worktrees: [{ path: '/repo' }],
+        },
+      ],
+    }).repos[0];
+    expect(repo?.worktreeCount).toBe(14);
+    expect(repo?.truncatedWorktrees).toBe(2);
+  });
+
+  it('旧服务端缺字段时：worktreeCount 退回实际条数、truncatedWorktrees=0', () => {
+    const repo = normalizeGitWorkspaces({
+      repos: [{ root: '/repo', worktrees: [{ path: '/repo' }, { path: '/repo/.worktrees/b' }] }],
+    }).repos[0];
+    expect(repo?.worktreeCount).toBe(2);
+    expect(repo?.truncatedWorktrees).toBe(0);
+  });
+
+  it('非法/负数截断字段回退默认值', () => {
+    const repo = normalizeGitWorkspaces({
+      repos: [{ root: '/repo', worktreeCount: -1, truncatedWorktrees: 'x', worktrees: [{ path: '/repo' }] }],
+    }).repos[0];
+    expect(repo?.worktreeCount).toBe(1);
+    expect(repo?.truncatedWorktrees).toBe(0);
+  });
+});
+
+describe('normalizePruneResult', () => {
+  it('兼容 pruned 包裹与平铺字段', () => {
+    expect(normalizePruneResult({ repoRoot: '/repo', removed: true })).toEqual({
+      repoRoot: '/repo',
+      removed: true,
+    });
+    expect(normalizePruneResult({ pruned: { repoRoot: '/repo', removed: false } })).toEqual({
+      repoRoot: '/repo',
+      removed: false,
+    });
+  });
+
+  it('空/非法输入安全兜底', () => {
+    expect(normalizePruneResult(null)).toEqual({ repoRoot: '', removed: false });
+    expect(normalizePruneResult({ removed: 'yes' })).toEqual({ repoRoot: '', removed: false });
   });
 });

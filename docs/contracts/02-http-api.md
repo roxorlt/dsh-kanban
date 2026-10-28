@@ -260,6 +260,7 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
     "repos": [
       { "root": "/repo", "name": "repo", "commonDir": "/repo/.git",
         "mainBranch": "main",
+        "worktreeCount": 12, "truncatedWorktrees": 0,  // v0.20 增量：实际工作副本总数 / 被 12 上限截断的数量
         "worktrees": [
           { "path": "/repo", "branch": "main", "detached": false, "sha": "…", "shortSha": "…",
             "isMain": true, "isCurrent": true,
@@ -313,3 +314,13 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
   `git worktree add <原路径> <分支>`（分支已删则 `git worktree add -b <分支> <原路径> <sha>`，对象不存在 → 409 `RESTORE_SHA_MISSING`），再把回收站里的文件覆盖回工作目录（保留工作区未保存内容），成功后删除回收站条目；原路径已存在 → 409 `RESTORE_PATH_EXISTS`；id 非法/穿越 → 400。
 - `DELETE /api/kanban/git/trash/:id`：立即彻底删除回收站条目（不经过 7 天保留）。
 - 安全：id 只允许 `trash` 下的直接子目录名（禁止 `/`、`..`）；只操作带 manifest 的条目；所有路径以 manifest 为准，不信任客户端路径。
+
+## 15. 清理失效工作副本记录（v0.20 增量，Phase C 小项）
+
+`git worktree prune`：文件夹已被手动删除、但 git 还记着失效记录时，提供一键清理记录（不动任何现有目录）。
+
+- `POST /api/kanban/git/worktrees/prune`
+- body：`{ "repoRoot": "/repo" }`（必须是看板未归档卡片 cwd 推导出的仓库根）
+- 行为：在该仓库执行 `git worktree prune`；只清理失效记录，不删除任何现存工作副本/分支；console.info 审计。
+- 200：`{ ok:true, revision, pruned: { repoRoot, removed: boolean } }`（removed 表示是否有记录被清掉）。
+- 错误：400 BAD_REQUEST / 404 NOT_FOUND（仓库不在允许集合）/ 500 PRUNE_FAILED。

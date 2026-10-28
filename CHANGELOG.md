@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.20.0 — 2026-10-28
+
+### 新增：P2 批 1（复制路径 / locked·prunable / 上限提示）
+
+- 用户确认范围：做 11、12、14、15、16、20；13 不做；17/18/19/21 暂不做。本版先落 11a 复制路径、12 locked/prunable、20 上限提示（14/15/16 与 agent 自动绑定下一版）。
+- 11a：工作副本行路径/分支名复制按钮（navigator.clipboard + toast；失败可读提示；390 图标态）。
+- 12：行内「已锁定」「文件夹已不存在」徽标；prunable 提供「清理失效记录」（POST /git/worktrees/prune，只清失效记录不删现存目录/分支，确认 + 审计）；主工作副本锁定不可清理。
+- 20：/git/workspaces 每仓库增 worktreeCount/truncatedWorktrees；界面显示「还有 N 个未展示」。
+- 测试：服务端 224/224（+8）；Web 28 文件/355 例（+42）；tsc/build/令牌 lint 全过。
+- 生效：含服务端改动，需合入 main 并重启 DSH；分支 feat/workspace-batch1。
+
 ## v0.19.0 — 2026-10-28
 
 ### 改进：卡片「绑定会话」下拉框——默认只列本工作区 + 按工作区分组 / 折叠 / 搜索

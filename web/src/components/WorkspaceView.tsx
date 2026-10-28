@@ -14,7 +14,8 @@ import { api } from '../api';
 import { useI18n } from '../i18n';
 import type { I18nKey, Lang, Translate } from '../i18n';
 import { STATUS_TONE } from '../lib/status';
-import { IconChevronDown } from './Icons';
+import { copyText } from '../lib/clipboard';
+import { IconChevronDown, IconCopy } from './Icons';
 import { shortenPath } from '../lib/forkGraph';
 import { formatDateTime } from '../lib/time';
 import {
@@ -25,6 +26,7 @@ import {
   formatLastCommitRelative,
   groupCardsByWorktree,
   previewWorkspaceCards,
+  pruneErrorReason,
   selectWorkspaceCards,
   sortRepoGroups,
   splitRepoWorktrees,
@@ -63,6 +65,9 @@ const COLLAPSED_REPOS_STORAGE_KEY = 'dsh-kanban.workspaces.collapsed';
 const UNASSIGNED_COLLAPSED_STORAGE_KEY = 'dsh-kanban.workspaces.unassigned-collapsed';
 const TRASH_COLLAPSED_STORAGE_KEY = 'dsh-kanban.workspaces.trash-collapsed';
 const SCOPE_STORAGE_KEY = 'dsh-kanban.workspaces.scope';
+
+/** 服务端每仓库最多返回 12 个工作副本；被截断时给出提示（契约 §12 v0.20）。 */
+const WORKTREE_DISPLAY_LIMIT = 12;
 
 /** 工作副本展示路径：主工作副本用仓库名；子工作副本用相对仓库根的路径；兜底取末两段。 */
 function worktreeLabel(repo: WorkspaceRepoGroup, worktree: WorkspaceWorktreeGroup): string {
@@ -214,6 +219,22 @@ function trashErrorMessage(error: unknown, t: Translate): string {
   }
 }
 
+/** prune 失败错误码 → 人话文案（契约 §15）。 */
+function pruneErrorMessage(error: unknown, t: Translate): string {
+  switch (pruneErrorReason(error)) {
+    case 'NOT_FOUND':
+      return t('workspace.pruneErrorNotFound');
+    case 'BAD_REQUEST':
+      return t('workspace.pruneErrorBadRequest');
+    case 'PRUNE_FAILED':
+      return t('workspace.pruneErrorFailed');
+    default:
+      return t('workspace.pruneErrorUnknown', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+  }
+}
+
 /** 回收站条目展示名：仓库名 / 工作副本名。 */
 function trashEntryName(entry: GitTrashEntry): string {
   return `${entry.repoName} / ${entry.worktreeName}`;
@@ -270,22 +291,42 @@ function MiniCardList({ cards, onOpenCard, emptyLabel }: MiniCardListProps) {
 
 interface CleanupControlProps {
   check: WorktreeCleanupCheck;
+  /** v0.20：目录已不存在（prunable）时改为「清理失效记录」，不做软删除清理 */
+  prunable: boolean;
   onCleanup: () => void;
+  onPrune: () => void;
 }
 
-/** 清理按钮 + 不可清理原因 / 可安全清理提示。 */
-function CleanupControl({ check, onCleanup }: CleanupControlProps) {
+/** 清理按钮 + 不可清理原因 / 可安全清理提示；prunable 时显示「清理失效记录」。 */
+function CleanupControl({ check, prunable, onCleanup, onPrune }: CleanupControlProps) {
   const { t } = useI18n();
+  if (prunable) {
+    return (
+      <span className="kb-workspace__cleanup">
+        <button
+          type="button"
+          className="kb-btn kb-btn--sm kb-btn--outline kb-workspace__prune-btn"
+          title={t('workspace.prune')}
+          aria-label={t('workspace.prune')}
+          onClick={onPrune}
+        >
+          {t('workspace.prune')}
+        </button>
+      </span>
+    );
+  }
   const reason =
-    check.blocked === 'main'
-      ? t('workspace.cleanupBlockedMain')
-      : check.blocked === 'session'
-        ? t('workspace.cleanupBlockedSession')
-        : check.blocked === 'running'
-          ? t('workspace.cleanupBlockedRunning')
-          : check.blocked === 'in-use'
-            ? t('workspace.cleanupBlockedInUse', { count: check.cardCount })
-            : null;
+    check.blocked === 'locked'
+      ? t('workspace.cleanupBlockedLocked')
+      : check.blocked === 'main'
+        ? t('workspace.cleanupBlockedMain')
+        : check.blocked === 'session'
+          ? t('workspace.cleanupBlockedSession')
+          : check.blocked === 'running'
+            ? t('workspace.cleanupBlockedRunning')
+            : check.blocked === 'in-use'
+              ? t('workspace.cleanupBlockedInUse', { count: check.cardCount })
+              : null;
   return (
     <span className="kb-workspace__cleanup">
       {check.safe ? <span className="kb-workspace__cleanup-safe">{t('workspace.cleanupSafe')}</span> : null}
@@ -313,9 +354,11 @@ interface WorktreeRowProps {
   now: number;
   onOpenCard: (cardId: string) => void;
   onCleanup: (worktree: WorkspaceWorktreeGroup) => void;
+  onPrune: (worktree: WorkspaceWorktreeGroup) => void;
+  onCopy: (text: string, kind: 'path' | 'branch') => void;
 }
 
-/** 单个工作副本行：文件夹图标 + 分支/状态徽标 + 最近提交 + 卡片预览 + 清理按钮。 */
+/** 单个工作副本行：文件夹图标 + 分支/状态徽标 + 最近提交 + 卡片预览 + 清理/复制按钮。 */
 function WorktreeRow({
   repo,
   worktree,
@@ -324,6 +367,8 @@ function WorktreeRow({
   now,
   onOpenCard,
   onCleanup,
+  onPrune,
+  onCopy,
 }: WorktreeRowProps) {
   const { t, lang } = useI18n();
   const branch = worktree.branch ?? t('workspace.detached');
@@ -344,8 +389,25 @@ function WorktreeRow({
           <code className="kb-workspace__branch" title={branch}>
             {branch}
           </code>
+          {worktree.branch ? (
+            <button
+              type="button"
+              className="kb-workspace__copy kb-workspace__copy--branch"
+              title={t('workspace.copyBranch')}
+              aria-label={t('workspace.copyBranch')}
+              onClick={() => onCopy(worktree.branch ?? '', 'branch')}
+            >
+              <span className="kb-icon" aria-hidden="true">
+                <IconCopy />
+              </span>
+            </button>
+          ) : null}
           {worktree.isMain ? <span className="kb-tag">{t('workspace.mainWorktree')}</span> : null}
           {worktree.isCurrent ? <span className="kb-tag kb-tag--current">{t('workspace.current')}</span> : null}
+          {worktree.locked ? <span className="kb-tag kb-workspace__tag--warn">{t('workspace.locked')}</span> : null}
+          {worktree.prunable ? (
+            <span className="kb-tag kb-workspace__tag--danger">{t('workspace.prunable')}</span>
+          ) : null}
           {badges.map((badge) => (
             <span className={`kb-tag${badgeClass(badge)}`} key={`${badge.kind}:${badge.key}`}>
               {t(badge.key as I18nKey, badge.params)}
@@ -353,8 +415,22 @@ function WorktreeRow({
           ))}
         </div>
         <div className="kb-workspace__wt-meta">
-          <span className="kb-workspace__path" title={worktree.path}>
-            {worktreeLabel(repo, worktree)}
+          <span className="kb-workspace__path-line">
+            <span className="kb-workspace__path" title={worktree.path}>
+              {worktreeLabel(repo, worktree)}
+            </span>
+            <button
+              type="button"
+              className="kb-workspace__copy kb-workspace__copy--path"
+              title={t('workspace.copyPath')}
+              aria-label={t('workspace.copyPath')}
+              onClick={() => onCopy(worktree.path, 'path')}
+            >
+              <span className="kb-icon" aria-hidden="true">
+                <IconCopy />
+              </span>
+              <span className="kb-workspace__copy-text">{t('workspace.copyPath')}</span>
+            </button>
           </span>
           <span className="kb-workspace__card-count">{t('workspace.cardCount', { count: worktree.cards.length })}</span>
           {sessionCount > 0 ? (
@@ -368,7 +444,12 @@ function WorktreeRow({
         </div>
       </div>
       <MiniCardList cards={worktree.cards} onOpenCard={onOpenCard} />
-      <CleanupControl check={check} onCleanup={() => onCleanup(worktree)} />
+      <CleanupControl
+        check={check}
+        prunable={worktree.prunable === true}
+        onCleanup={() => onCleanup(worktree)}
+        onPrune={() => onPrune(worktree)}
+      />
     </li>
   );
 }
@@ -380,6 +461,8 @@ interface RepoSectionProps {
   now: number;
   onOpenCard: (cardId: string) => void;
   onCleanup: (worktree: WorkspaceWorktreeGroup) => void;
+  onPrune: (worktree: WorkspaceWorktreeGroup) => void;
+  onCopy: (text: string, kind: 'path' | 'branch') => void;
   collapsed: boolean;
   onToggle: (root: string) => void;
   idleExpanded: boolean;
@@ -394,6 +477,8 @@ function RepoSection({
   now,
   onOpenCard,
   onCleanup,
+  onPrune,
+  onCopy,
   collapsed,
   onToggle,
   idleExpanded,
@@ -403,6 +488,8 @@ function RepoSection({
   const panelId = `kb-workspace-panel-${encodeURIComponent(repo.root)}`;
   const idlePanelId = `${panelId}-idle`;
   const split = splitRepoWorktrees(repo.worktrees);
+  const truncated = repo.truncatedWorktrees ?? 0;
+  const limit = WORKTREE_DISPLAY_LIMIT;
   const renderRow = (worktree: WorkspaceWorktreeGroup) => (
     <WorktreeRow
       key={worktree.path}
@@ -413,6 +500,8 @@ function RepoSection({
       now={now}
       onOpenCard={onOpenCard}
       onCleanup={onCleanup}
+      onPrune={onPrune}
+      onCopy={onCopy}
     />
   );
   return (
@@ -441,6 +530,11 @@ function RepoSection({
         <span className="kb-workspace__repo-meta">
           {t('workspace.repoMeta', { worktrees: repo.worktrees.length, cards: repo.cardCount })}
         </span>
+        {truncated > 0 ? (
+          <span className="kb-workspace__truncated" title={t('workspace.truncatedTitle', { limit })}>
+            {t('workspace.truncated', { count: truncated })}
+          </span>
+        ) : null}
       </button>
       {collapsed ? (
         <p className="kb-workspace__repo-collapsed-hint">
@@ -475,6 +569,11 @@ function RepoSection({
                 </ul>
               ) : null}
             </>
+          ) : null}
+          {truncated > 0 ? (
+            <p className="kb-workspace__truncated-foot">
+              {t('workspace.truncatedFooter', { count: truncated, limit })}
+            </p>
           ) : null}
         </div>
       )}
@@ -649,6 +748,8 @@ export function WorkspaceView({
   const [idleExpandedRepos, setIdleExpandedRepos] = useState<Set<string>>(() => new Set());
   const [scope, setScope] = useState<WorkspaceCardScope>(readWorkspaceScope);
   const [cleanupTarget, setCleanupTarget] = useState<CleanupTarget | null>(null);
+  const [pruneTarget, setPruneTarget] = useState<{ repo: WorkspaceRepoGroup; worktree: WorkspaceWorktreeGroup } | null>(null);
+  const [pruneBusy, setPruneBusy] = useState(false);
   const [trashEntries, setTrashEntries] = useState<GitTrashEntry[]>([]);
   const [trashCollapsed, setTrashCollapsed] = useState<boolean>(readTrashCollapsed);
   const [trashAction, setTrashAction] = useState<TrashActionState | null>(null);
@@ -761,6 +862,34 @@ export function WorkspaceView({
     [cleanupTarget, onNotify, refreshTrash, t, workspaces],
   );
 
+  const handleCopy = useCallback(
+    async (text: string, kind: 'path' | 'branch'): Promise<void> => {
+      const ok = await copyText(text);
+      if (ok) {
+        onNotify?.(t(kind === 'path' ? 'workspace.copiedPath' : 'workspace.copiedBranch'), 'success');
+      } else {
+        onNotify?.(t('workspace.copyFailed', { message: t('workspace.copyUnavailable') }), 'error');
+      }
+    },
+    [onNotify, t],
+  );
+
+  const handlePruneConfirm = useCallback(async (): Promise<void> => {
+    if (!pruneTarget || pruneBusy) return;
+    setPruneBusy(true);
+    try {
+      const result = await api.pruneGitWorktrees(pruneTarget.repo.root);
+      setPruneTarget(null);
+      onNotify?.(result.removed ? t('workspace.pruneDone') : t('workspace.pruneNoop'), 'success');
+      workspaces.reload();
+    } catch (error) {
+      setPruneTarget(null);
+      onNotify?.(pruneErrorMessage(error, t), 'error');
+    } finally {
+      setPruneBusy(false);
+    }
+  }, [onNotify, pruneBusy, pruneTarget, t, workspaces]);
+
   const handleTrashConfirm = useCallback(async (): Promise<void> => {
     if (!trashAction || trashBusy) return;
     const { kind, entry } = trashAction;
@@ -872,6 +1001,8 @@ export function WorkspaceView({
           now={nowValue}
           onOpenCard={onOpenCard}
           onCleanup={(worktree) => setCleanupTarget({ repo, worktree })}
+          onPrune={(worktree) => setPruneTarget({ repo, worktree })}
+          onCopy={(text, kind) => void handleCopy(text, kind)}
           collapsed={collapsedRepos.has(repo.root)}
           onToggle={toggleRepo}
           idleExpanded={idleExpandedRepos.has(repo.root)}
@@ -896,6 +1027,19 @@ export function WorkspaceView({
           onToggle={toggleTrash}
           onRestore={(entry) => setTrashAction({ kind: 'restore', entry })}
           onPurge={(entry) => setTrashAction({ kind: 'purge', entry })}
+        />
+      ) : null}
+      {pruneTarget ? (
+        <ConfirmDialog
+          title={t('workspace.pruneTitle')}
+          message={t('workspace.pruneMessage')}
+          confirmLabel={t('workspace.pruneConfirm')}
+          busy={pruneBusy}
+          danger={false}
+          onConfirm={() => void handlePruneConfirm()}
+          onClose={() => {
+            if (!pruneBusy) setPruneTarget(null);
+          }}
         />
       ) : null}
       {cleanupTarget ? (
