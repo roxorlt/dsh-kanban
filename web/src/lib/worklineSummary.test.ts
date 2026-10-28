@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { GitContextAvailable, GitGraphData } from '../types';
-import { buildWorklineSummary } from './worklineSummary';
+import { buildWorklineStatus, buildWorklineSummary } from './worklineSummary';
+import type { WorklineStatusInput } from './worklineSummary';
+import { chunkWorklineDirs, collectWorklineCwds, worklineStatusFromSummary } from './useWorklineStatuses';
+import { normalizeGitSummaries } from '../api';
+import type { Card } from '../types';
 
 interface Overrides {
   current?: Partial<GitContextAvailable['current']>;
@@ -147,5 +151,189 @@ describe('buildWorklineSummary', () => {
 
   it('没有 graph（旧服务端）返回 null', () => {
     expect(buildWorklineSummary(makeGit({ graph: undefined }))).toBeNull();
+  });
+});
+
+const statusInput = (overrides: Partial<WorklineStatusInput> = {}): WorklineStatusInput => ({
+  branch: 'feat/x',
+  detached: false,
+  mainBranch: 'main',
+  base: { kind: 'main', ahead: 0, behind: 0 },
+  upstream: { ahead: 0, behind: 0 },
+  ...overrides,
+});
+
+describe('buildWorklineStatus', () => {
+  it('位置分类：主线（分支名===主分支 / base.kind=upstream）/ feature / detached', () => {
+    expect(buildWorklineStatus(statusInput({ branch: 'main' })).position).toBe('main');
+    expect(
+      buildWorklineStatus(statusInput({ branch: 'main', base: { kind: 'upstream', ahead: 2, behind: 0 } })).position,
+    ).toBe('main');
+    expect(buildWorklineStatus(statusInput()).position).toBe('feature');
+    expect(buildWorklineStatus(statusInput({ branch: null, detached: true })).position).toBe('detached');
+  });
+
+  it('与主线的分类：same / merged / ahead-only / ahead-behind / main（计数透传）', () => {
+    expect(buildWorklineStatus(statusInput()).mainRelation).toBe('same');
+    expect(buildWorklineStatus(statusInput({ base: { kind: 'main', ahead: 0, behind: 3 } })).mainRelation).toBe('merged');
+    expect(buildWorklineStatus(statusInput({ base: { kind: 'main', ahead: 4, behind: 0 } })).mainRelation).toBe('ahead-only');
+    const aheadBehind = buildWorklineStatus(statusInput({ base: { kind: 'main', ahead: 4, behind: 3 } }));
+    expect(aheadBehind.mainRelation).toBe('ahead-behind');
+    expect(aheadBehind.aheadMain).toBe(4);
+    expect(aheadBehind.behindMain).toBe(3);
+    const onMain = buildWorklineStatus(statusInput({ branch: 'main', base: { kind: 'upstream', ahead: 5, behind: 0 } }));
+    expect(onMain.mainRelation).toBe('main');
+    expect(onMain.aheadMain).toBe(5);
+  });
+
+  it('与线上的分类：no-upstream / synced / ahead / behind / diverged', () => {
+    expect(buildWorklineStatus(statusInput({ upstream: null })).remoteRelation).toBe('no-upstream');
+    expect(buildWorklineStatus(statusInput()).remoteRelation).toBe('synced');
+    expect(buildWorklineStatus(statusInput({ upstream: { ahead: 3, behind: 0 } })).remoteRelation).toBe('ahead');
+    expect(buildWorklineStatus(statusInput({ upstream: { ahead: 0, behind: 2 } })).remoteRelation).toBe('behind');
+    const diverged = buildWorklineStatus(statusInput({ upstream: { ahead: 3, behind: 2 } }));
+    expect(diverged.remoteRelation).toBe('diverged');
+    expect(diverged.aheadUpstream).toBe(3);
+    expect(diverged.behindUpstream).toBe(2);
+  });
+
+  it('base / upstream 缺失或负数时按 0 降级，不出现负计数', () => {
+    const status = buildWorklineStatus({
+      branch: 'feat/x',
+      detached: false,
+      mainBranch: null,
+      base: { kind: 'main', ahead: -2, behind: -1 },
+      upstream: null,
+    });
+    expect(status.position).toBe('feature');
+    expect(status.aheadMain).toBe(0);
+    expect(status.behindMain).toBe(0);
+    expect(status.remoteRelation).toBe('no-upstream');
+  });
+});
+
+function makeCard(id: string, overrides: Partial<Card> = {}): Card {
+  return {
+    id,
+    boardId: 'board',
+    title: id,
+    summary: '',
+    status: 'backlog',
+    priority: 'none',
+    labels: [],
+    sessionIds: [],
+    checklists: [],
+    approvals: [],
+    artifacts: [],
+    metadata: { toolCalls: 0, searches: 0 },
+    order: 0,
+    version: 1,
+    createdAt: 0,
+    updatedAt: 0,
+    ...overrides,
+  } as Card;
+}
+
+describe('collectWorklineCwds', () => {
+  it('只取未归档、有 cwd 的卡片，cwd 去重并保持出现顺序', () => {
+    const cards = [
+      makeCard('a', { cwd: '/repo/a' }),
+      makeCard('b', { cwd: '/repo/a' }),
+      makeCard('c', { cwd: ' /repo/b ' }),
+      makeCard('d'),
+      makeCard('e', { cwd: '/repo/c', archived: true }),
+    ];
+    expect(collectWorklineCwds(cards)).toEqual(['/repo/a', '/repo/b']);
+  });
+
+  it('没有卡片/全部无 cwd 时返回空列表', () => {
+    expect(collectWorklineCwds([])).toEqual([]);
+    expect(collectWorklineCwds([makeCard('a'), makeCard('b', { cwd: '' })])).toEqual([]);
+  });
+});
+
+describe('chunkWorklineDirs', () => {
+  it('按 32 个一批切分（契约上限）', () => {
+    const dirs = Array.from({ length: 65 }, (_, index) => `/repo/${index}`);
+    const chunks = chunkWorklineDirs(dirs);
+    expect(chunks.map((chunk) => chunk.length)).toEqual([32, 32, 1]);
+    expect(chunks[2]).toEqual(['/repo/64']);
+  });
+
+  it('空列表不分批，可自定义批量大小', () => {
+    expect(chunkWorklineDirs([])).toEqual([]);
+    expect(chunkWorklineDirs(['a', 'b', 'c'], 2)).toEqual([['a', 'b'], ['c']]);
+  });
+});
+
+describe('worklineStatusFromSummary', () => {
+  it('非 git 仓库 / 无 cwd → undefined（徽标不显示）；其余失败 → null（灰色未知）', () => {
+    expect(worklineStatusFromSummary({ available: false, reason: 'not_git' })).toBeUndefined();
+    expect(worklineStatusFromSummary({ available: false, reason: 'no_cwd' })).toBeUndefined();
+    expect(worklineStatusFromSummary({ available: false, reason: 'timeout' })).toBeNull();
+    expect(worklineStatusFromSummary({ available: false, reason: 'missing' })).toBeNull();
+    expect(worklineStatusFromSummary({ available: false, reason: 'forbidden' })).toBeNull();
+  });
+
+  it('available:true → 与详情同一套分类', () => {
+    const status = worklineStatusFromSummary({
+      available: true,
+      dir: '/repo',
+      branch: 'feat/x',
+      detached: false,
+      mainBranch: 'main',
+      base: { kind: 'main', ahead: 2, behind: 1 },
+      upstream: { ref: 'origin/feat/x', ahead: 1, behind: 0 },
+      isWorktree: true,
+      worktreePath: '/repo/.worktrees/feat-x',
+    });
+    expect(status).toMatchObject({
+      position: 'feature',
+      branch: 'feat/x',
+      mainRelation: 'ahead-behind',
+      aheadMain: 2,
+      behindMain: 1,
+      remoteRelation: 'ahead',
+      aheadUpstream: 1,
+    });
+  });
+});
+
+describe('normalizeGitSummaries', () => {
+  it('按请求原文 key 保留；不可用原因归并；缺字段兜底', () => {
+    const summaries = normalizeGitSummaries({
+      '/repo/a': {
+        available: true,
+        dir: '/repo/a',
+        branch: 'main',
+        detached: false,
+        mainBranch: 'main',
+        base: { kind: 'main', ahead: -1, behind: 2 },
+        upstream: null,
+        isWorktree: false,
+        worktreePath: '/repo/a',
+      },
+      '/repo/b': { available: false, reason: 'forbidden' },
+      '/repo/c': { available: false, reason: 'weird' },
+      '/repo/d': 'bad',
+      '': { available: true },
+    });
+    expect(summaries['/repo/a']).toMatchObject({
+      available: true,
+      branch: 'main',
+      base: { kind: 'main', ahead: 0, behind: 2 },
+      upstream: null,
+      isWorktree: false,
+    });
+    expect(summaries['/repo/b']).toEqual({ available: false, reason: 'forbidden' });
+    expect(summaries['/repo/c']).toEqual({ available: false, reason: 'error' });
+    expect(summaries['/repo/d']).toEqual({ available: false, reason: 'error' });
+    expect(summaries['']).toBeUndefined();
+  });
+
+  it('非对象输入返回空 map', () => {
+    expect(normalizeGitSummaries(null)).toEqual({});
+    expect(normalizeGitSummaries(undefined)).toEqual({});
+    expect(normalizeGitSummaries([])).toEqual({});
   });
 });

@@ -481,6 +481,21 @@
 | 生效方式 | 纯前端改动，**已合入 main（merge `78c3046`），刷新看板即生效、无需重启 DSH**；服务端接口与数据未改（v0.14 `graph` 不变）。注意：`/api/kanban/health` 的版本号在重启前仍显示 0.14.0（服务端进程未重启），前端已是 0.14.1 |
 | 分支 | `feat/workline-summary`（基于 v0.14.0 主线 `f30889a`），**已合入 main（merge `78c3046`）**；README / CHANGELOG / 版本号同步为 **0.14.1** |
 
+## 1.31 v0.15.0（卡片 / 列表「工作线」徽标 + hover 高亮 demo + 方案 2/3 调整版原型，2026-10-28）
+
+| 项 | 结果 |
+|---|---|
+| 背景 | 用户确认方案 1 按 Lead 结论落地：卡片/列表显示工作线状态，但**不给卡片加真值字段**（由 `cwd` 派生、按仓库聚合、失败显示未知），并先看可交互 hover 高亮 demo 与按项目/仓库分组的方案 2/3 原型 |
+| 服务端 | 新增 `POST /api/kanban/git/summaries`（契约 02 §11 / 06 §4.6）：`lib/git.js` 新增 `collectGitSummary`（轻量，不采 graph/提交列表，约 8 条只读命令/目录；含 base 两种模式、upstream、worktree 检测；失败收敛 no_cwd/missing/not_git/no_commits/timeout/error）；`lib/routes.js` 新增路由：`dirs` 1–32 非空字符串、**允许集合 = 未归档卡片 cwd 原文（trim 严格相等）**、其余逐项 `forbidden`、去重并发、realpath 缓存 10s/上限 128、全部失败仍 200；`gitSummaryCacheTtlMs` 仅测试用 |
+| Web | `worklineSummary.ts` 抽出 `buildWorklineStatus`（位置 / 与主线 / 与线上分类，与详情共用）；`api.getGitSummaries` + 容错归一化；`useWorklineStatuses`（未归档有 cwd 去重、400ms 防抖、≤32/批、模块缓存 15s、20s 可见时刷新、失败静默未知且不缓存）；`WorklineBadge`（彩点 + `工作线 feat/x` + 关系/线上短语；仅 feature 显示；无 cwd / 非 git 不渲染；missing/timeout/error/forbidden 显示灰色「工作线未知」；11px 单行、窄卡省略分支名保留关系、title/aria 全文）；接入 `KanbanCard` / `ListView` / `BoardView` / `App`；`board.css` / `list.css` / i18n 同步 |
+| 顺带修正 | 当前分支 === 主分支（主分支无 upstream 的仓库）此前被判成 feature，现已判为「就在主线上」，详情抽屉文案同步修正 |
+| 单测 | 服务端 `node --test` **181/181**（新增 11：collectGitSummary 5 + 路由 6，含 400 矩阵 / forbidden / 归档排除 / 缓存命中与 TTL 过期 / 逐项失败仍 200 / 405/404）；Web `vitest` **26 文件 / 260 测试**（worklineStatus 分类、批次/归一化等新增 12 例；既有 248 例无回退）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 9 CSS 0 error / 0 warning |
+| 真实浏览器验收（dev-server + 真实/演示仓库数据；1440×900 DPR2 / 390×844，亮/暗） | 看板与列表均正确：`feat/graph` 卡 `工作线 feat/graph · 多 1 · 线上落后 1`、`feat/long` 卡 `工作线 feat/long · 多 6 · 未同步`、目录不存在卡灰色「工作线未知」；主线卡（cwd=主仓库）、无 cwd 卡、非 git 卡均不显示徽标；暗色与 390 竖屏正常（`documentElement.scrollWidth==390`），console error 0 / pageerror 0 / 4xx 0；列表视图同样 3 条徽标。服务端实测：主仓库摘要首次 ~200ms、同目录缓存命中 2ms、feature worktree 49ms |
+| 设计交付 | ① `design/branch-awareness/hover-lane-demo.html`：**可交互**的 hover 高亮泳道 demo（真实仓库 48 提交 / 7 条工作线数据、亮暗切换；悬停任意提交行 → 同色泳道保持高亮、其它淡出、图例同步高亮；无点击/跳转；已用 Playwright 验证 48 行、悬停后 18 条同色段保持、127 条淡出、图例 is-active 正确、console 0 error）。② 方案 2/3 原型更新为**按「项目 / 仓库」两级分组**（`v2-branch-overview.png` / `v3-worktree-map.png`），无 cwd 的卡片进「未指定仓库」 |
+| 截图 | `docs/assets/screens/git-workline-badges-board-light.png`、`-board-dark.png`、`-list-light.png`、`-portrait.png`（4 张） |
+| 生效方式 | 含服务端改动（`lib/git.js` / `lib/routes.js`），需**合入主线并重启 DSH**；`web/dist` 已重建；hover demo 为静态 HTML 可直接打开 |
+| 分支 | `feat/workline-badges`（基于 v0.14.1 主线 `226aa01`）；版本号 0.15.0 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
@@ -687,3 +702,10 @@ python3 /tmp/lead-v013/realhost-check.py --base http://127.0.0.1:<新端口> \
   --repo "/Users/roxor/Desktop/dsh/dsh kanban" --demo-root /tmp/dsh-kanban-git-demo \
   --expect-version 0.13.0 --real-card card-a57f6dbf --out /tmp/lead-v013/realhost-results.json
 #    结果与证据见 §1.27；重启口径：需 ⌘Q / 菜单「退出」真正结束宿主进程，仅关窗口不会重载服务端
+
+# v0.15.0 卡片「工作线」徽标 / hover demo 复跑
+npm --prefix web run test                  # 26 文件 / 260 例（worklineStatus 等）
+node --test test/*.test.mjs                # 181/181（含 test/git-summary.test.mjs 11 例）
+npm --prefix web run build                 # 重建 web/dist
+# dev-server 打开看板即可看卡片徽标（需要先起独立 dev-server；徽标走 POST /api/kanban/git/summaries）
+# hover 高亮 demo：直接用浏览器打开 design/branch-awareness/hover-lane-demo.html

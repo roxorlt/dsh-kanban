@@ -27,6 +27,7 @@
 | DELETE | `/api/kanban/cards/:id` | 归档（`archived:true`）→ `{ok, revision}` |
 | POST | `/api/kanban/cards/:id/move` | `{column, version?, beforeId?, afterId?}` → `{ok, card, revision}`；设置对应代表 status 并更新 cardOrder |
 | GET | `/api/kanban/cards/:id/git?cwd=` | 卡片执行目录的 git 上下文（只读派生，不落库），见 §10 → `{ok, git, revision}`；不可用时仍是 200 + `git.available:false` |
+| POST | `/api/kanban/git/summaries` | 批量 git 摘要（卡片徽标用，轻量无 graph/提交列表），见 §11 → `{ok, summaries, revision}` |
 | GET | `/api/kanban/cards/:id/activities?limit=&before=` | 单卡时间线（倒序，默认 30，上限 100）。`before` 为上一页最后一条 activity id，用于「加载更早」；返回 `{ok, activities, hasMore, nextBefore}`。`/state` 不内嵌全量时间线 |
 | POST | `/api/kanban/cards/:id/comments` | `{text, actor?}` → `{ok, activity, card, revision}`（UI 提交后由客户端桥把同一文本发到主会话） |
 | POST | `/api/kanban/cards/:id/approvals` | 二选一：单题 `{title, detail, options[], multiSelect?, sessionId?}`；多题 `{questions:[{header?,question,multiSelect?,options[]}], detail?, sessionId?}` → `{ok, approval, card, revision}`；卡片 status→`needs_you`；多题时每题独立单选/多选。选项可带 `outcome: 'running'\|'backlog'\|'done'` 声明「选中后卡片进哪一列」（v0.9.5），非法值 400 |
@@ -226,3 +227,22 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
 - **v0.14 起** `git.graph` 为 Fork 风格多分支提交图数据（refs / commits / truncated / refsTruncated / maxCommits / maxRefs），字段语义见 `06-git-context.md` §4.5；旧服务端没有该字段时前端整块隐藏。
 - 404 `CARD_NOT_FOUND`；405（非 GET/HEAD）。
 - 只读：不写仓库、不写 `data.json`；每条 git 命令 2s 超时、整次采集 4s 兜底；同源校验与其它接口一致。
+
+## 11. 批量 Git 摘要（v0.15 增量，卡片「工作线」徽标用）
+
+详情抽屉用 `GET /cards/:id/git`（重接口，含 graph）。看板/列表的卡片徽标需要**轻量批量**数据，避免 N 张卡 N 次 git 探测。
+
+- `POST /api/kanban/git/summaries`
+- body：`{ "dirs": ["/绝对路径", ...] }`，1–32 个，允许重复（服务端去重）。
+- 安全边界：`dirs` 里的目录必须**原样（trim 后）等于看板上某张未归档卡片的 `cwd`**（前端回传卡片 `cwd` 原文；服务端缓存 key 用 realpath）；不在允许集合里的目录返回该项 `available:false, reason:"forbidden"`，不报 400（批量容错）。非法 body（非数组 / 0 个 / >32 / 非字符串）→ 400 `BAD_REQUEST`。
+- 200：`{ ok:true, revision, summaries: { "<请求里的 dir 原文>": GitSummary } }`，按请求原文做 key（客户端可直接映射回卡片）。
+- `GitSummary`：
+  ```jsonc
+  { "available": true, "dir": "/real/path", "branch": "feat/x", "detached": false,
+    "mainBranch": "main",
+    "base": { "kind": "main", "ahead": 3, "behind": 1 },   // kind: main | upstream
+    "upstream": { "ref": "origin/feat/x", "ahead": 1, "behind": 0 },  // 无则 null
+    "isWorktree": true, "worktreePath": "/repo/.worktrees/feat-x" }
+  ```
+  不可用：`{ "available": false, "reason": "no_cwd" | "missing" | "not_git" | "no_commits" | "timeout" | "error" | "forbidden" }`。
+- 性能与缓存：不做 graph / 提交列表采集（每条 6–8 条只读命令）；服务端按 realpath **缓存 10s / 最多 128 条**；前端可按仓库聚合、TTL 15s 复用。

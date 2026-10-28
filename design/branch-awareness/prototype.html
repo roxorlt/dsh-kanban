@@ -198,6 +198,24 @@
   .rel { display: flex; flex-direction: column; gap: 4px; }
   .rel span { color: var(--text-2); font-size: 11px; }
 
+  /* 跨项目/仓库分组（v2 调整版） */
+  .repo-group { border-top: 0.5px solid var(--border); }
+  .repo-group:first-of-type { border-top: 0; }
+  .repo-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px;
+    background: var(--bg);
+    color: var(--text-2);
+    font-size: 11px;
+  }
+  .repo-head b { color: var(--text); font-size: 12px; font-weight: 600; }
+  .repo-head .cap { margin-left: auto; }
+  .repo-icon {
+    width: 14px; height: 14px; border-radius: 4px;
+    background: var(--bg-soft); border: 0.5px solid var(--border); flex: none;
+  }
+  .empty-group { padding: 10px 14px; color: var(--text-3); font-size: 12px; }
+
   /* 工作区地图（V3） */
   .wt-map { display: flex; flex-direction: column; gap: 10px; }
   .wt-card {
@@ -362,53 +380,90 @@
   <section class="screen" id="v2">
     <div class="screen-head">
       <span class="variant-tag">方案 2</span>
-      <h2>看板顶部「工作线总览」</h2>
+      <h2>看板顶部「工作线总览」<span style="font-weight:400;color:var(--text-3);font-size:12px;margin-left:6px">（调整版：按项目 / 仓库分组）</span></h2>
       <p>回答「现在有几条线在跑、各自到哪一步」</p>
     </div>
     <div class="screen-body">
       <div class="overview">
         <div class="overview-head">
-          <h3>工作线</h3>
-          <span class="cap">8 条 · 2 条在进行 · 6 条已并入主线</span>
+          <h3>工作线总览</h3>
+          <span class="cap">按「项目 / 仓库」分组 · 3 个仓库 · 7 条工作线 · 2 条在进行</span>
           <div class="tab" style="margin-left:auto"><span class="on">按工作线</span><span>按卡片</span></div>
         </div>
-        <div class="ov-row ov-row--selected">
-          <span class="dot dot--blue"></span>
-          <span class="wt-name"><b>fix/approval-stuck</b><span class="cap">2 张卡片 · 最近改动 12 分钟前</span></span>
-          <span class="pill pill--blue">进行中</span>
-          <div class="rel"><div class="bar"><i style="width:62%;background:var(--blue)"></i><i style="width:0"></i></div><span>比主线多 3 处改动 · 少 0</span></div>
-          <span class="pill">还没同步到线上</span>
-          <span class="mono muted">工作副本 · 主文件夹</span>
+
+        <div class="repo-group">
+          <div class="repo-head"><span class="repo-icon"></span><b>dsh-kanban</b><span class="cap">仓库：~/Desktop/dsh/dsh kanban · 4 条工作线 · 2 条在进行</span></div>
+          <div class="ov-row ov-row--selected">
+            <span class="dot dot--blue"></span>
+            <span class="wt-name"><b>fix/approval-stuck</b><span class="cap">2 张卡片 · 最近改动 12 分钟前</span></span>
+            <span class="pill pill--blue">进行中</span>
+            <div class="rel"><div class="bar"><i style="width:62%;background:var(--blue)"></i></div><span>比主线多 3 处改动 · 少 0</span></div>
+            <span class="pill">还没同步到线上</span>
+            <span class="mono muted">主文件夹</span>
+          </div>
+          <div class="ov-row">
+            <span class="dot dot--blue"></span>
+            <span class="wt-name"><b>feat/branch-badge</b><span class="cap">1 张卡片 · 最近改动 1 小时前</span></span>
+            <span class="pill pill--blue">进行中</span>
+            <div class="rel"><div class="bar"><i style="width:40%;background:var(--blue)"></i></div><span>比主线多 5 处改动 · 少 2</span></div>
+            <span class="pill">还没同步到线上</span>
+            <span class="mono muted">.worktrees/feat-branch-badge</span>
+          </div>
+          <div class="ov-row">
+            <span class="dot dot--green"></span>
+            <span class="wt-name"><b>feat/fork-graph-viz</b><span class="cap">3 张卡片 · 最近改动 昨天 22:51</span></span>
+            <span class="pill pill--green">已并入主线</span>
+            <div class="rel"><div class="bar"><i style="width:100%;background:var(--green)"></i></div><span>和主线完全一致</span></div>
+            <span class="pill pill--green">已同步线上</span>
+            <span class="mono muted">已合入 · 可归档</span>
+          </div>
+          <div class="ov-row">
+            <span class="dot dot--amber"></span>
+            <span class="wt-name"><b>docs/release-notes</b><span class="cap">1 张卡片 · 最近改动 3 天前</span></span>
+            <span class="pill pill--amber">停滞</span>
+            <div class="rel"><div class="bar"><i style="width:80%;background:var(--amber)"></i></div><span>比主线多 1 处 · 少 5 处</span></div>
+            <span class="pill">还没同步线上</span>
+            <span class="mono muted">.worktrees/docs</span>
+          </div>
         </div>
-        <div class="ov-row">
-          <span class="dot dot--blue"></span>
-          <span class="wt-name"><b>feat/branch-badge</b><span class="cap">1 张卡片 · 最近改动 1 小时前</span></span>
-          <span class="pill pill--blue">进行中</span>
-          <div class="rel"><div class="bar"><i style="width:40%;background:var(--blue)"></i></div><span>比主线多 5 处改动 · 少 2</span></div>
-          <span class="pill">还没同步到线上</span>
-          <span class="mono muted">.worktrees/feat-branch-badge</span>
+
+        <div class="repo-group">
+          <div class="repo-head"><span class="repo-icon"></span><b>geo-platform</b><span class="cap">仓库：~/work/geo-platform · 2 条工作线 · 1 条在进行</span></div>
+          <div class="ov-row">
+            <span class="dot dot--blue"></span>
+            <span class="wt-name"><b>feat/geo-report</b><span class="cap">2 张卡片 · 最近改动 2 小时前</span></span>
+            <span class="pill pill--blue">进行中</span>
+            <div class="rel"><div class="bar"><i style="width:30%;background:var(--blue)"></i></div><span>比主线多 2 处 · 少 0</span></div>
+            <span class="pill">还没同步线上</span>
+            <span class="mono muted">.worktrees/geo-report</span>
+          </div>
+          <div class="ov-row">
+            <span class="dot dot--green"></span>
+            <span class="wt-name"><b>fix/export-timeout</b><span class="cap">1 张卡片 · 最近改动 昨天</span></span>
+            <span class="pill pill--green">已并入主线</span>
+            <div class="rel"><div class="bar"><i style="width:100%;background:var(--green)"></i></div><span>和主线完全一致</span></div>
+            <span class="pill pill--green">已同步线上</span>
+            <span class="mono muted">已合入</span>
+          </div>
         </div>
-        <div class="ov-row">
-          <span class="dot dot--green"></span>
-          <span class="wt-name"><b>feat/fork-graph-viz</b><span class="cap">3 张卡片 · 最近改动 昨天 22:51</span></span>
-          <span class="pill pill--green">已并入主线</span>
-          <div class="rel"><div class="bar"><i style="width:100%;background:var(--green)"></i></div><span>和主线完全一致</span></div>
-          <span class="pill pill--green">已同步线上</span>
-          <span class="mono muted">已合入 · 可归档</span>
-        </div>
-        <div class="ov-row">
-          <span class="dot dot--amber"></span>
-          <span class="wt-name"><b>docs/release-notes</b><span class="cap">1 张卡片 · 最近改动 3 天前</span></span>
-          <span class="pill pill--amber">停滞</span>
-          <div class="rel"><div class="bar"><i style="width:80%;background:var(--amber)"></i></div><span>比主线多 1 处 · 少 5 处</span></div>
-          <span class="pill">还没同步线上</span>
-          <span class="mono muted">工作副本 · .worktrees/docs</span>
+
+        <div class="repo-group">
+          <div class="repo-head"><span class="repo-icon"></span><b>未指定仓库</b><span class="cap">卡片没有填写执行目录 · 1 条工作线</span></div>
+          <div class="ov-row">
+            <span class="dot dot--gray"></span>
+            <span class="wt-name"><b>未知</b><span class="cap">1 张卡片 · 补齐执行目录后显示</span></span>
+            <span class="pill">无法判断</span>
+            <div class="rel"><div class="bar"><i style="width:0;background:var(--text-4)"></i></div><span>暂无数据</span></div>
+            <span class="pill">—</span>
+            <span class="mono muted">—</span>
+          </div>
         </div>
       </div>
       <div class="notes">
         <span><b>点一条工作线：</b>看板只显示这条线的卡片；再点「按卡片」视图恢复。</span>
         <span><b>优点：</b>一次看清所有线、卡在哪些线、哪些已并入主线、哪些停滞。</span>
-        <span><b>数据前提：</b>卡片 ↔ 工作线映射 + 现有 git 数据（v0.14 已具备）。</span>
+        <span><b>跨项目处理：</b>看板本来就是多个项目/目录混在一起，所以按「项目 / 仓库」分组，不在一条列表里铺平；无执行目录的卡片进「未指定」。</span>
+        <span><b>数据前提：</b>按 cwd 推导仓库根，同一仓库只探测一次（非每卡一次）；卡片无需新增字段。</span>
       </div>
     </div>
   </section>
@@ -417,11 +472,12 @@
   <section class="screen" id="v3">
     <div class="screen-head">
       <span class="variant-tag">方案 3</span>
-      <h2>「并行工作区」地图</h2>
+      <h2>「并行工作区」地图<span style="font-weight:400;color:var(--text-3);font-size:12px;margin-left:6px">（调整版：按仓库分块）</span></h2>
       <p>回答「哪个任务开在哪个文件夹里」——worktree 场景专用</p>
     </div>
     <div class="screen-body">
       <div class="wt-map">
+        <div class="repo-head" style="border:0.5px solid var(--border);border-radius:10px;background:var(--bg-soft)"><span class="repo-icon"></span><b>dsh-kanban</b><span class="cap">~/Desktop/dsh/dsh kanban · 3 个工作副本 · 3 张卡片在跑</span></div>
         <div class="wt-card">
           <span class="folder-icon"></span>
           <div class="wt-head"><b>dsh kanban（主文件夹）</b><span class="cap">主线 · 3 张卡片在跑 · 有未提交改动</span></div>
@@ -444,9 +500,17 @@
           <div class="cards-mini"><span><span class="dot dot--green"></span>分支图重做（已并入主线）</span></div>
           <span class="pill pill--green">可删除工作副本</span>
         </div>
+        <div class="repo-head" style="border:0.5px solid var(--border);border-radius:10px;background:var(--bg-soft);margin-top:6px"><span class="repo-icon"></span><b>geo-platform</b><span class="cap">~/work/geo-platform · 1 个工作副本 · 1 张卡片在跑</span></div>
+        <div class="wt-card">
+          <span class="folder-icon"></span>
+          <div class="wt-head"><b>.worktrees/geo-report</b><span class="cap">工作副本：feat/geo-report · 1 张卡片 · 干净</span></div>
+          <div class="cards-mini"><span><span class="dot dot--blue"></span>GEO 报告导出优化</span></div>
+          <span class="pill">还没同步线上</span>
+        </div>
       </div>
       <div class="notes">
         <span><b>优点：</b>解决「同时开了几个文件夹、哪个任务在哪」；能提示未保存改动 / 可安全清理。</span>
+        <span><b>跨项目处理：</b>本来就按仓库分块——每个仓库一行组头 + 它的工作副本，不会把不同项目的文件夹混在一张表里。</span>
         <span><b>数据：</b>git worktree 列表 + 卡片 cwd / 会话 cwd（现有接口已有）。</span>
       </div>
     </div>

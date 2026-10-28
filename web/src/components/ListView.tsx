@@ -12,6 +12,9 @@ import {
 } from '../lib/listGroups';
 import type { ListGroupBy } from '../lib/listGroups';
 import type { CardActionHandlers, CardViewShared } from './types';
+import type { WorklineStatus } from '../lib/worklineSummary';
+import type { WorklineStatusMap } from '../lib/useWorklineStatuses';
+import { WorklineBadge } from './WorklineBadge';
 import { ApprovalPanel } from './ApprovalPanel';
 import { NativeInbox } from './NativeInbox';
 import type { NativeInboxProps } from './NativeInbox';
@@ -41,6 +44,8 @@ interface ListViewProps {
   onDoneOpenChange: (open: boolean) => void;
   shared: CardViewShared;
   actions: CardActionHandlers;
+  /** cwd → 工作线状态（列表行「工作线」徽标） */
+  worklineStatuses: WorklineStatusMap;
   filtering: boolean;
   onClearFilters: () => void;
   selectionMode: boolean;
@@ -68,6 +73,7 @@ export function ListView({
   onDoneOpenChange,
   shared,
   actions,
+  worklineStatuses,
   filtering,
   onClearFilters,
   selectionMode,
@@ -173,6 +179,7 @@ export function ListView({
                           actions={actions}
                           selectionMode={selectionMode}
                           selectionSelected={selectedIds.has(card.id)}
+                          worklineStatus={card.cwd?.trim() ? worklineStatuses[card.cwd.trim()] : undefined}
                           onToggleSelection={onToggleSelection}
                           highlighted={highlightedCardId === card.id}
                         />
@@ -206,6 +213,7 @@ function ListRow({
   actions,
   selectionMode,
   selectionSelected,
+  worklineStatus,
   onToggleSelection,
   highlighted = false,
 }: {
@@ -214,6 +222,8 @@ function ListRow({
   actions: CardActionHandlers;
   selectionMode: boolean;
   selectionSelected: boolean;
+  /** 工作线徽标状态：undefined=未就绪，null=探测失败（未知） */
+  worklineStatus?: WorklineStatus | null;
   onToggleSelection: (cardId: string) => void;
   highlighted?: boolean;
 }) {
@@ -405,6 +415,10 @@ function ListRow({
           {t(statusKey)}
           {card.project ? <span className="kb-list__project"> · {card.project}</span> : null}
         </span>
+      </div>
+
+      <div className="kb-list__workline">
+        <WorklineBadge cwd={card.cwd} status={worklineStatus} />
       </div>
 
       {expanded && !selectionMode ? (

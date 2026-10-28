@@ -8,6 +8,7 @@ import { COLUMNS } from '../lib/status';
 import { countByColumn, planCardDrop } from '../lib/grouping';
 import { DONE_PREVIEW_LIMIT } from '../lib/listGroups';
 import { useBoardWheelScroll } from '../lib/useBoardWheelScroll';
+import type { WorklineStatusMap } from '../lib/useWorklineStatuses';
 import { KanbanCard } from './KanbanCard';
 import { NativeInbox } from './NativeInbox';
 import type { NativeInboxProps } from './NativeInbox';
@@ -22,6 +23,8 @@ interface BoardViewProps {
   doneTotal: number;
   shared: CardViewShared;
   actions: CardActionHandlers;
+  /** cwd → 工作线状态（卡片「工作线」徽标） */
+  worklineStatuses: WorklineStatusMap;
   mobile: boolean;
   selectionMode: boolean;
   selectedIds: ReadonlySet<string>;
@@ -70,6 +73,7 @@ export function BoardView({
   doneTotal,
   shared,
   actions,
+  worklineStatuses,
   mobile,
   selectionMode,
   selectedIds,
@@ -279,6 +283,7 @@ export function BoardView({
                     feed={shared.feeds[card.id]}
                     onLoadEarlier={() => shared.loadEarlier(card.id)}
                     sessions={shared.sessions}
+                    worklineStatus={card.cwd?.trim() ? worklineStatuses[card.cwd.trim()] : undefined}
                     resolvingApprovalId={shared.resolvingApprovalId}
                     selectionMode={selectionMode}
                     selectionSelected={selectedIds.has(card.id)}

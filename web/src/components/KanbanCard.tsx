@@ -7,12 +7,14 @@ import { COLUMN_OF_STATUS, COLUMNS, STATUS_OF_COLUMN, STATUS_TONE, isWarningStat
 import { elapsedMs, formatDateTime, formatDuration } from '../lib/time';
 import { CARD_TIMELINE_PREVIEW, CARD_TIMELINE_STEP, visibleActivities } from '../lib/activities';
 import type { ActivityFeed } from '../lib/activities';
+import type { WorklineStatus } from '../lib/worklineSummary';
 import { ApprovalPanel } from './ApprovalPanel';
 import { canStartCard } from '../lib/startCard';
 import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 import { MenuButton } from './MenuButton';
 import type { MenuEntry } from './MenuButton';
 import { Timeline, TimelineLoadMore } from './Timeline';
+import { WorklineBadge } from './WorklineBadge';
 import {
   IconArchive,
   IconChevronDown,
@@ -41,6 +43,8 @@ interface KanbanCardProps {
   feed: ActivityFeed | undefined;
   onLoadEarlier: () => void;
   sessions: SessionRow[];
+  /** 卡片「工作线」徽标状态：undefined=未就绪，null=探测失败（未知） */
+  worklineStatus?: WorklineStatus | null;
   resolvingApprovalId: string | null;
   selectionMode: boolean;
   selectionSelected: boolean;
@@ -78,6 +82,7 @@ export function KanbanCard({
   feed,
   onLoadEarlier,
   sessions,
+  worklineStatus,
   resolvingApprovalId,
   selectionMode,
   selectionSelected,
@@ -296,6 +301,8 @@ export function KanbanCard({
       </div>
 
       {card.summary ? <p className="kb-card-summary">{card.summary}</p> : null}
+
+      <WorklineBadge cwd={card.cwd} status={worklineStatus} />
 
       {card.currentAction ? (
         <p className={`kb-card-action kb-card-action--${actionTone}`}>

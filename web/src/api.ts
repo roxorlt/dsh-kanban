@@ -12,6 +12,11 @@ import type {
   GitGraphData,
   GitGraphRef,
   GitGraphRefKind,
+  GitSummary,
+  GitSummaryAvailable,
+  GitSummaryBase,
+  GitSummaryUnavailableReason,
+  GitSummaryUpstream,
   GitUnavailableReason,
   KanbanState,
   Priority,
@@ -392,6 +397,68 @@ function normalizeGitReason(value: unknown): GitUnavailableReason {
   return GIT_UNAVAILABLE_REASONS.find((reason) => reason === value) ?? 'error';
 }
 
+/** git 摘要不可用原因（比详情多一个 forbidden）。 */
+const GIT_SUMMARY_REASONS: readonly GitSummaryUnavailableReason[] = [...GIT_UNAVAILABLE_REASONS, 'forbidden'];
+
+function normalizeGitSummaryReason(value: unknown): GitSummaryUnavailableReason {
+  return GIT_SUMMARY_REASONS.find((reason) => reason === value) ?? 'error';
+}
+
+function normalizeSummaryBase(raw: unknown): GitSummaryBase | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const base = raw as Partial<GitSummaryBase>;
+  return {
+    kind: base.kind === 'upstream' ? 'upstream' : 'main',
+    ahead: typeof base.ahead === 'number' && base.ahead > 0 ? base.ahead : 0,
+    behind: typeof base.behind === 'number' && base.behind > 0 ? base.behind : 0,
+  };
+}
+
+function normalizeSummaryUpstream(raw: unknown): GitSummaryUpstream | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const upstream = raw as Partial<GitSummaryUpstream>;
+  if (typeof upstream.ref !== 'string' || !upstream.ref) return null;
+  return {
+    ref: upstream.ref,
+    ahead: typeof upstream.ahead === 'number' && upstream.ahead > 0 ? upstream.ahead : 0,
+    behind: typeof upstream.behind === 'number' && upstream.behind > 0 ? upstream.behind : 0,
+  };
+}
+
+/**
+ * 容错归一化单条 Git 摘要（`POST /git/summaries` 的 summaries value）。
+ * available 缺失/非 true → 按不可用处理（reason 未知归 error），保证徽标降级为「未知」而不是谎报。
+ */
+export function normalizeGitSummary(raw: unknown): GitSummary {
+  if (!raw || typeof raw !== 'object' || (raw as { available?: unknown }).available !== true) {
+    const reason = raw && typeof raw === 'object' ? (raw as { reason?: unknown }).reason : null;
+    return { available: false, reason: normalizeGitSummaryReason(reason) };
+  }
+  const summary = raw as Partial<GitSummaryAvailable>;
+  return {
+    available: true,
+    dir: typeof summary.dir === 'string' ? summary.dir : '',
+    branch: typeof summary.branch === 'string' ? summary.branch : null,
+    detached: summary.detached === true,
+    mainBranch: typeof summary.mainBranch === 'string' ? summary.mainBranch : null,
+    base: normalizeSummaryBase(summary.base),
+    upstream: normalizeSummaryUpstream(summary.upstream),
+    isWorktree: summary.isWorktree === true,
+    worktreePath: typeof summary.worktreePath === 'string' ? summary.worktreePath : null,
+  };
+}
+
+/** 容错归一化批量摘要：key 按请求原文保留（服务端契约 §11），非法条目丢弃。 */
+export function normalizeGitSummaries(raw: unknown): Record<string, GitSummary> {
+  if (!raw || typeof raw !== 'object') return {};
+  const summaries: Record<string, GitSummary> = {};
+  for (const [dir, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!dir) continue;
+    summaries[dir] = normalizeGitSummary(value);
+  }
+  return summaries;
+}
+
 /**
  * 容错归一化 git 上下文：服务端字段缺失时不让抽屉渲染崩溃。
  * 数组缺失 → 空数组（图退化为空、组件整块隐藏）；available 缺失 → 按不可用处理。
@@ -720,6 +787,18 @@ export const api = {
       `/cards/${encodeURIComponent(cardId)}/git${query ? `?${query}` : ''}`,
     );
     return normalizeGitContext(result.git);
+  },
+
+  /**
+   * v0.15 批量 Git 摘要（卡片「工作线」徽标，docs/contracts/02-http-api.md §11）：
+   * `dirs` 1–32 个，服务端按请求原文做 key；网络/HTTP 错误向上抛，由 useWorklineStatuses 兜底为未知。
+   */
+  getGitSummaries: async (dirs: string[]): Promise<Record<string, GitSummary>> => {
+    const result = await request<{ summaries?: Record<string, unknown> }>('/git/summaries', {
+      method: 'POST',
+      body: JSON.stringify({ dirs }),
+    });
+    return normalizeGitSummaries(result.summaries);
   },
 
   ack: (cardId: string): Promise<{ revision: number }> =>

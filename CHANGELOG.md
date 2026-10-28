@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.15.0 — 2026-10-28
+
+### 新增：卡片 / 列表「工作线」徽标（方案 1，派生式不落卡片字段）
+
+- 背景：用户确认按 Lead 结论落地方案 1——卡片面直接显示工作线状态，但**不给卡片加真值字段**：沿用 `card.cwd` / 会话 cwd 派生，按仓库去重探测、失败显示「未知」而不是谎报；同时交付可交互 hover 高亮泳道 demo 与「按项目/仓库分组」的调整版方案 2/3 原型。
+- 服务端（`lib/git.js` / `lib/routes.js`）：新增 **`POST /api/kanban/git/summaries`**（契约 02 §11 / 06 §4.6）——轻量批量摘要（不采 graph/提交列表，每目录约 8 条只读命令）：`{dirs:[...]}`（1–32，去重并发）→ `{summaries: {dir: {available, branch, detached, mainBranch, base{kind,ahead,behind}, upstream|null, isWorktree, worktreePath} | {available:false, reason}}}`；**允许集合 = 未归档卡片 cwd 原文（trim 严格相等）**，其余逐项 `forbidden`；服务端 realpath 缓存 10s / 上限 128；全部失败仍 200；`gitSummaryCacheTtlMs` 仅供测试。
+- Web：`worklineSummary.ts` 抽出 `buildWorklineStatus`（位置 / 与主线 / 与线上分类，详情与徽标共用）；新增 `api.getGitSummaries` + 容错归一化；`useWorklineStatuses`（未归档有 cwd 的卡片去重、400ms debounce、≤32/批、模块缓存 15s、20s 可见时刷新、失败静默为未知且不缓存）；`WorklineBadge`（仅非主线 feature 显示：彩点 + `工作线 feat/x` + `多 N` / `已并入主线` / `和主线一致` + `未同步` / `线上落后 N` / `已同步`；无 cwd / 非 git 不显示；其余失败灰色「工作线未知」；11px 单行、窄卡省略分支名保留关系、title/aria 全文）；接入 `KanbanCard` / `ListView` / `BoardView` / `App`。
+- 顺带修正：当前分支 === 主分支（主分支无 upstream 的仓库）此前会被判成 feature，现已判为「就在主线上」，详情抽屉文案同步修正。
+- 设计原型：`design/branch-awareness/hover-lane-demo.html`（**可交互**：鼠标悬停任意提交行 → 该泳道同色线/点/ref 徽标保持高亮、其它淡出，带亮暗切换）；方案 2/3 原型改为**按「项目 / 仓库」两级分组**（`v2-branch-overview.png` / `v3-worktree-map.png` 已更新），解决看板跨项目跨 cwd 的问题。
+- 测试：服务端 `node --test` **181/181**（新增 11：collectGitSummary 5 + 路由 6，含 400 矩阵 / forbidden / 归档排除 / 缓存命中与 TTL 过期 / 逐项失败仍 200）；Web `vitest` **26 文件 / 260 测试**（新增/改写 worklineStatus 分类、批次与归一化等 12 例）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 9 CSS 0 error / 0 warning。
+- 验证（dev-server + 真实仓库 / 演示仓库数据）：看板与列表均只对 feature 工作线卡显示徽标（如 `工作线 feat/graph · 多 1 · 线上落后 1`、`工作线 feat/long · 多 6 · 未同步`），主线卡、无 cwd 卡、非 git 卡不显示，目录不存在显示灰色「工作线未知」；亮/暗/390 竖屏无横向溢出、console error 0 / pageerror 0 / 4xx 0。截图 `docs/assets/screens/git-workline-badges-*.png`（4 张），验证记录 docs/06 §1.31。
+- 生效方式：含服务端改动（`lib/git.js` / `lib/routes.js`），需**合入主线并重启 DSH**；`web/dist` 已重建。hover demo 为静态 HTML，可直接双击打开。
+- 已知限制：徽标只对非主线 feature 工作线显示；「多 N 且少 M」单行只显示「多 N」（完整计数在详情抽屉 / title）；探测不到主分支时不显示；前端按 cwd 派生，符号链接写法不一致会落为「未知」；单批最多 32 个目录全并发（正常看板 1–3 个 cwd）。
+- 分支：`feat/workline-badges`（基于 `226aa01`）。
+
 ## v0.14.1 — 2026-10-28
 
 ### 改进：详情抽屉「工作线」人话版（面向非技术用户）

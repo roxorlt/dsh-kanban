@@ -455,3 +455,44 @@ export interface GitContextUnavailable {
 }
 
 export type GitContext = GitContextAvailable | GitContextUnavailable;
+
+// ------------------------------------------------ 批量 Git 摘要（v0.15，卡片「工作线」徽标）
+// POST /api/kanban/git/summaries：轻量批量数据（无 graph/commits），docs/contracts/02-http-api.md §11。
+
+/** 摘要不可用原因：在详情接口枚举上多一个 forbidden（目录不属于看板未归档卡片的 cwd）。 */
+export type GitSummaryUnavailableReason = GitUnavailableReason | 'forbidden';
+
+/** 摘要里「与主线」的比较。 */
+export interface GitSummaryBase {
+  kind: 'main' | 'upstream';
+  ahead: number;
+  behind: number;
+}
+
+/** 摘要里「与线上」的比较。 */
+export interface GitSummaryUpstream {
+  ref: string;
+  ahead: number;
+  behind: number;
+}
+
+export interface GitSummaryAvailable {
+  available: true;
+  /** realpath 后的采集目录 */
+  dir: string;
+  branch: string | null;
+  detached: boolean;
+  mainBranch: string | null;
+  /** 探测不到主分支时 null */
+  base: GitSummaryBase | null;
+  upstream: GitSummaryUpstream | null;
+  isWorktree: boolean;
+  worktreePath: string | null;
+}
+
+export interface GitSummaryUnavailable {
+  available: false;
+  reason: GitSummaryUnavailableReason;
+}
+
+export type GitSummary = GitSummaryAvailable | GitSummaryUnavailable;
