@@ -53,6 +53,8 @@ export function CleanupWorktreeDialog({ target, onConfirm, onClose }: CleanupWor
   const canDeleteBranch = branch !== null;
   const unmergedAhead = Math.max(1, status.aheadMain);
   const badges = worktreeStatusBadges(target.worktree);
+  /** 从未推送：未合并时删分支 = 提交彻底丢失（回收站只能找回文件，不能恢复提交历史）。 */
+  const isNoRemote = status.remote === 'no-upstream';
 
   const [stage, setStage] = useState<'confirm' | 'danger'>('confirm');
   // 已并入主线 → 默认勾选「同时删除本地分支」；否则默认不勾
@@ -110,6 +112,9 @@ export function CleanupWorktreeDialog({ target, onConfirm, onClose }: CleanupWor
   }
   if (branchRiskVisible) {
     dangerWarnings.push(t('workspace.cleanupDangerBranch', { count: unmergedAhead }));
+  }
+  if (isNoRemote && status.merge === 'unmerged' && confirmDeleteBranch) {
+    dangerWarnings.push(t('workspace.cleanupDangerNoRemote'));
   }
 
   const primaryDisabled = busy || (stage === 'danger' && !riskAccepted);
@@ -170,6 +175,12 @@ export function CleanupWorktreeDialog({ target, onConfirm, onClose }: CleanupWor
               </div>
             </dl>
             <p className="kb-form__note">{t('workspace.cleanupTrashNote', { days: TRASH_RETENTION_DAYS })}</p>
+            {isNoRemote && status.merge === 'merged' ? (
+              <p className="kb-form__note">{t('workspace.cleanupNoRemoteMerged')}</p>
+            ) : null}
+            {isNoRemote && status.merge === 'unmerged' ? (
+              <p className="kb-workspace__cleanup-warn">{t('workspace.cleanupNoRemoteUnmerged')}</p>
+            ) : null}
             {canDeleteBranch ? (
               <label className="kb-check">
                 <input

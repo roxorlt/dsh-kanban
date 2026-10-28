@@ -588,3 +588,36 @@ export interface CleanupWorktreeResult {
   /** 回收站保留天数（服务端契约固定 7） */
   trashRetentionDays: number;
 }
+
+// ------------------------------------------------ 回收站（v0.18，GET /git/trash 等）
+// 清理的补救入口：列表 / 恢复 / 彻底删除；docs/contracts/02-http-api.md §14。
+
+export interface GitTrashEntry {
+  /** 回收站目录名（同时也是接口里的 id） */
+  id: string;
+  repoRoot: string;
+  worktreePath: string;
+  repoName: string;
+  worktreeName: string;
+  branch: string | null;
+  /** 清理时 HEAD 的 sha（分支已删时恢复用；可能缺失） */
+  sha: string | null;
+  /** 移入回收站的时间（ISO 字符串） */
+  trashedAt: string;
+  branchDeleted: boolean;
+  /** 旧条目无 manifest / 记录损坏 → 不可恢复 */
+  restorable: boolean;
+}
+
+export interface GitTrashListResult {
+  entries: GitTrashEntry[];
+}
+
+export interface GitTrashRestoreResult {
+  id: string;
+  repoRoot: string;
+  worktreePath: string;
+  /** 实际恢复到的路径（通常等于 worktreePath） */
+  restoredTo: string;
+  branch: string | null;
+}

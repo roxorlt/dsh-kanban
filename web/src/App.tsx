@@ -57,7 +57,7 @@ import { doneCardsOf } from './lib/listGroups';
 import type { ListGroupBy } from './lib/listGroups';
 import { applyPage, EMPTY_FEED } from './lib/activities';
 import { useWorklineStatuses } from './lib/useWorklineStatuses';
-import { useWorkspaces } from './lib/useWorkspaces';
+import { collectRunningSessionCwds, useWorkspaces } from './lib/useWorkspaces';
 import type { ActivityFeed } from './lib/activities';
 import { useMediaQuery } from './lib/useMediaQuery';
 import { useRealtime } from './lib/useRealtime';
@@ -421,10 +421,14 @@ export function App() {
   }, [highlightCardId]);
 
   const filteredCards = useMemo(() => filterCards(snapshot.cards, filters), [snapshot.cards, filters]);
+  // 未归档的全部卡片：工作区「显示全部」范围 + 清理占用判定用
+  const unarchivedCards = useMemo(() => snapshot.cards.filter((card) => !card.archived), [snapshot.cards]);
+  // 运行中会话的 cwd：客户端清理安全层（服务端不知道会话 cwd）
+  const runningSessionCwds = useMemo(() => collectRunningSessionCwds(sessions), [sessions]);
   // 卡片「工作线」徽标：按 cwd 去重批量探测（轻量摘要，不看 graph）
   const worklineStatuses = useWorklineStatuses(filteredCards);
-  // 「工作区」视图：按仓库/工作副本聚合（同样按 cwd 去重批量探测）
-  const workspaceState = useWorkspaces(filteredCards);
+  // 「工作区」视图：按仓库/工作副本聚合（探测全部未归档卡片的 cwd，范围切换时数据才完整）
+  const workspaceState = useWorkspaces(unarchivedCards);
   const groups = useMemo(
     () => (snapshot.board ? groupCardsByColumn(filteredCards, snapshot.board.cardOrder) : EMPTY_GROUPS),
     [filteredCards, snapshot.board],
@@ -1670,7 +1674,10 @@ export function App() {
       return (
         <WorkspaceView
           cards={filteredCards}
+          allCards={unarchivedCards}
           workspaces={workspaceState}
+          runningSessionCwds={runningSessionCwds}
+          now={now}
           onOpenCard={actions.onOpenDetail}
           onNotify={actions.onNotify}
         />
