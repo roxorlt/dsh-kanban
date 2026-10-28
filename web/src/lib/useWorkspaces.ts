@@ -10,7 +10,16 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import type { Card, GitWorkspaceRepo, GitWorkspacesResult, GitWorkspaceUnavailable, GitWorkspaceWorktree } from '../types';
+import { formatRelative } from './time';
+import type { Lang } from './time';
+import type {
+  Card,
+  GitWorkspaceRepo,
+  GitWorkspacesResult,
+  GitWorkspaceUnavailable,
+  GitWorkspaceWorktree,
+  SessionRow,
+} from '../types';
 
 /** 模块缓存 TTL（与服务端 realpath 缓存 8s 互补）。 */
 export const WORKSPACES_CACHE_TTL_MS = 15_000;
@@ -339,14 +348,16 @@ export function worktreeStatusBadges(worktree: WorktreeStatusInput): WorktreeSta
 }
 
 /** 清理按钮被禁用的原因（null = 可清理）。 */
-export type WorktreeCleanupBlocked = 'main' | 'running' | 'in-use' | null;
+export type WorktreeCleanupBlocked = 'main' | 'session' | 'running' | 'in-use' | null;
 
 export interface WorktreeCleanupCheck {
-  /** 是否可点「清理」（主工作副本 / 锁定 / 有卡片占用时不可点） */
+  /** 是否可点「清理」（主工作副本 / 有会话或卡片占用时不可点） */
   canCleanup: boolean;
   blocked: WorktreeCleanupBlocked;
   cardCount: number;
   runningCardCount: number;
+  /** cwd 落在该工作副本内的运行中会话数（客户端安全层；服务端不知道会话 cwd） */
+  runningSessionCount: number;
   /** 安全可清理：可清理 && 已并入主线 && 干净（不弹第二层危险确认） */
   safe: boolean;
   /** 需要第二层危险确认：可清理但未合并或有未保存改动 */
@@ -355,19 +366,55 @@ export interface WorktreeCleanupCheck {
 
 type WorktreeCleanupInput = Pick<
   GitWorkspaceWorktree,
-  'isMain' | 'mergedIntoBase' | 'aheadOfBase' | 'modifiedCount' | 'untrackedCount' | 'dirty'
+  'path' | 'isMain' | 'mergedIntoBase' | 'aheadOfBase' | 'modifiedCount' | 'untrackedCount' | 'dirty'
 > & { cards: readonly Card[] };
+
+export interface WorktreeCleanupOptions {
+  /** 运行中会话的 cwd 列表（App 从 sessions 预计算；落在工作副本内则禁止清理） */
+  sessionCwds?: readonly string[];
+}
+
+/** 收集运行中会话的 cwd（去重；只看 running 且有 cwd 的会话）。 */
+export function collectRunningSessionCwds(
+  sessions: readonly Pick<SessionRow, 'running' | 'cwd'>[],
+): string[] {
+  const seen = new Set<string>();
+  const cwds: string[] = [];
+  for (const session of sessions) {
+    if (!session.running) continue;
+    const cwd = session.cwd?.trim();
+    if (!cwd || seen.has(cwd)) continue;
+    seen.add(cwd);
+    cwds.push(cwd);
+  }
+  return cwds;
+}
+
+/** cwd 是否落在工作副本内（同源前缀判定）。 */
+function cwdInsidePath(cwd: string, path: string): boolean {
+  const root = trimTrailingSlash(path);
+  if (!root) return false;
+  return cwd === root || cwd.startsWith(`${root}/`);
+}
 
 /**
  * 清理判定（纯函数，契约 §12/§13）：
- * 非主工作副本 + 没被未归档卡片占用 + 没有卡片在跑 才允许清理；
+ * 非主工作副本 + 没有运行中会话 / 卡片在跑 + 没被未归档卡片占用 才允许清理；
  * 允许但「未并入主线 / 有改动」时需要第二层危险确认。
+ * 阻塞原因优先级：主工作副本 > 有会话在跑 > 有卡片在跑 > 有卡片占用。
  */
-export function evaluateWorktreeCleanup(worktree: WorktreeCleanupInput): WorktreeCleanupCheck {
+export function evaluateWorktreeCleanup(
+  worktree: WorktreeCleanupInput,
+  options: WorktreeCleanupOptions = {},
+): WorktreeCleanupCheck {
   const cards = worktree.cards;
   const runningCardCount = cards.filter((card) => card.status === 'running').length;
+  const runningSessionCount = (options.sessionCwds ?? []).filter((cwd) =>
+    cwdInsidePath(cwd.trim(), worktree.path),
+  ).length;
   let blocked: WorktreeCleanupBlocked = null;
   if (worktree.isMain) blocked = 'main';
+  else if (runningSessionCount > 0) blocked = 'session';
   else if (runningCardCount > 0) blocked = 'running';
   else if (cards.length > 0) blocked = 'in-use';
 
@@ -380,6 +427,7 @@ export function evaluateWorktreeCleanup(worktree: WorktreeCleanupInput): Worktre
     blocked,
     cardCount: cards.length,
     runningCardCount,
+    runningSessionCount,
     safe: canCleanup && !dirty && !unmerged,
     needsDangerConfirm: canCleanup && (dirty || unmerged),
   };
@@ -426,6 +474,148 @@ export function cleanupErrorReason(error: unknown): CleanupErrorReason {
 export function cleanupErrorNeedsLossConfirm(error: unknown): boolean {
   const reason = cleanupErrorReason(error);
   return reason === 'WORKTREE_DIRTY' || reason === 'WORKTREE_UNMERGED';
+}
+
+/** 通用错误码提取（KanbanApiError.code / details.reason / body.reason 三种形态）。 */
+function extractErrorCode(error: unknown, codes: readonly string[]): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const record = error as { code?: unknown; reason?: unknown; details?: unknown };
+  const details =
+    record.details && typeof record.details === 'object'
+      ? (record.details as { reason?: unknown; code?: unknown })
+      : null;
+  const candidates = [record.code, details?.reason, details?.code, record.reason];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && codes.includes(candidate)) return candidate;
+  }
+  return null;
+}
+
+/** 回收站接口错误码（契约 §14；兼容服务端 error.code 或 details.reason）。 */
+export const TRASH_ERROR_CODES = [
+  'RESTORE_PATH_EXISTS',
+  'RESTORE_SHA_MISSING',
+  'RESTORE_FAILED',
+  'TRASH_DELETE_FAILED',
+  'NOT_FOUND',
+  'BAD_REQUEST',
+] as const;
+
+export type TrashErrorReason = (typeof TRASH_ERROR_CODES)[number] | 'unknown';
+
+/** 从任意错误对象提取回收站错误码；认不出返回 'unknown'（UI 用兜底文案）。 */
+export function trashErrorReason(error: unknown): TrashErrorReason {
+  return (extractErrorCode(error, TRASH_ERROR_CODES) as TrashErrorReason | null) ?? 'unknown';
+}
+
+// ---------------------------------------------------------------- P1 排序
+
+/** 工作副本排序：主工作副本固定第一，其余 running 卡片 > 有改动 > 有卡片 > 最近提交新→旧 > 分支名。 */
+export function sortWorktreeGroups(
+  worktrees: readonly WorkspaceWorktreeGroup[],
+): WorkspaceWorktreeGroup[] {
+  const rank = (worktree: WorkspaceWorktreeGroup): [number, number, number, number, number, string] => {
+    const status = worktreeStatusInfo(worktree);
+    const runningCards = worktree.cards.filter((card) => card.status === 'running').length;
+    const dirty = status.changes !== 'clean' ? 1 : 0;
+    const lastCommit = parseCommitTimestamp(worktree.lastCommitAt) ?? 0;
+    return [worktree.isMain ? 0 : 1, -runningCards, -dirty, -worktree.cards.length, -lastCommit, worktree.branch ?? ''];
+  };
+  return [...worktrees].sort((a, b) => {
+    const left = rank(a);
+    const right = rank(b);
+    for (let index = 0; index < 5; index += 1) {
+      const diff = (left[index] as number) - (right[index] as number);
+      if (diff !== 0) return diff;
+    }
+    return left[5].localeCompare(right[5], 'zh-Hans-CN');
+  });
+}
+
+/** 仓库块排序：有 running 卡片 > 有未保存改动 > 有卡片 > 名称。 */
+export function sortRepoGroups(repos: readonly WorkspaceRepoGroup[]): WorkspaceRepoGroup[] {
+  const rank = (repo: WorkspaceRepoGroup): [number, number, number, string] => {
+    const runningCards = repo.worktrees.reduce(
+      (total, worktree) => total + worktree.cards.filter((card) => card.status === 'running').length,
+      0,
+    );
+    const dirty = repo.worktrees.some((worktree) => worktreeStatusInfo(worktree).changes !== 'clean');
+    return [-runningCards, dirty ? 0 : 1, -repo.cardCount, repo.name];
+  };
+  return [...repos].sort((a, b) => {
+    const left = rank(a);
+    const right = rank(b);
+    for (let index = 0; index < 3; index += 1) {
+      const diff = (left[index] as number) - (right[index] as number);
+      if (diff !== 0) return diff;
+    }
+    return left[3].localeCompare(right[3], 'zh-Hans-CN');
+  });
+}
+
+/** 每个仓库内的展示顺序：主工作副本 + 活跃工作副本 + 空闲工作副本（0 张卡片，主副本不算）。 */
+export interface RepoWorktreeSplit {
+  main: WorkspaceWorktreeGroup[];
+  active: WorkspaceWorktreeGroup[];
+  idle: WorkspaceWorktreeGroup[];
+}
+
+export function splitRepoWorktrees(worktrees: readonly WorkspaceWorktreeGroup[]): RepoWorktreeSplit {
+  const sorted = sortWorktreeGroups(worktrees);
+  return {
+    main: sorted.filter((worktree) => worktree.isMain),
+    active: sorted.filter((worktree) => !worktree.isMain && worktree.cards.length > 0),
+    idle: sorted.filter((worktree) => !worktree.isMain && worktree.cards.length === 0),
+  };
+}
+
+// ---------------------------------------------------------------- P1 卡片预览
+
+/** 工作副本行内卡片预览上限（超出显示「还有 N 张」）。 */
+export const WORKSPACE_CARD_PREVIEW_LIMIT = 5;
+
+/** 卡片预览：默认只取前 N 张，返回被折叠的数量。 */
+export function previewWorkspaceCards(
+  cards: readonly Card[],
+  limit = WORKSPACE_CARD_PREVIEW_LIMIT,
+): { visible: Card[]; hiddenCount: number } {
+  const safeLimit = Math.max(1, Math.floor(limit));
+  if (cards.length <= safeLimit) return { visible: [...cards], hiddenCount: 0 };
+  return { visible: cards.slice(0, safeLimit), hiddenCount: cards.length - safeLimit };
+}
+
+// ---------------------------------------------------------------- P1 筛选范围
+
+/** 工作区卡片范围：只看当前筛选 / 显示全部（持久化在视图层）。 */
+export type WorkspaceCardScope = 'filtered' | 'all';
+
+/** 按范围选择分组用的卡片：filtered = 看板当前筛选结果，all = 全部未归档卡片。 */
+export function selectWorkspaceCards(
+  scope: WorkspaceCardScope,
+  filteredCards: readonly Card[],
+  allCards: readonly Card[],
+): Card[] {
+  return scope === 'filtered' ? [...filteredCards] : [...allCards];
+}
+
+// ---------------------------------------------------------------- P1 相对时间
+
+/** 解析 ISO 时间字符串为毫秒；非法/缺失返回 null。 */
+export function parseCommitTimestamp(value: string | null | undefined): number | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** 最近提交的相对时间（如「3 天前」）；无数据/非法时不显示（返回 null）。 */
+export function formatLastCommitRelative(
+  value: string | null | undefined,
+  now: number = Date.now(),
+  lang: Lang = 'zh',
+): string | null {
+  const at = parseCommitTimestamp(value);
+  if (at === null) return null;
+  return formatRelative(at, now, lang);
 }
 
 export interface WorkspacesController extends WorkspacesState {

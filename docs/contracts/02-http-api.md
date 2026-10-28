@@ -293,8 +293,23 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
   - 有未保存改动/未跟踪文件且 `confirmLoss !== true` → 409 `WORKTREE_DIRTY`（带 `modifiedCount`/`untrackedCount`）；
   - 未并入主线且 `confirmLoss !== true` → 409 `WORKTREE_UNMERGED`（带 `ahead`）；
   - `deleteBranch` 且分支是主分支 → 400 `BRANCH_MAIN`；分支被其它工作副本占用 → 409 `BRANCH_IN_USE`。
-- 行为：把目录 `rename` 到 `~/.dsh-kanban/trash/<时间戳>-<仓库名>-<工作副本名>`（同一磁盘；跨磁盘失败返回 500 `TRASH_MOVE_FAILED`，不做强删）；在仓库内 `git worktree prune` 清理元数据；`deleteBranch` 时：已合并用 `git branch -d`，未合并（已 `confirmLoss`）用 `git branch -D`；顺手清理 trash 中超 7 天的条目（尽力而为）。
+- 行为：把目录 `rename` 到 `~/.dsh-kanban/trash/<时间戳>-<仓库名>-<工作副本名>`（同一磁盘；跨磁盘失败返回 500 `TRASH_MOVE_FAILED`，不做强删），并在回收站目录写入 `manifest.json`（v0.18 起：`{version:1, trashedAt, repoRoot, worktreePath, branch, sha, branchDeleted}`，供恢复使用；旧条目无 manifest 时列表标记不可恢复）；在仓库内 `git worktree prune` 清理元数据；`deleteBranch` 时：已合并用 `git branch -d`，未合并（已 `confirmLoss`）用 `git branch -D`；顺手清理 trash 中超 7 天的条目（尽力而为）。
 - 200：`{ok, revision, cleanup: { repoRoot, worktreePath, trashedTo, branchName, branchDeleted, trashRetentionDays: 7}}`。
 - 只读边界：本接口是 v0.13 以来第一个写 git 状态的接口，只做「移入回收站 + prune + 可选删本地分支」，不做 push/fetch/reset。
 - 审计：服务端 `console.info` 记录操作者/目标（后续可接决策日志）；前端在成功后 toast 并触发工作区数据刷新。
 
+
+## 14. 回收站（v0.18 增量，清理的补救入口）
+
+- `GET /api/kanban/git/trash`：列出 `~/.dsh-kanban/trash` 下带 `manifest.json` 的条目（按 trashedAt 倒序）：
+  ```jsonc
+  { "ok": true, "revision": 12, "entries": [
+    { "id": "20261028-205458-repo-feat-cleanup-demo", "repoRoot": "/repo", "worktreePath": "/repo/.worktrees/feat-x",
+      "repoName": "repo", "worktreeName": "feat-x", "branch": "feat/x", "sha": "…",
+      "trashedAt": "2026-10-28T20:54:58+08:00", "branchDeleted": true, "restorable": true } ] }
+  ```
+  `restorable=false`：旧条目无 manifest / 记录损坏。
+- `POST /api/kanban/git/trash/restore` body `{"id":"<目录名>"}`：把工作副本恢复到原路径——
+  `git worktree add <原路径> <分支>`（分支已删则 `git worktree add -b <分支> <原路径> <sha>`，对象不存在 → 409 `RESTORE_SHA_MISSING`），再把回收站里的文件覆盖回工作目录（保留工作区未保存内容），成功后删除回收站条目；原路径已存在 → 409 `RESTORE_PATH_EXISTS`；id 非法/穿越 → 400。
+- `DELETE /api/kanban/git/trash/:id`：立即彻底删除回收站条目（不经过 7 天保留）。
+- 安全：id 只允许 `trash` 下的直接子目录名（禁止 `/`、`..`）；只操作带 manifest 的条目；所有路径以 manifest 为准，不信任客户端路径。

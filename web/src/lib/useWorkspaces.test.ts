@@ -1,18 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import type { Card, GitWorkspaceRepo, GitWorkspaceWorktree } from '../types';
-import { normalizeCleanupResult, normalizeGitWorkspaces } from '../api';
+import { normalizeCleanupResult, normalizeGitTrash, normalizeGitWorkspaces, normalizeTrashRestore } from '../api';
 import {
   chunkWorkspaceDirs,
   cleanupErrorNeedsLossConfirm,
   cleanupErrorReason,
+  collectRunningSessionCwds,
   collectWorkspaceCwds,
   countBoundSessions,
   evaluateWorktreeCleanup,
+  formatLastCommitRelative,
   groupCardsByWorktree,
   mergeWorkspaceResults,
+  parseCommitTimestamp,
+  previewWorkspaceCards,
+  selectWorkspaceCards,
+  sortRepoGroups,
+  sortWorktreeGroups,
+  splitRepoWorktrees,
+  trashErrorReason,
   worktreeStatusBadges,
   worktreeStatusInfo,
 } from './useWorkspaces';
+import type { WorkspaceRepoGroup, WorkspaceWorktreeGroup } from './useWorkspaces';
 
 function makeCard(id: string, overrides: Partial<Card> = {}): Card {
   return {
@@ -516,5 +526,293 @@ describe('groupCardsByWorktree · dirs 精确归组（v0.17 契约）', () => {
     );
     expect(groups.repos[0]?.worktrees[0]?.cards.map((card) => card.id)).toEqual(['linked', 'nested']);
     expect(groups.unassigned).toEqual([]);
+  });
+});
+
+// ------------------------------------------------ v0.18 回收站 + P1 精修
+
+/** 排序/分组用：工作副本 + 已归组卡片。 */
+function groupWorktree(
+  path: string,
+  overrides: Partial<GitWorkspaceWorktree> & { cards?: Card[] } = {},
+): WorkspaceWorktreeGroup {
+  return { ...makeWorktree(path), cards: [], ...overrides };
+}
+
+function makeRepoGroup(root: string, worktrees: WorkspaceWorktreeGroup[]): WorkspaceRepoGroup {
+  return {
+    root,
+    name: root.split('/').filter(Boolean).pop() ?? root,
+    commonDir: `${root}/.git`,
+    mainBranch: 'main',
+    worktrees,
+  cardCount: worktrees.reduce((total, worktree) => total + worktree.cards.length, 0),
+  };
+}
+
+describe('collectRunningSessionCwds', () => {
+  it('只收 running 且有 cwd 的会话，trim 后去重', () => {
+    expect(
+      collectRunningSessionCwds([
+        { running: true, cwd: '/repo/.worktrees/feat-x ' },
+        { running: true, cwd: '/repo/.worktrees/feat-x' },
+        { running: false, cwd: '/repo/.worktrees/feat-y' },
+        { running: true },
+        { running: true, cwd: '   ' },
+      ]),
+    ).toEqual(['/repo/.worktrees/feat-x']);
+  });
+
+  it('空列表返回空数组', () => {
+    expect(collectRunningSessionCwds([])).toEqual([]);
+  });
+});
+
+describe('evaluateWorktreeCleanup · 运行中会话（客户端安全层）', () => {
+  const mergedClean = {
+    mergedIntoBase: true,
+    modifiedCount: 0,
+    untrackedCount: 0,
+    dirty: false,
+  };
+
+  it('运行中会话 cwd 落在工作副本内（含子目录）→ 禁止清理并优先提示会话', () => {
+    const check = evaluateWorktreeCleanup(cleanupInput(mergedClean), {
+      sessionCwds: ['/repo/.worktrees/feat-x/web/src'],
+    });
+    expect(check).toMatchObject({ canCleanup: false, blocked: 'session', runningSessionCount: 1 });
+  });
+
+  it('会话在别的工作副本里不影响清理', () => {
+    const check = evaluateWorktreeCleanup(cleanupInput(mergedClean), {
+      sessionCwds: ['/repo/.worktrees/other-worktree'],
+    });
+    expect(check).toMatchObject({ canCleanup: true, blocked: null, runningSessionCount: 0 });
+  });
+
+  it('阻塞原因优先级：主工作副本 > 会话 > 卡片在跑 > 卡片占用', () => {
+    const session = { sessionCwds: ['/repo/.worktrees/feat-x'] };
+    expect(
+      evaluateWorktreeCleanup(cleanupInput({ ...mergedClean, isMain: true }), session).blocked,
+    ).toBe('main');
+    expect(
+      evaluateWorktreeCleanup(
+        cleanupInput({ ...mergedClean, cards: [makeCard('running', { status: 'running' })] }),
+        session,
+      ).blocked,
+    ).toBe('session');
+    expect(
+      evaluateWorktreeCleanup(cleanupInput({ ...mergedClean, cards: [makeCard('idle')] }), session).blocked,
+    ).toBe('session');
+  });
+});
+
+describe('sortWorktreeGroups / sortRepoGroups / splitRepoWorktrees', () => {
+  const mainWt = groupWorktree('/repo', { isMain: true, lastCommitAt: '2026-10-01T00:00:00+08:00' });
+  const runningWt = groupWorktree('/repo/.worktrees/running', {
+    cards: [makeCard('r1', { status: 'running' })],
+    lastCommitAt: '2026-10-10T00:00:00+08:00',
+  });
+  const dirtyWt = groupWorktree('/repo/.worktrees/dirty', {
+    modifiedCount: 2,
+    lastCommitAt: '2026-10-05T00:00:00+08:00',
+  });
+  const cardsWt = groupWorktree('/repo/.worktrees/cards', {
+    cards: [makeCard('c1'), makeCard('c2')],
+    lastCommitAt: '2026-10-02T00:00:00+08:00',
+  });
+  const idleNewWt = groupWorktree('/repo/.worktrees/idle-new', {
+    lastCommitAt: '2026-10-28T00:00:00+08:00',
+  });
+  const idleOldWt = groupWorktree('/repo/.worktrees/idle-old', {
+    lastCommitAt: '2026-10-20T00:00:00+08:00',
+  });
+
+  it('工作副本排序：主副本固定第一，其余 running > 有改动 > 有卡片 > 最近提交新→旧', () => {
+    const sorted = sortWorktreeGroups([idleOldWt, cardsWt, mainWt, idleNewWt, dirtyWt, runningWt]);
+    expect(sorted.map((worktree) => worktree.path)).toEqual([
+      '/repo',
+      '/repo/.worktrees/running',
+      '/repo/.worktrees/dirty',
+      '/repo/.worktrees/cards',
+      '/repo/.worktrees/idle-new',
+      '/repo/.worktrees/idle-old',
+    ]);
+  });
+
+  it('工作副本排序：同条件按分支名兜底', () => {
+    const beta = groupWorktree('/repo/.worktrees/beta', { branch: 'feat/beta', lastCommitAt: null });
+    const alpha = groupWorktree('/repo/.worktrees/alpha', { branch: 'feat/alpha', lastCommitAt: null });
+    expect(sortWorktreeGroups([beta, alpha]).map((worktree) => worktree.branch)).toEqual([
+      'feat/alpha',
+      'feat/beta',
+    ]);
+  });
+
+  it('仓库排序：running 卡片 > 有改动 > 有卡片 > 名称', () => {
+    const repoRunning = makeRepoGroup('/repo-running', [
+      groupWorktree('/repo-running', { cards: [makeCard('r', { status: 'running' })] }),
+    ]);
+    const repoDirty = makeRepoGroup('/repo-dirty', [
+      groupWorktree('/repo-dirty', { modifiedCount: 1 }),
+    ]);
+    const repoCards = makeRepoGroup('/repo-cards', [
+      groupWorktree('/repo-cards', { cards: [makeCard('a'), makeCard('b')] }),
+    ]);
+    const repoEmpty = makeRepoGroup('/repo-empty', [groupWorktree('/repo-empty')]);
+    const sorted = sortRepoGroups([repoEmpty, repoCards, repoDirty, repoRunning]);
+    expect(sorted.map((repo) => repo.name)).toEqual(['repo-running', 'repo-dirty', 'repo-cards', 'repo-empty']);
+  });
+
+  it('splitRepoWorktrees：主副本恒为 main，0 卡片的非主副本进 idle', () => {
+    const split = splitRepoWorktrees([mainWt, runningWt, dirtyWt, idleNewWt]);
+    expect(split.main.map((worktree) => worktree.path)).toEqual(['/repo']);
+    expect(split.active.map((worktree) => worktree.path)).toEqual(['/repo/.worktrees/running']);
+    expect(split.idle.map((worktree) => worktree.path)).toEqual([
+      '/repo/.worktrees/dirty',
+      '/repo/.worktrees/idle-new',
+    ]);
+  });
+});
+
+describe('previewWorkspaceCards', () => {
+  const many = Array.from({ length: 7 }, (_, index) => makeCard(`card-${index}`));
+
+  it('默认只展示前 5 张，并返回折叠数量', () => {
+    const preview = previewWorkspaceCards(many);
+    expect(preview.visible.map((card) => card.id)).toEqual([
+      'card-0',
+      'card-1',
+      'card-2',
+      'card-3',
+      'card-4',
+    ]);
+    expect(preview.hiddenCount).toBe(2);
+  });
+
+  it('不超过上限时不折叠；可自定义上限', () => {
+    expect(previewWorkspaceCards(many.slice(0, 5)).hiddenCount).toBe(0);
+    expect(previewWorkspaceCards(many.slice(0, 4)).visible).toHaveLength(4);
+    expect(previewWorkspaceCards(many, 2)).toMatchObject({ visible: many.slice(0, 2), hiddenCount: 5 });
+  });
+});
+
+describe('selectWorkspaceCards', () => {
+  const filtered = [makeCard('f1')];
+  const all = [makeCard('f1'), makeCard('a2')];
+
+  it('filtered 返回当前筛选结果，all 返回全部未归档卡片（均为新数组）', () => {
+    expect(selectWorkspaceCards('filtered', filtered, all).map((card) => card.id)).toEqual(['f1']);
+    expect(selectWorkspaceCards('all', filtered, all).map((card) => card.id)).toEqual(['f1', 'a2']);
+    expect(selectWorkspaceCards('all', filtered, all)).not.toBe(all);
+  });
+});
+
+describe('parseCommitTimestamp / formatLastCommitRelative', () => {
+  const now = Date.parse('2026-10-28T12:00:00+08:00');
+
+  it('解析 ISO 时间；缺失/非法返回 null', () => {
+    expect(parseCommitTimestamp('2026-10-28T11:00:00+08:00')).toBe(
+      Date.parse('2026-10-28T11:00:00+08:00'),
+    );
+    expect(parseCommitTimestamp(null)).toBeNull();
+    expect(parseCommitTimestamp(undefined)).toBeNull();
+    expect(parseCommitTimestamp('')).toBeNull();
+    expect(parseCommitTimestamp('not-a-date')).toBeNull();
+  });
+
+  it('最近提交相对时间（zh/en）；无数据返回 null', () => {
+    expect(formatLastCommitRelative('2026-10-26T12:00:00+08:00', now, 'zh')).toBe('2 天前');
+    expect(formatLastCommitRelative('2026-10-26T12:00:00+08:00', now, 'en')).toBe('2d ago');
+    expect(formatLastCommitRelative(null, now, 'zh')).toBeNull();
+    expect(formatLastCommitRelative('bad', now, 'zh')).toBeNull();
+  });
+});
+
+describe('trashErrorReason', () => {
+  it('识别回收站错误码（error.code / details.reason / body.reason）', () => {
+    expect(trashErrorReason({ code: 'RESTORE_PATH_EXISTS' })).toBe('RESTORE_PATH_EXISTS');
+    expect(trashErrorReason({ code: 'CONFLICT', details: { reason: 'RESTORE_SHA_MISSING' } })).toBe(
+      'RESTORE_SHA_MISSING',
+    );
+    expect(trashErrorReason({ reason: 'NOT_FOUND' })).toBe('NOT_FOUND');
+    expect(trashErrorReason({ code: 'RESTORE_FAILED' })).toBe('RESTORE_FAILED');
+    expect(trashErrorReason({ code: 'TRASH_DELETE_FAILED' })).toBe('TRASH_DELETE_FAILED');
+  });
+
+  it('认不出/非对象归 unknown', () => {
+    expect(trashErrorReason({ code: 'WHAT' })).toBe('unknown');
+    expect(trashErrorReason(null)).toBe('unknown');
+    expect(trashErrorReason('RESTORE_SHA_MISSING')).toBe('unknown');
+  });
+});
+
+describe('normalizeGitTrash / normalizeTrashRestore', () => {
+  it('回收站列表：兼容 entries 字段与裸数组，丢弃无 id 条目，名称按路径兜底', () => {
+    const result = normalizeGitTrash({
+      entries: [
+        {
+          id: 'entry-1',
+          repoRoot: '/repo',
+          worktreePath: '/repo/.worktrees/feat-x',
+          repoName: 'repo',
+          worktreeName: 'feat-x',
+          branch: 'feat/x',
+          sha: 'abc1234',
+          trashedAt: '2026-10-28T20:54:58+08:00',
+          branchDeleted: true,
+          restorable: true,
+        },
+        { repoRoot: '/repo', worktreePath: '/repo/.worktrees/no-id' },
+      ],
+    });
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({
+      id: 'entry-1',
+      repoName: 'repo',
+      worktreeName: 'feat-x',
+      branch: 'feat/x',
+      sha: 'abc1234',
+      branchDeleted: true,
+      restorable: true,
+    });
+    const bare = normalizeGitTrash([{ id: 'entry-2', repoRoot: '/repo', worktreePath: '/repo/.worktrees/x' }]);
+    expect(bare.entries[0]).toMatchObject({
+      id: 'entry-2',
+      repoName: 'repo',
+      worktreeName: 'x',
+      restorable: false,
+      branchDeleted: false,
+    });
+  });
+
+  it('回收站列表：空/非法输入返回空数组', () => {
+    expect(normalizeGitTrash(null).entries).toEqual([]);
+    expect(normalizeGitTrash({ entries: 'nope' }).entries).toEqual([]);
+  });
+
+  it('恢复结果：兼容 restored 包裹/平铺，restoredTo 缺省用 worktreePath', () => {
+    expect(
+      normalizeTrashRestore({
+        restored: { id: 'e1', repoRoot: '/repo', worktreePath: '/repo/.worktrees/x', branch: 'feat/x' },
+      }),
+    ).toEqual({
+      id: 'e1',
+      repoRoot: '/repo',
+      worktreePath: '/repo/.worktrees/x',
+      restoredTo: '/repo/.worktrees/x',
+      branch: 'feat/x',
+    });
+    expect(
+      normalizeTrashRestore({ id: 'e2', worktreePath: '/repo/.worktrees/y', restoredTo: '/repo/.worktrees/y' })
+        .restoredTo,
+    ).toBe('/repo/.worktrees/y');
+    expect(normalizeTrashRestore(null)).toEqual({
+      id: '',
+      repoRoot: '',
+      worktreePath: '',
+      restoredTo: '',
+      branch: null,
+    });
   });
 });

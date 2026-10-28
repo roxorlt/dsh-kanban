@@ -536,6 +536,20 @@
 | 生效方式 | 含服务端改动，**已合入 main（merge `8d37ba7`），需重启 DSH 后生效**；回收站 `~/.dsh-kanban/trash`（7 天自动清理） |
 | 分支 | `feat/worktree-cleanup`（基于 v0.16.1 主线 `0d92b04`），**已合入 main（merge `8d37ba7`）**；版本 0.17.0；合入后自测 206/206、294 例通过 |
 
+## 1.35 v0.18.0（回收站恢复 P0 + 工作区 P1 五项，2026-10-28）
+
+| 项 | 结果 |
+|---|---|
+| 用户问题 | 「没有远端」是什么意思、能否清理；P0/P1 按顺序做掉；P2/P3 部分需解释 |
+| 结论 | 「没有远端」= 分支从未推送过（没有 upstream），**不是能否清理的判定条件**：已并入主线就安全（主线里有提交）；未合并 + 没有远端时删除分支会丢提交（回收站只保留文件，不恢复提交历史），所以 v0.18 在危险确认中明确提示 |
+| 服务端 | cleanup 写 manifest.json（sha/branch/原路径/branchDeleted）；新增 GET /git/trash（旧条目 restorable:false）、POST /git/trash/restore（分支在/worktree add；分支已删按 sha 重建；覆盖文件排除 .git/manifest；原路径已存在/SHA 缺失 409；成功后失效工作区缓存）、DELETE /git/trash/:id（彻底删除）；id 防穿越 |
+| Web | 底部「回收站（N）」可收起区块（恢复/彻底删除 + 错误人话 + toast + reload）；运行中会话 cwd 阻塞清理（P0-③，客户端安全层，服务端卡片 cwd 兜底）；「没有远端（从未推送）」与未合并风险提示；P1：卡片预览 5 + 还有 N 张、仓库/工作副本排序（主副本固定第一）、筛选范围开关（默认全部，持久化，App 传 allCards）、最近提交相对时间、空闲工作副本子分组默认收起；修复滚动容器 flex 压缩裁剪 |
+| 测试 | 服务端 **216/216**（+10 回收站）；Web 27 文件 / **313 例**（+19）；tsc/build/令牌 lint 全过 |
+| 真实浏览器验收（dev-server + 演示仓库真实 git） | 清理生成 manifest → 回收站 3 条（1 可恢复/2 旧条目不可恢复，旧条目恢复按钮 disabled）→ 点恢复轻确认 → toast「已恢复「repo / feat-trash-demo」」→ 回收站条目减少、`git worktree list` 恢复工作副本、回收站文件回来；P1 排序/预览/scope/相对时间/空闲分组渲染正确；390/暗色无横向溢出；console error 0 / 4xx 0 |
+| 截图 | `docs/assets/screens/git-workspaces-v018-light.png`、`git-workspaces-trash-restore.png`、`git-workspaces-trash-after.png` |
+| 生效方式 | 含服务端改动，**需合入 main 并重启 DSH**；回收站 `~/.dsh-kanban/trash`（7 天自动清理） |
+| 分支 | `feat/workspace-polish`（基于 `90a55b3`）；版本 0.18.0 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

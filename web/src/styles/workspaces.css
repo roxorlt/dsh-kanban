@@ -13,19 +13,72 @@
 }
 
 .kb-workspace__summary {
+  display: flex;
   flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxs-12);
   font-variant-numeric: tabular-nums;
 }
 
+.kb-workspace__summary-text {
+  min-width: 0;
+}
+
+/* 「只看当前筛选 / 显示全部」范围切换（v0.18） */
+.kb-workspace__scope {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--kb-surface-card);
+}
+
+.kb-workspace__scope-btn {
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--kb-dur-fast) var(--kb-ease-out),
+    color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-workspace__scope-btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-workspace__scope-btn--on {
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+  font-weight: 600;
+}
+
+.kb-workspace__scope-btn--on:hover {
+  background: var(--dsw-alias-button-primary-hover);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
 .kb-workspace__hint {
+  flex: none;
   margin: 0;
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxxs-11);
 }
 
 .kb-workspace__empty {
+  flex: none;
   margin: 0;
   padding: 40px 12px;
   color: var(--dsw-alias-label-tertiary);
@@ -37,6 +90,7 @@
 
 .kb-workspace__repo {
   display: flex;
+  flex: none;
   flex-direction: column;
   min-width: 0;
   border: 0.5px solid var(--dsw-alias-border-l2);
@@ -251,15 +305,43 @@
 
 /* --------------------------------------------------- 关联卡片 mini 列表 */
 
-.kb-workspace__cards {
+.kb-workspace__card-wrap {
   display: flex;
   flex: 0 1 44%;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kb-workspace__cards {
+  display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.kb-workspace__more-cards {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-state-business-primary);
+  font: var(--dsw-font-xxxs-11);
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.kb-workspace__more-cards:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-workspace__more-cards:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
 }
 
 .kb-workspace__card {
@@ -314,7 +396,7 @@
   padding: 8px 12px 0;
 }
 
-.kb-workspace__repo--unassigned .kb-workspace__cards {
+.kb-workspace__repo--unassigned .kb-workspace__card-wrap {
   padding: 4px 12px 10px;
 }
 
@@ -473,6 +555,129 @@
   cursor: not-allowed;
 }
 
+/* --------------------------------------------- 空闲工作副本子分组（v0.18） */
+
+.kb-workspace__idle-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  border: 0;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 2%, transparent);
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-workspace__idle-head:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-workspace__idle-head:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+}
+
+.kb-workspace__worktrees--idle {
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 2%, transparent);
+}
+
+.kb-workspace__last-commit {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+/* ------------------------------------------------------ 回收站区块（v0.18） */
+
+.kb-workspace__repo--trash .kb-workspace__hint {
+  padding: 8px 12px 0;
+}
+
+.kb-workspace__trash-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kb-workspace__trash-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 12px;
+}
+
+.kb-workspace__trash-item + .kb-workspace__trash-item {
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.kb-workspace__trash-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kb-workspace__trash-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-strong-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-workspace__trash-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-workspace__trash-branch {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-caption);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-workspace__trash-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.kb-workspace__trash-purge {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.kb-workspace__trash-purge:hover {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+.kb-workspace__trash-error {
+  margin: 0;
+  padding: 6px 12px 8px;
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xxxs-11);
+}
+
 /* ---------------------------------------------------------------- 竖屏 */
 
 @media (max-width: 719px) {
@@ -489,7 +694,7 @@
     padding: 4px 6px;
   }
 
-  .kb-workspace__cards,
+  .kb-workspace__card-wrap,
   .kb-workspace__no-cards {
     flex-basis: 100%;
     padding-left: 28px;
@@ -515,12 +720,24 @@
     padding-right: 10px;
   }
 
-  .kb-workspace__repo--unassigned .kb-workspace__hint {
+  .kb-workspace__repo--unassigned .kb-workspace__hint,
+  .kb-workspace__repo--trash .kb-workspace__hint {
     padding-left: 10px;
     padding-right: 10px;
   }
 
-  .kb-workspace__repo--unassigned .kb-workspace__cards,
+  .kb-workspace__idle-head,
+  .kb-workspace__trash-item {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .kb-workspace__trash-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+
+  .kb-workspace__repo--unassigned .kb-workspace__card-wrap,
   .kb-workspace__repo--unassigned .kb-workspace__no-cards {
     padding-left: 10px;
     padding-right: 10px;

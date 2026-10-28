@@ -1,45 +1,68 @@
 /**
- * 「工作区」视图（v0.17，docs/contracts/02-http-api.md §12/§13 / 06 §4.7/§4.8）。
+ * 「工作区」视图（v0.18，docs/contracts/02-http-api.md §12/§13/§14 / 06 §4.7/§4.8）。
  *
- * 按仓库分块展示：仓库标题栏整行可点（展开/收起，状态持久化）→ 每个工作副本一行：
- * 分支、Phase A 状态（合并 / 远端 / 改动）、路径、卡片 mini 列表、会话数、清理按钮；
- * 「未指定」块同样可展开/收起。清理（Phase B）走两段式确认对话框 + 软删除接口。
- *
- * 数据由 useWorkspaces + groupCardsByWorktree 提供；写操作仅「清理工作副本」。
+ * 按仓库分块展示工作副本（分支、Phase A 状态、卡片预览、最近提交、清理）：
+ * - 仓库标题栏整行可展开/收起；「未指定」块同样可收起；
+ * - 每个仓库内：主工作副本固定第一、活跃工作副本按优先级排序、空闲工作副本收进默认收起的子分组；
+ * - 顶部可切换卡片范围（只看当前筛选 / 显示全部，持久化）；
+ * - 底部可收起「回收站（N）」：恢复 / 彻底删除（v0.18）；
+ * - 清理（Phase B）两段式确认 + 软删除；运行中会话所在工作副本禁止清理（客户端安全层）。
  */
-import { useCallback, useMemo, useState } from 'react';
-import type { Card } from '../types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { Card, GitTrashEntry } from '../types';
 import { api } from '../api';
 import { useI18n } from '../i18n';
-import type { I18nKey, Translate } from '../i18n';
+import type { I18nKey, Lang, Translate } from '../i18n';
 import { STATUS_TONE } from '../lib/status';
 import { IconChevronDown } from './Icons';
 import { shortenPath } from '../lib/forkGraph';
+import { formatDateTime } from '../lib/time';
 import {
   cleanupErrorNeedsLossConfirm,
   cleanupErrorReason,
   countBoundSessions,
   evaluateWorktreeCleanup,
+  formatLastCommitRelative,
   groupCardsByWorktree,
+  previewWorkspaceCards,
+  selectWorkspaceCards,
+  sortRepoGroups,
+  splitRepoWorktrees,
+  trashErrorReason,
   worktreeStatusBadges,
 } from '../lib/useWorkspaces';
 import type {
-  WorktreeStatusBadge,
+  WorkspaceCardScope,
   WorkspaceRepoGroup,
   WorkspaceWorktreeGroup,
   WorkspacesController,
+  WorktreeCleanupCheck,
+  WorktreeStatusBadge,
 } from '../lib/useWorkspaces';
 import { CleanupWorktreeDialog } from './CleanupWorktreeDialog';
 import type { CleanupConfirmOptions, CleanupOutcome, CleanupTarget } from './CleanupWorktreeDialog';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface WorkspaceViewProps {
+  /** 当前筛选后的卡片（scope=filtered 时用于分组） */
   cards: Card[];
+  /** 全部未归档卡片（scope=all 与清理占用判定用） */
+  allCards: Card[];
   workspaces: WorkspacesController;
+  /** 运行中会话的 cwd（客户端清理安全层；服务端不知道会话 cwd） */
+  runningSessionCwds?: string[];
+  /** 相对时间基准（App 的 15s 时钟）；缺省 Date.now() */
+  now?: number;
   /** 点击 mini 卡片打开详情（App 的 actions.onOpenDetail） */
   onOpenCard: (cardId: string) => void;
-  /** 清理成功后的 toast（App 的 actions.onNotify） */
+  /** 操作结果 toast（App 的 actions.onNotify） */
   onNotify?: (message: string, tone?: 'info' | 'success' | 'error') => void;
 }
+
+const COLLAPSED_REPOS_STORAGE_KEY = 'dsh-kanban.workspaces.collapsed';
+const UNASSIGNED_COLLAPSED_STORAGE_KEY = 'dsh-kanban.workspaces.unassigned-collapsed';
+const TRASH_COLLAPSED_STORAGE_KEY = 'dsh-kanban.workspaces.trash-collapsed';
+const SCOPE_STORAGE_KEY = 'dsh-kanban.workspaces.scope';
 
 /** 工作副本展示路径：主工作副本用仓库名；子工作副本用相对仓库根的路径；兜底取末两段。 */
 function worktreeLabel(repo: WorkspaceRepoGroup, worktree: WorkspaceWorktreeGroup): string {
@@ -66,51 +89,199 @@ function badgeClass(badge: WorktreeStatusBadge): string {
   return '';
 }
 
+// ---------------------------------------------------------------- 本地存储
+
+function readCollapsedRepos(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_REPOS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function storeCollapsedRepos(roots: Set<string>): void {
+  try {
+    localStorage.setItem(COLLAPSED_REPOS_STORAGE_KEY, JSON.stringify([...roots]));
+  } catch {
+    // 隐私模式/配额满：忽略，本次会话内仍可收起
+  }
+}
+
+function readUnassignedCollapsed(): boolean {
+  try {
+    return localStorage.getItem(UNASSIGNED_COLLAPSED_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function storeUnassignedCollapsed(collapsed: boolean): void {
+  try {
+    if (collapsed) localStorage.setItem(UNASSIGNED_COLLAPSED_STORAGE_KEY, '1');
+    else localStorage.removeItem(UNASSIGNED_COLLAPSED_STORAGE_KEY);
+  } catch {
+    // 忽略
+  }
+}
+
+function readTrashCollapsed(): boolean {
+  try {
+    return localStorage.getItem(TRASH_COLLAPSED_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function storeTrashCollapsed(collapsed: boolean): void {
+  try {
+    if (collapsed) localStorage.setItem(TRASH_COLLAPSED_STORAGE_KEY, '1');
+    else localStorage.removeItem(TRASH_COLLAPSED_STORAGE_KEY);
+  } catch {
+    // 忽略
+  }
+}
+
+function readWorkspaceScope(): WorkspaceCardScope {
+  try {
+    return localStorage.getItem(SCOPE_STORAGE_KEY) === 'filtered' ? 'filtered' : 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+function storeWorkspaceScope(scope: WorkspaceCardScope): void {
+  try {
+    localStorage.setItem(SCOPE_STORAGE_KEY, scope);
+  } catch {
+    // 忽略
+  }
+}
+
+// ---------------------------------------------------------------- 错误文案
+
+/** 清理失败错误码 → 人话文案。 */
+function cleanupErrorMessage(error: unknown, t: Translate): string {
+  switch (cleanupErrorReason(error)) {
+    case 'WORKTREE_MAIN':
+      return t('workspace.cleanupErrorMain');
+    case 'WORKTREE_IN_USE':
+      return t('workspace.cleanupErrorInUse');
+    case 'WORKTREE_DIRTY':
+      return t('workspace.cleanupErrorDirty');
+    case 'WORKTREE_UNMERGED':
+      return t('workspace.cleanupErrorUnmerged');
+    case 'BRANCH_MAIN':
+      return t('workspace.cleanupErrorBranchMain');
+    case 'BRANCH_IN_USE':
+      return t('workspace.cleanupErrorBranchInUse');
+    case 'TRASH_MOVE_FAILED':
+      return t('workspace.cleanupErrorTrash');
+    case 'WORKTREE_PRUNE_FAILED':
+      return t('workspace.cleanupErrorPrune');
+    case 'BRANCH_DELETE_FAILED':
+      return t('workspace.cleanupErrorBranchDelete');
+    case 'NOT_FOUND':
+      return t('workspace.cleanupErrorNotFound');
+    default:
+      return t('workspace.cleanupErrorUnknown', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+  }
+}
+
+/** 回收站操作失败错误码 → 人话文案（契约 §14：RESTORE_PATH_EXISTS / RESTORE_SHA_MISSING 等）。 */
+function trashErrorMessage(error: unknown, t: Translate): string {
+  switch (trashErrorReason(error)) {
+    case 'RESTORE_PATH_EXISTS':
+      return t('workspace.trashErrorPathExists');
+    case 'RESTORE_SHA_MISSING':
+      return t('workspace.trashErrorShaMissing');
+    case 'NOT_FOUND':
+      return t('workspace.trashErrorNotFound');
+    case 'BAD_REQUEST':
+      return t('workspace.trashErrorBadRequest');
+    case 'RESTORE_FAILED':
+      return t('workspace.trashErrorRestoreFailed');
+    case 'TRASH_DELETE_FAILED':
+      return t('workspace.trashErrorDeleteFailed');
+    default:
+      return t('workspace.trashErrorUnknown', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+  }
+}
+
+/** 回收站条目展示名：仓库名 / 工作副本名。 */
+function trashEntryName(entry: GitTrashEntry): string {
+  return `${entry.repoName} / ${entry.worktreeName}`;
+}
+
+// ---------------------------------------------------------------- 子组件
+
 interface MiniCardListProps {
   cards: Card[];
   onOpenCard: (cardId: string) => void;
   emptyLabel?: string;
 }
 
-/** 关联卡片 mini 列表：状态点 + 标题（单行省略），点击打开详情。 */
+/** 关联卡片 mini 列表：状态点 + 标题（单行省略），默认最多 5 张，可展开全部。 */
 function MiniCardList({ cards, onOpenCard, emptyLabel }: MiniCardListProps) {
   const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
   if (!cards.length) {
     return <p className="kb-workspace__no-cards">{emptyLabel ?? t('workspace.noCards')}</p>;
   }
+  const { visible, hiddenCount } = previewWorkspaceCards(cards);
+  const shown = expanded ? cards : visible;
   return (
-    <ul className="kb-workspace__cards">
-      {cards.map((card) => (
-        <li key={card.id}>
-          <button
-            type="button"
-            className="kb-workspace__card"
-            title={card.title}
-            aria-label={t('workspace.openCard', { title: card.title })}
-            onClick={() => onOpenCard(card.id)}
-          >
-            <span className={`kb-dot kb-dot--${STATUS_TONE[card.status]}`} aria-hidden="true" />
-            <span className="kb-workspace__card-title">{card.title}</span>
-          </button>
-        </li>
-      ))}
-    </ul>
+    <div className="kb-workspace__card-wrap">
+      <ul className="kb-workspace__cards">
+        {shown.map((card) => (
+          <li key={card.id}>
+            <button
+              type="button"
+              className="kb-workspace__card"
+              title={card.title}
+              aria-label={t('workspace.openCard', { title: card.title })}
+              onClick={() => onOpenCard(card.id)}
+            >
+              <span className={`kb-dot kb-dot--${STATUS_TONE[card.status]}`} aria-hidden="true" />
+              <span className="kb-workspace__card-title">{card.title}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {hiddenCount > 0 ? (
+        <button
+          type="button"
+          className="kb-workspace__more-cards"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? t('workspace.collapseCards') : t('workspace.moreCards', { count: hiddenCount })}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
 interface CleanupControlProps {
-  worktree: WorkspaceWorktreeGroup;
-  onCleanup: (worktree: WorkspaceWorktreeGroup) => void;
+  check: WorktreeCleanupCheck;
+  onCleanup: () => void;
 }
 
 /** 清理按钮 + 不可清理原因 / 可安全清理提示。 */
-function CleanupControl({ worktree, onCleanup }: CleanupControlProps) {
+function CleanupControl({ check, onCleanup }: CleanupControlProps) {
   const { t } = useI18n();
-  const check = evaluateWorktreeCleanup(worktree);
   const reason =
     check.blocked === 'main'
       ? t('workspace.cleanupBlockedMain')
-      : check.blocked === 'running'
+      : check.blocked === 'session'
+        ? t('workspace.cleanupBlockedSession')
+        : check.blocked === 'running'
           ? t('workspace.cleanupBlockedRunning')
           : check.blocked === 'in-use'
             ? t('workspace.cleanupBlockedInUse', { count: check.cardCount })
@@ -124,7 +295,7 @@ function CleanupControl({ worktree, onCleanup }: CleanupControlProps) {
         disabled={!check.canCleanup}
         title={reason ?? t('workspace.cleanup')}
         aria-label={reason ?? t('workspace.cleanup')}
-        onClick={() => onCleanup(worktree)}
+        onClick={onCleanup}
       >
         {t('workspace.cleanup')}
       </button>
@@ -136,16 +307,35 @@ function CleanupControl({ worktree, onCleanup }: CleanupControlProps) {
 interface WorktreeRowProps {
   repo: WorkspaceRepoGroup;
   worktree: WorkspaceWorktreeGroup;
+  /** 清理判定用的占用卡片（来自全部未归档卡片，不受筛选范围影响） */
+  occupancyCards: Card[];
+  runningSessionCwds: string[];
+  now: number;
   onOpenCard: (cardId: string) => void;
   onCleanup: (worktree: WorkspaceWorktreeGroup) => void;
 }
 
-/** 单个工作副本行：文件夹图标 + 分支/状态徽标 + 路径/会话数 + 卡片 mini 列表 + 清理按钮。 */
-function WorktreeRow({ repo, worktree, onOpenCard, onCleanup }: WorktreeRowProps) {
-  const { t } = useI18n();
+/** 单个工作副本行：文件夹图标 + 分支/状态徽标 + 最近提交 + 卡片预览 + 清理按钮。 */
+function WorktreeRow({
+  repo,
+  worktree,
+  occupancyCards,
+  runningSessionCwds,
+  now,
+  onOpenCard,
+  onCleanup,
+}: WorktreeRowProps) {
+  const { t, lang } = useI18n();
   const branch = worktree.branch ?? t('workspace.detached');
   const sessionCount = countBoundSessions(worktree.cards);
   const badges = worktreeStatusBadges(worktree);
+  const check = evaluateWorktreeCleanup(
+    { ...worktree, cards: occupancyCards },
+    { sessionCwds: runningSessionCwds },
+  );
+  const lastCommit = formatLastCommitRelative(worktree.lastCommitAt, now, lang as Lang);
+  const lastCommitTitle =
+    worktree.lastCommitAt && lastCommit ? formatDateTime(Date.parse(worktree.lastCommitAt), lang as Lang) : undefined;
   return (
     <li className={`kb-workspace__worktree${worktree.isCurrent ? ' kb-workspace__worktree--current' : ''}`}>
       <span className="kb-workspace__folder" aria-hidden="true" />
@@ -170,26 +360,61 @@ function WorktreeRow({ repo, worktree, onOpenCard, onCleanup }: WorktreeRowProps
           {sessionCount > 0 ? (
             <span className="kb-workspace__sessions">{t('workspace.sessions', { count: sessionCount })}</span>
           ) : null}
+          {lastCommit ? (
+            <span className="kb-workspace__last-commit" title={lastCommitTitle}>
+              {lastCommit}
+            </span>
+          ) : null}
         </div>
       </div>
       <MiniCardList cards={worktree.cards} onOpenCard={onOpenCard} />
-      <CleanupControl worktree={worktree} onCleanup={onCleanup} />
+      <CleanupControl check={check} onCleanup={() => onCleanup(worktree)} />
     </li>
   );
 }
 
 interface RepoSectionProps {
   repo: WorkspaceRepoGroup;
+  occupancyByPath: Map<string, Card[]>;
+  runningSessionCwds: string[];
+  now: number;
   onOpenCard: (cardId: string) => void;
   onCleanup: (worktree: WorkspaceWorktreeGroup) => void;
   collapsed: boolean;
   onToggle: (root: string) => void;
+  idleExpanded: boolean;
+  onToggleIdle: (root: string) => void;
 }
 
-/** 一个仓库一块：整行可点的仓库标题栏 + 该仓库所有工作副本。 */
-function RepoSection({ repo, onOpenCard, onCleanup, collapsed, onToggle }: RepoSectionProps) {
+/** 一个仓库一块：整行可点的仓库标题栏 + 主/活跃工作副本 + 空闲工作副本子分组。 */
+function RepoSection({
+  repo,
+  occupancyByPath,
+  runningSessionCwds,
+  now,
+  onOpenCard,
+  onCleanup,
+  collapsed,
+  onToggle,
+  idleExpanded,
+  onToggleIdle,
+}: RepoSectionProps) {
   const { t } = useI18n();
   const panelId = `kb-workspace-panel-${encodeURIComponent(repo.root)}`;
+  const idlePanelId = `${panelId}-idle`;
+  const split = splitRepoWorktrees(repo.worktrees);
+  const renderRow = (worktree: WorkspaceWorktreeGroup) => (
+    <WorktreeRow
+      key={worktree.path}
+      repo={repo}
+      worktree={worktree}
+      occupancyCards={occupancyByPath.get(worktree.path) ?? worktree.cards}
+      runningSessionCwds={runningSessionCwds}
+      now={now}
+      onOpenCard={onOpenCard}
+      onCleanup={onCleanup}
+    />
+  );
   return (
     <section className={`kb-workspace__repo${collapsed ? ' kb-workspace__repo--collapsed' : ''}`} aria-label={repo.name}>
       <button
@@ -222,17 +447,36 @@ function RepoSection({ repo, onOpenCard, onCleanup, collapsed, onToggle }: RepoS
           {t('workspace.repoCollapsed', { count: repo.worktrees.length })}
         </p>
       ) : (
-        <ul className="kb-workspace__worktrees" id={panelId}>
-          {repo.worktrees.map((worktree) => (
-            <WorktreeRow
-              key={worktree.path}
-              repo={repo}
-              worktree={worktree}
-              onOpenCard={onOpenCard}
-              onCleanup={onCleanup}
-            />
-          ))}
-        </ul>
+        <div id={panelId}>
+          <ul className="kb-workspace__worktrees">
+            {split.main.map(renderRow)}
+            {split.active.map(renderRow)}
+          </ul>
+          {split.idle.length ? (
+            <>
+              <button
+                type="button"
+                className="kb-workspace__idle-head"
+                aria-expanded={idleExpanded}
+                aria-controls={idlePanelId}
+                onClick={() => onToggleIdle(repo.root)}
+              >
+                <span
+                  className={`kb-workspace__repo-chevron${idleExpanded ? ' kb-workspace__repo-chevron--open' : ''}`}
+                  aria-hidden="true"
+                >
+                  <IconChevronDown />
+                </span>
+                {t('workspace.idleWorktrees', { count: split.idle.length })}
+              </button>
+              {idleExpanded ? (
+                <ul className="kb-workspace__worktrees kb-workspace__worktrees--idle" id={idlePanelId}>
+                  {split.idle.map(renderRow)}
+                </ul>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       )}
     </section>
   );
@@ -289,82 +533,127 @@ function UnassignedSection({ cards, onOpenCard, collapsed, onToggle }: Unassigne
   );
 }
 
-const COLLAPSED_REPOS_STORAGE_KEY = 'dsh-kanban.workspaces.collapsed';
-const UNASSIGNED_COLLAPSED_STORAGE_KEY = 'dsh-kanban.workspaces.unassigned-collapsed';
-
-/** 读取记住的「已收起仓库」（localStorage 不可用时静默返回空）。 */
-function readCollapsedRepos(): Set<string> {
-  try {
-    const raw = localStorage.getItem(COLLAPSED_REPOS_STORAGE_KEY);
-    if (!raw) return new Set();
-    const parsed: unknown = JSON.parse(raw);
-    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []);
-  } catch {
-    return new Set();
-  }
+interface TrashSectionProps {
+  entries: GitTrashEntry[];
+  collapsed: boolean;
+  busy: boolean;
+  error: string | null;
+  now: number;
+  onToggle: () => void;
+  onRestore: (entry: GitTrashEntry) => void;
+  onPurge: (entry: GitTrashEntry) => void;
 }
 
-function storeCollapsedRepos(roots: Set<string>): void {
-  try {
-    localStorage.setItem(COLLAPSED_REPOS_STORAGE_KEY, JSON.stringify([...roots]));
-  } catch {
-    // 隐私模式/配额满：忽略，本次会话内仍可收起
-  }
+/** 回收站区块：可收起；每条可恢复 / 彻底删除；显示删除时间与可恢复性。 */
+function TrashSection({ entries, collapsed, busy, error, now, onToggle, onRestore, onPurge }: TrashSectionProps) {
+  const { t, lang } = useI18n();
+  const panelId = 'kb-workspace-panel-trash';
+  return (
+    <section className="kb-workspace__repo kb-workspace__repo--trash" aria-label={t('workspace.trashTitle', { count: entries.length })}>
+      <button
+        type="button"
+        className="kb-workspace__repo-head"
+        aria-expanded={!collapsed}
+        aria-controls={panelId}
+        onClick={onToggle}
+      >
+        <span
+          className={`kb-workspace__repo-chevron${collapsed ? '' : ' kb-workspace__repo-chevron--open'}`}
+          aria-hidden="true"
+        >
+          <IconChevronDown />
+        </span>
+        <span className="kb-workspace__repo-name" role="heading" aria-level={2}>
+          {t('workspace.trashTitle', { count: entries.length })}
+        </span>
+        <span className="kb-workspace__repo-meta">{t('workspace.trashCountMeta', { count: entries.length })}</span>
+      </button>
+      {collapsed ? (
+        <p className="kb-workspace__repo-collapsed-hint">
+          {t('workspace.trashCollapsed', { count: entries.length })}
+        </p>
+      ) : (
+        <div id={panelId}>
+          <p className="kb-workspace__hint">{t('workspace.trashHint', { days: 7 })}</p>
+          <ul className="kb-workspace__trash-list">
+            {entries.map((entry) => {
+              const deletedAt = formatLastCommitRelative(entry.trashedAt, now, lang as Lang);
+              return (
+                <li className="kb-workspace__trash-item" key={entry.id}>
+                  <div className="kb-workspace__trash-main">
+                    <span className="kb-workspace__trash-name" title={entry.worktreePath}>
+                      {trashEntryName(entry)}
+                    </span>
+                    <span className="kb-workspace__trash-meta">
+                      {entry.branch ? <code className="kb-workspace__trash-branch">{entry.branch}</code> : null}
+                      {deletedAt ? <span>{t('workspace.trashDeletedAt', { time: deletedAt })}</span> : null}
+                      <span className={`kb-tag${entry.restorable ? '' : ' kb-workspace__tag--warn'}`}>
+                        {entry.restorable ? t('workspace.trashRestorable') : t('workspace.trashNotRestorable')}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="kb-workspace__trash-actions">
+                    <button
+                      type="button"
+                      className="kb-btn kb-btn--sm kb-btn--outline"
+                      disabled={!entry.restorable || busy}
+                      onClick={() => onRestore(entry)}
+                    >
+                      {t('workspace.trashRestore')}
+                    </button>
+                    <button
+                      type="button"
+                      className="kb-btn kb-btn--sm kb-btn--ghost kb-workspace__trash-purge"
+                      disabled={busy}
+                      onClick={() => onPurge(entry)}
+                    >
+                      {t('workspace.trashPurge')}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {error ? (
+        <p className="kb-workspace__trash-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
 }
 
-function readUnassignedCollapsed(): boolean {
-  try {
-    return localStorage.getItem(UNASSIGNED_COLLAPSED_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
+interface TrashActionState {
+  kind: 'restore' | 'purge';
+  entry: GitTrashEntry;
 }
 
-function storeUnassignedCollapsed(collapsed: boolean): void {
-  try {
-    if (collapsed) localStorage.setItem(UNASSIGNED_COLLAPSED_STORAGE_KEY, '1');
-    else localStorage.removeItem(UNASSIGNED_COLLAPSED_STORAGE_KEY);
-  } catch {
-    // 忽略
-  }
-}
+// ---------------------------------------------------------------- 主视图
 
-/** 清理失败错误码 → 人话文案。 */
-function cleanupErrorMessage(error: unknown, t: Translate): string {
-  switch (cleanupErrorReason(error)) {
-    case 'WORKTREE_MAIN':
-      return t('workspace.cleanupErrorMain');
-    case 'WORKTREE_IN_USE':
-      return t('workspace.cleanupErrorInUse');
-    case 'WORKTREE_DIRTY':
-      return t('workspace.cleanupErrorDirty');
-    case 'WORKTREE_UNMERGED':
-      return t('workspace.cleanupErrorUnmerged');
-    case 'BRANCH_MAIN':
-      return t('workspace.cleanupErrorBranchMain');
-    case 'BRANCH_IN_USE':
-      return t('workspace.cleanupErrorBranchInUse');
-    case 'TRASH_MOVE_FAILED':
-      return t('workspace.cleanupErrorTrash');
-    case 'WORKTREE_PRUNE_FAILED':
-      return t('workspace.cleanupErrorPrune');
-    case 'BRANCH_DELETE_FAILED':
-      return t('workspace.cleanupErrorBranchDelete');
-    case 'NOT_FOUND':
-      return t('workspace.cleanupErrorNotFound');
-    default:
-      return t('workspace.cleanupErrorUnknown', {
-        message: error instanceof Error ? error.message : String(error),
-      });
-  }
-}
-
-/** 「工作区」视图：顶部摘要 + 按仓库分块 + 未归属块 + 清理对话框。 */
-export function WorkspaceView({ cards, workspaces, onOpenCard, onNotify }: WorkspaceViewProps) {
+/** 「工作区」视图：摘要（含范围切换）+ 按仓库分块 + 未指定块 + 回收站 + 清理对话框。 */
+export function WorkspaceView({
+  cards,
+  allCards,
+  workspaces,
+  runningSessionCwds = [],
+  now,
+  onOpenCard,
+  onNotify,
+}: WorkspaceViewProps) {
   const { t } = useI18n();
+  const nowValue = now ?? Date.now();
   const [collapsedRepos, setCollapsedRepos] = useState<Set<string>>(readCollapsedRepos);
   const [unassignedCollapsed, setUnassignedCollapsed] = useState<boolean>(readUnassignedCollapsed);
+  const [idleExpandedRepos, setIdleExpandedRepos] = useState<Set<string>>(() => new Set());
+  const [scope, setScope] = useState<WorkspaceCardScope>(readWorkspaceScope);
   const [cleanupTarget, setCleanupTarget] = useState<CleanupTarget | null>(null);
+  const [trashEntries, setTrashEntries] = useState<GitTrashEntry[]>([]);
+  const [trashCollapsed, setTrashCollapsed] = useState<boolean>(readTrashCollapsed);
+  const [trashAction, setTrashAction] = useState<TrashActionState | null>(null);
+  const [trashBusy, setTrashBusy] = useState(false);
+  const [trashError, setTrashError] = useState<string | null>(null);
 
   const toggleRepo = useCallback((root: string) => {
     setCollapsedRepos((prev) => {
@@ -372,6 +661,15 @@ export function WorkspaceView({ cards, workspaces, onOpenCard, onNotify }: Works
       if (next.has(root)) next.delete(root);
       else next.add(root);
       storeCollapsedRepos(next);
+      return next;
+    });
+  }, []);
+
+  const toggleIdle = useCallback((root: string) => {
+    setIdleExpandedRepos((prev) => {
+      const next = new Set(prev);
+      if (next.has(root)) next.delete(root);
+      else next.add(root);
       return next;
     });
   }, []);
@@ -384,7 +682,50 @@ export function WorkspaceView({ cards, workspaces, onOpenCard, onNotify }: Works
     });
   }, []);
 
-  const groups = useMemo(() => groupCardsByWorktree(cards, workspaces.repos), [cards, workspaces.repos]);
+  const toggleTrash = useCallback(() => {
+    setTrashCollapsed((previous) => {
+      const next = !previous;
+      storeTrashCollapsed(next);
+      return next;
+    });
+  }, []);
+
+  const changeScope = useCallback((next: WorkspaceCardScope) => {
+    setScope(next);
+    storeWorkspaceScope(next);
+  }, []);
+
+  const refreshTrash = useCallback(async (): Promise<void> => {
+    try {
+      const entries = await api.getGitTrash();
+      setTrashEntries(entries);
+      setTrashError(null);
+    } catch {
+      // 回收站读取失败静默（不阻塞工作区视图）
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshTrash();
+  }, [refreshTrash]);
+
+  const scopeCards = useMemo(() => selectWorkspaceCards(scope, cards, allCards), [scope, cards, allCards]);
+  const displayGroups = useMemo(
+    () => groupCardsByWorktree(scopeCards, workspaces.repos),
+    [scopeCards, workspaces.repos],
+  );
+  const allGroups = useMemo(
+    () => groupCardsByWorktree(allCards, workspaces.repos),
+    [allCards, workspaces.repos],
+  );
+  const displayRepos = useMemo(() => sortRepoGroups(displayGroups.repos), [displayGroups.repos]);
+  const occupancyByPath = useMemo(() => {
+    const map = new Map<string, Card[]>();
+    for (const repo of allGroups.repos) {
+      for (const worktree of repo.worktrees) map.set(worktree.path, worktree.cards);
+    }
+    return map;
+  }, [allGroups.repos]);
 
   const handleCleanupConfirm = useCallback(
     async (options: CleanupConfirmOptions): Promise<CleanupOutcome> => {
@@ -407,6 +748,7 @@ export function WorkspaceView({ cards, workspaces, onOpenCard, onNotify }: Works
         setCleanupTarget(null);
         onNotify?.(message, 'success');
         workspaces.reload();
+        void refreshTrash();
         return { ok: true };
       } catch (error) {
         return {
@@ -416,8 +758,32 @@ export function WorkspaceView({ cards, workspaces, onOpenCard, onNotify }: Works
         };
       }
     },
-    [cleanupTarget, onNotify, t, workspaces],
+    [cleanupTarget, onNotify, refreshTrash, t, workspaces],
   );
+
+  const handleTrashConfirm = useCallback(async (): Promise<void> => {
+    if (!trashAction || trashBusy) return;
+    const { kind, entry } = trashAction;
+    setTrashBusy(true);
+    setTrashError(null);
+    try {
+      if (kind === 'restore') {
+        await api.restoreGitTrash(entry.id);
+        onNotify?.(t('workspace.trashRestoreDone', { name: trashEntryName(entry) }), 'success');
+      } else {
+        await api.purgeGitTrash(entry.id);
+        onNotify?.(t('workspace.trashPurgeDone', { name: trashEntryName(entry) }), 'success');
+      }
+      setTrashAction(null);
+      await refreshTrash();
+      workspaces.reload();
+    } catch (error) {
+      setTrashError(trashErrorMessage(error, t));
+      setTrashAction(null);
+    } finally {
+      setTrashBusy(false);
+    }
+  }, [onNotify, refreshTrash, t, trashAction, trashBusy, workspaces]);
 
   if (workspaces.disabled) {
     return (
@@ -426,14 +792,14 @@ export function WorkspaceView({ cards, workspaces, onOpenCard, onNotify }: Works
       </div>
     );
   }
-  if (!cards.length) {
+  if (!allCards.length) {
     return (
       <div className="kb-workspace" role="region" aria-label={t('app.viewWorkspaces')}>
         <p className="kb-workspace__empty">{t('workspace.empty')}</p>
       </div>
     );
   }
-  if (!workspaces.loaded && !groups.repos.length) {
+  if (!workspaces.loaded && !workspaces.repos.length) {
     return (
       <div className="kb-workspace" role="region" aria-label={t('app.viewWorkspaces')}>
         <p className="kb-workspace__empty">{t('common.loading')}</p>
@@ -442,30 +808,94 @@ export function WorkspaceView({ cards, workspaces, onOpenCard, onNotify }: Works
   }
 
   const summary = t('workspace.summary', {
-    repos: groups.repos.length,
-    worktrees: groups.worktreeCount,
-    running: groups.runningCount,
+    repos: displayRepos.length,
+    worktrees: displayGroups.worktreeCount,
+    running: displayGroups.runningCount,
   });
+  const trashVisible = trashEntries.length > 0 || trashError !== null;
+  const trashDialog = trashAction ? (
+    <ConfirmDialog
+      title={trashAction.kind === 'restore' ? t('workspace.trashRestoreTitle') : t('workspace.trashPurgeTitle')}
+      message={
+        trashAction.kind === 'restore'
+          ? t('workspace.trashRestoreMessage', {
+              name: trashEntryName(trashAction.entry),
+              path: trashAction.entry.worktreePath,
+            })
+          : t('workspace.trashPurgeMessage', { name: trashEntryName(trashAction.entry) })
+      }
+      confirmLabel={
+        trashAction.kind === 'restore' ? t('workspace.trashRestoreConfirm') : t('workspace.trashPurgeConfirm')
+      }
+      busy={trashBusy}
+      danger={trashAction.kind === 'purge'}
+      onConfirm={() => void handleTrashConfirm()}
+      onClose={() => {
+        if (!trashBusy) setTrashAction(null);
+      }}
+    />
+  ) : null;
+
   return (
     <div className="kb-workspace" role="region" aria-label={t('app.viewWorkspaces')}>
-      <header className="kb-workspace__summary">{summary}</header>
-      {!groups.repos.length ? <p className="kb-workspace__hint">{t('workspace.noReposHint')}</p> : null}
-      {groups.repos.map((repo) => (
+      <header className="kb-workspace__summary">
+        <span className="kb-workspace__summary-text">{summary}</span>
+        <div className="kb-workspace__scope" role="group" aria-label={t('workspace.scopeLabel')}>
+          <button
+            type="button"
+            className={`kb-workspace__scope-btn${scope === 'filtered' ? ' kb-workspace__scope-btn--on' : ''}`}
+            aria-pressed={scope === 'filtered'}
+            onClick={() => changeScope('filtered')}
+          >
+            {t('workspace.scopeFiltered')}
+          </button>
+          <button
+            type="button"
+            className={`kb-workspace__scope-btn${scope === 'all' ? ' kb-workspace__scope-btn--on' : ''}`}
+            aria-pressed={scope === 'all'}
+            onClick={() => changeScope('all')}
+          >
+            {t('workspace.scopeAll')}
+          </button>
+        </div>
+      </header>
+      {scopeCards.length === 0 ? <p className="kb-workspace__empty">{t('workspace.emptyFiltered')}</p> : null}
+      {!displayRepos.length && scopeCards.length > 0 ? (
+        <p className="kb-workspace__hint">{t('workspace.noReposHint')}</p>
+      ) : null}
+      {displayRepos.map((repo) => (
         <RepoSection
           key={repo.root}
           repo={repo}
+          occupancyByPath={occupancyByPath}
+          runningSessionCwds={runningSessionCwds}
+          now={nowValue}
           onOpenCard={onOpenCard}
           onCleanup={(worktree) => setCleanupTarget({ repo, worktree })}
           collapsed={collapsedRepos.has(repo.root)}
           onToggle={toggleRepo}
+          idleExpanded={idleExpandedRepos.has(repo.root)}
+          onToggleIdle={toggleIdle}
         />
       ))}
-      {groups.unassigned.length ? (
+      {displayGroups.unassigned.length ? (
         <UnassignedSection
-          cards={groups.unassigned}
+          cards={displayGroups.unassigned}
           onOpenCard={onOpenCard}
           collapsed={unassignedCollapsed}
           onToggle={toggleUnassigned}
+        />
+      ) : null}
+      {trashVisible ? (
+        <TrashSection
+          entries={trashEntries}
+          collapsed={trashCollapsed}
+          busy={trashBusy}
+          error={trashError}
+          now={nowValue}
+          onToggle={toggleTrash}
+          onRestore={(entry) => setTrashAction({ kind: 'restore', entry })}
+          onPurge={(entry) => setTrashAction({ kind: 'purge', entry })}
         />
       ) : null}
       {cleanupTarget ? (
@@ -476,6 +906,7 @@ export function WorkspaceView({ cards, workspaces, onOpenCard, onNotify }: Works
           onClose={() => setCleanupTarget(null)}
         />
       ) : null}
+      {trashDialog}
     </div>
   );
 }

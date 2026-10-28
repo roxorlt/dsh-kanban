@@ -25,6 +25,9 @@ import type {
   GitWorkspaceWorktree,
   CleanupWorktreeInput,
   CleanupWorktreeResult,
+  GitTrashEntry,
+  GitTrashListResult,
+  GitTrashRestoreResult,
   KanbanState,
   Priority,
   SessionActivityEntry,
@@ -570,6 +573,76 @@ export function normalizeCleanupResult(raw: unknown): CleanupWorktreeResult {
   };
 }
 
+/** 从路径取 basename（服务端旧字段缺失时的兜底展示）。 */
+function basenameOfPath(path: string): string {
+  return path.replace(/\/+$/, '').split('/').filter(Boolean).pop() ?? path;
+}
+
+/** 容错归一化回收站条目；id 缺失/非字符串的条目丢弃。 */
+function normalizeTrashEntry(raw: unknown): GitTrashEntry | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const entry = raw as Partial<GitTrashEntry>;
+  if (typeof entry.id !== 'string' || !entry.id) return null;
+  const repoRoot = typeof entry.repoRoot === 'string' ? entry.repoRoot : '';
+  const worktreePath = typeof entry.worktreePath === 'string' ? entry.worktreePath : '';
+  return {
+    id: entry.id,
+    repoRoot,
+    worktreePath,
+    repoName:
+      typeof entry.repoName === 'string' && entry.repoName
+        ? entry.repoName
+        : repoRoot
+          ? basenameOfPath(repoRoot)
+          : entry.id,
+    worktreeName:
+      typeof entry.worktreeName === 'string' && entry.worktreeName
+        ? entry.worktreeName
+        : worktreePath
+          ? basenameOfPath(worktreePath)
+          : entry.id,
+    branch: typeof entry.branch === 'string' && entry.branch ? entry.branch : null,
+    sha: typeof entry.sha === 'string' && entry.sha ? entry.sha : null,
+    trashedAt: typeof entry.trashedAt === 'string' ? entry.trashedAt : '',
+    branchDeleted: entry.branchDeleted === true,
+    // 缺省为不可恢复：宁可让用户看到「不可恢复」，也不引导误恢复
+    restorable: entry.restorable === true,
+  };
+}
+
+/** 容错归一化回收站列表（`GET /git/trash`）：兼容 entries 字段或裸数组。 */
+export function normalizeGitTrash(raw: unknown): GitTrashListResult {
+  const list = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === 'object' && Array.isArray((raw as { entries?: unknown }).entries)
+      ? ((raw as { entries: unknown[] }).entries)
+      : [];
+  return {
+    entries: list
+      .map(normalizeTrashEntry)
+      .filter((entry): entry is GitTrashEntry => entry !== null),
+  };
+}
+
+/** 容错归一化恢复结果（`POST /git/trash/restore`；兼容 restored 包裹或字段平铺）。 */
+export function normalizeTrashRestore(raw: unknown): GitTrashRestoreResult {
+  const payload =
+    raw && typeof raw === 'object' && (raw as { restored?: unknown }).restored && typeof (raw as { restored: unknown }).restored === 'object'
+      ? ((raw as { restored: Record<string, unknown> }).restored)
+      : raw && typeof raw === 'object'
+        ? (raw as Record<string, unknown>)
+        : {};
+  const pick = (key: string): string => (typeof payload[key] === 'string' ? (payload[key] as string) : '');
+  const worktreePath = pick('worktreePath');
+  return {
+    id: pick('id'),
+    repoRoot: pick('repoRoot'),
+    worktreePath,
+    restoredTo: pick('restoredTo') || worktreePath,
+    branch: typeof payload.branch === 'string' && payload.branch ? payload.branch : null,
+  };
+}
+
 /**
  * 容错归一化工作区地图（`POST /git/workspaces`）。
  * repos 缺省 []；单条非法仓库/工作副本直接丢弃；disabled 仅接受显式 true。
@@ -953,6 +1026,26 @@ export const api = {
       body: JSON.stringify(input),
     });
     return normalizeCleanupResult(result.cleanup);
+  },
+
+  /** v0.18 回收站列表（docs/contracts/02-http-api.md §14）：按清理时间倒序。 */
+  getGitTrash: async (): Promise<GitTrashEntry[]> => {
+    const result = await request<{ entries?: unknown }>('/git/trash');
+    return normalizeGitTrash(result).entries;
+  },
+
+  /** 从回收站恢复工作副本；失败抛 KanbanApiError（RESTORE_PATH_EXISTS / RESTORE_SHA_MISSING 等）。 */
+  restoreGitTrash: async (id: string): Promise<GitTrashRestoreResult> => {
+    const result = await request<Record<string, unknown>>('/git/trash/restore', {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    });
+    return normalizeTrashRestore(result);
+  },
+
+  /** 立即彻底删除回收站条目（不经过 7 天保留）。 */
+  purgeGitTrash: async (id: string): Promise<void> => {
+    await request<unknown>(`/git/trash/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
 
   ack: (cardId: string): Promise<{ revision: number }> =>
