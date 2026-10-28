@@ -1481,3 +1481,79 @@
     box-shadow: inset 0 0 0 2px var(--dsw-alias-state-business-primary);
   }
 }
+
+/* ---------------------------------------------- 卡片「工作线」徽标（v0.15）*/
+/* 单行 11px：彩色圆点 + 工作线 <branch> + 与主线关系 + 与线上关系；
+   窄卡片时分支名先省略（ellipsis），关系短语保留，title 给全文。 */
+
+.kb-workline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  height: 16px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.kb-workline__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-label-caption);
+}
+
+.kb-workline--feature .kb-workline__dot {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.kb-workline--merged .kb-workline__dot {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.kb-workline--behind .kb-workline__dot {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.kb-workline__label {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+}
+
+.kb-workline__branch {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-workline__relation {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kb-workline__sep {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+}
+
+.kb-workline__remote {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-workline__unknown {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+}

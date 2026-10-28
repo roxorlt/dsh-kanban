@@ -56,6 +56,7 @@ import { COLUMN_OF_STATUS, COLUMNS, STATUS_OF_COLUMN } from './lib/status';
 import { doneCardsOf } from './lib/listGroups';
 import type { ListGroupBy } from './lib/listGroups';
 import { applyPage, EMPTY_FEED } from './lib/activities';
+import { useWorklineStatuses } from './lib/useWorklineStatuses';
 import type { ActivityFeed } from './lib/activities';
 import { useMediaQuery } from './lib/useMediaQuery';
 import { useRealtime } from './lib/useRealtime';
@@ -408,6 +409,8 @@ export function App() {
   }, [highlightCardId]);
 
   const filteredCards = useMemo(() => filterCards(snapshot.cards, filters), [snapshot.cards, filters]);
+  // 卡片「工作线」徽标：按 cwd 去重批量探测（轻量摘要，不看 graph）
+  const worklineStatuses = useWorklineStatuses(filteredCards);
   const groups = useMemo(
     () => (snapshot.board ? groupCardsByColumn(filteredCards, snapshot.board.cardOrder) : EMPTY_GROUPS),
     [filteredCards, snapshot.board],
@@ -1660,6 +1663,7 @@ export function App() {
           onDoneOpenChange={setDoneOpen}
           shared={shared}
           actions={actions}
+          worklineStatuses={worklineStatuses}
           filtering={hasActiveFilters(filters)}
           onClearFilters={() => setFilters({ query: '', project: null })}
           selectionMode={selectionMode}
@@ -1678,6 +1682,7 @@ export function App() {
         doneTotal={doneTotal}
         shared={shared}
         actions={actions}
+        worklineStatuses={worklineStatuses}
         mobile={mobile}
         activeColumn={activeColumn}
         onActiveColumnChange={setActiveColumn}

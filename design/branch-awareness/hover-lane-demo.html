@@ -1,0 +1,2635 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hover 高亮泳道 · 交互原型</title>
+<style>
+/* lint-tokens-ignore: global-sheet */
+/*
+ * DSH 主题令牌的本地兜底值。
+ *
+ * 只有「独立模式」（直接打开页面、没有 DSH 父页面）才会用到这里的值；
+ * 嵌入 DSH 后父页面通过 postMessage(kanban:theme) 把真实令牌写到 :root 的行内样式，
+ * 行内样式优先级更高，会覆盖本文件。
+ *
+ * 取值照抄 DSH v0.1.5 主题表（docs/ui 规范 dsh-tokens.md），只覆盖看板用到的令牌子集。
+ * 亮/暗切换由 html[data-kanban-theme] 控制（由 bridge.ts 设置），
+ * 不写 prefers-color-scheme 选择器，避免与宿主主题机制冲突。
+ *
+ * lint-tokens 对本文件的 literal-color / reserved-prefix 属于预期：
+ * 这是主题兜底值镜像，不是组件样式。
+ */
+
+:root {
+  color-scheme: light;
+
+  /* 背景与表面 */
+  --dsw-alias-bg-base: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-1: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-2: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-3: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-module-platform: rgb(245, 246, 247); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-skeleton: rgba(0, 0, 0, 0.04); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-1: rgba(0, 0, 0, 0.24); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-2: rgba(0, 0, 0, 0.12); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-3: rgba(0, 0, 0, 0.48); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-overlay: rgb(233, 236, 242); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 文字 */
+  --dsw-alias-label-primary: rgb(15, 17, 21); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-secondary: rgb(97, 102, 107); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-tertiary: rgb(129, 133, 140); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-caption: rgb(173, 178, 184); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-dimmed: rgb(225, 229, 238); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-inverted: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-foreground: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-dimmed: rgb(21, 21, 23); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 品牌与按钮（DSH 主按钮是黑底，不是蓝底） */
+  --dsw-alias-brand-primary: rgb(15, 17, 21); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-brand-text: rgb(15, 17, 21); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-fill: rgb(15, 17, 21); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-hover: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-dimmed: rgb(235, 238, 242); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-contrast-fill: rgb(97, 102, 107); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-elevated-fill: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-floating-fill: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-floating-hover: rgb(241, 243, 245); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-ghost-active-fill: rgb(235, 238, 242); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 描边（中性实线一律 0.5px） */
+  --dsw-alias-border-l1: rgba(0, 0, 0, 0.04); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l2: rgba(0, 0, 0, 0.1); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l3: rgba(0, 0, 0, 0.12); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l4: rgba(0, 0, 0, 0.16); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 交互底色 */
+  --dsw-alias-interactive-bg-hover: rgba(38, 49, 72, 0.06); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-active: rgba(38, 49, 72, 0.1); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-solid: rgb(241, 243, 245); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-danger: rgba(236, 19, 19, 0.05); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-accent: rgba(38, 49, 72, 0.14); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 状态色 */
+  --dsw-alias-state-error-primary: rgb(236, 19, 19); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-error-secondary: rgb(242, 90, 90); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-success-primary: rgb(34, 197, 94); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-success-secondary: rgb(78, 209, 126); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-success-tertiary: rgb(230, 250, 237); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-warn-primary: rgb(245, 158, 11); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-warn-secondary: rgb(247, 173, 49); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-warn-label: rgb(221, 134, 41); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-warn-tertiary: rgb(254, 245, 231); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-business-primary: rgb(65, 118, 230); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-business-tertiary: rgb(228, 237, 253); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-link: rgb(65, 118, 230); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 代码与工具表面 */
+  --dsw-alias-markdown-code-block: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-markdown-inline-code: rgb(250, 250, 250); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-markdown-tag: rgb(241, 243, 245); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-toast-bg: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-tooltip-bg: rgb(44, 44, 46); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 产品专用表面 */
+  --dsw-specific-menu: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-input-major: rgb(255, 255, 255); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-sidebar-fill: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-selector: rgb(245, 246, 247); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-tip: rgb(245, 246, 247); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 高度/阴影 */
+  --dsw-elevation-panel: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 3px 8px 0 rgba(0, 0, 0, 0.03), /* lint-tokens-ignore: literal-color,reserved-prefix */
+    0 0 16px 0 rgba(0, 0, 0, 0.02);
+  --dsw-elevation-prominent: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 3px 8px 0 rgba(0, 0, 0, 0.04), /* lint-tokens-ignore: literal-color,reserved-prefix */
+    0 0 20px 0 rgba(0, 0, 0, 0.05);
+  --dsw-elevation-soft: 0 0 0 0.5px rgba(0, 0, 0, 0.16), 0 4px 16px 0 rgba(0, 0, 0, 0.03), /* lint-tokens-ignore: literal-color,reserved-prefix */
+    0 0 24px 0 rgba(0, 0, 0, 0.03);
+  --dsw-shadow-lv2: 0 4px 12px 0 rgba(0, 0, 0, 0.02), 0 2px 8px 0 rgba(0, 0, 0, 0.04); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-mask-blur: blur(2px); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  /* 排版（复合简写自带行高） */
+  --dsw-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-xs-13: 13px/20px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-xxs-12: 12px/18px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-xxxs-11: 11px/14px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-s-14: 14px/22px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-xs-strong-13: 500 13px/20px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-s-strong-14: 500 14px/22px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --dsw-font-l-20: 500 20px/28px -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', /* lint-tokens-ignore: literal-color,reserved-prefix */
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --ds-font-family-code: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, 'Liberation Mono', Menlo,
+    Courier, 'PingFang SC', 'Microsoft YaHei';
+
+  /* 动效（看板 120–220ms） */
+  --ds-transition-duration: 0.2s;
+  --ds-transition-duration-fast: 0.1s;
+  --ds-transition-duration-slow: 0.3s;
+  --ds-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-kanban-theme='dark'] {
+  color-scheme: dark;
+
+  --dsw-alias-bg-base: rgb(21, 21, 23); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-1: rgb(35, 35, 36); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-2: rgb(44, 44, 46); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-layer-3: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-module-platform: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-skeleton: rgba(255, 255, 255, 0.08); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-1: rgba(0, 0, 0, 0.5); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-2: rgba(0, 0, 0, 0.2); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-mask-3: rgba(0, 0, 0, 0.48); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-bg-overlay: rgb(97, 102, 107); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-label-primary: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-secondary: rgb(207, 211, 214); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-tertiary: rgb(173, 178, 184); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-caption: rgb(129, 133, 140); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-dimmed: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-inverted: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-foreground: rgb(15, 17, 21); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-label-primary-dimmed: rgb(235, 238, 242); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-brand-primary: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-brand-text: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-fill: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-hover: rgb(235, 238, 242); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-primary-dimmed: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-contrast-fill: rgb(249, 250, 251); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-elevated-fill: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-floating-fill: rgb(44, 44, 46); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-floating-hover: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-button-ghost-active-fill: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-border-l1: rgba(255, 255, 255, 0.06); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l2: rgba(255, 255, 255, 0.12); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l3: rgba(255, 255, 255, 0.16); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-border-l4: rgba(255, 255, 255, 0.2); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-interactive-bg-hover: rgba(255, 255, 255, 0.08); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-active: rgba(255, 255, 255, 0.14); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-solid: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-danger: rgba(242, 90, 90, 0.15); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-interactive-bg-hover-accent: rgba(255, 255, 255, 0.24); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-state-error-primary: rgb(242, 90, 90); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-success-tertiary: rgb(35, 60, 44); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-warn-tertiary: rgb(39, 36, 31); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-business-primary: rgb(103, 158, 254); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-state-business-tertiary: rgb(52, 65, 91); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-link: rgb(103, 158, 254); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-alias-markdown-code-block: rgb(27, 27, 28); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-markdown-inline-code: rgb(41, 41, 41); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-markdown-tag: rgb(44, 44, 46); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-toast-bg: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-alias-tooltip-bg: rgb(67, 69, 74); /* lint-tokens-ignore: literal-color,reserved-prefix */
+
+  --dsw-specific-menu: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-input-major: rgb(44, 44, 46); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-sidebar-fill: rgb(27, 27, 28); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-selector: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+  --dsw-specific-tip: rgb(53, 54, 56); /* lint-tokens-ignore: literal-color,reserved-prefix */
+}
+
+/* lint-tokens-ignore: global-sheet */
+/* 看板基础样式：reset、排版、按钮/输入/菜单/提示等共享原子。
+   lint-tokens-ignore: global-sheet —— 根级 reset 与共享原子需要全局，组件类统一 kb- 前缀隔离。 */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: var(--dsw-alias-link);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ol,
+ul,
+dl,
+dd,
+dt {
+  margin: 0;
+}
+
+ol,
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.kb-app-scope {
+  --kb-r-card: 12px;
+  --kb-r-col: 14px;
+  --kb-r-ctl: 8px;
+  --kb-gap: 12px;
+  --kb-pad-x: 16px;
+  --kb-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --kb-dur-fast: 120ms;
+  --kb-dur: 180ms;
+  --kb-dur-slow: 220ms;
+
+  --kb-status-backlog: var(--dsw-alias-label-caption);
+  --kb-status-running: var(--dsw-alias-state-business-primary);
+  --kb-status-needs: var(--dsw-alias-state-warn-primary);
+  --kb-status-needs-text: var(--dsw-alias-state-warn-label);
+  --kb-status-done: var(--dsw-alias-state-success-primary);
+  --kb-status-failed: var(--dsw-alias-state-error-primary);
+  --kb-surface-column: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, var(--dsw-alias-bg-base));
+  --kb-surface-card: var(--dsw-alias-bg-layer-1);
+  --kb-hairline: var(--dsw-alias-border-l2);
+
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+}
+
+.kb-app-scope:focus {
+  outline: none;
+}
+
+/* 嵌入 DSH 时避让宿主左上控件（0.2.x insets.top / leading） */
+.kb-app--embedded {
+  --kb-topbar-h: 52px;
+  padding: max(16px, calc(var(--kb-host-inset-top, 0px) + 8px)) 16px 12px;
+}
+
+.kb-app--embedded .kb-topbar {
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.kb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.kb-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.kb-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ------------------------------------------------------------------ 按钮 */
+
+.kb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--kb-r-ctl);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-strong-12);
+  white-space: nowrap;
+  transition:
+    background-color var(--kb-dur-fast) var(--kb-ease-out),
+    color var(--kb-dur-fast) var(--kb-ease-out),
+    border-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-btn:disabled {
+  color: var(--dsw-alias-label-caption);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.kb-btn--primary {
+  height: 32px;
+  padding: 0 12px;
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.kb-btn--primary:hover {
+  background: var(--dsw-alias-button-primary-hover);
+}
+
+.kb-btn--primary:disabled {
+  background: var(--dsw-alias-button-primary-dimmed);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-btn--outline {
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--kb-surface-card);
+}
+
+.kb-btn--outline:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}
+
+.kb-btn--ghost {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kb-btn--ghost:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-btn--danger {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.kb-btn--danger:hover {
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
+.kb-btn--sm {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--kb-r-ctl);
+}
+
+.kb-btn--icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.kb-btn--icon.kb-btn--sm {
+  width: 28px;
+  height: 28px;
+}
+
+.kb-icon-btn {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--kb-r-ctl);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  transition:
+    background-color var(--kb-dur-fast) var(--kb-ease-out),
+    color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-icon-btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-icon-btn:active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.kb-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-link);
+  font: var(--dsw-font-xxxs-strong-11);
+  cursor: pointer;
+}
+
+.kb-link-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ------------------------------------------------------------------ 分段 */
+
+.kb-seg {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--dsw-specific-selector);
+}
+
+.kb-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--kb-r-ctl);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-strong-12);
+  white-space: nowrap;
+  transition: background-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-seg-btn:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-seg-btn--active {
+  background: var(--dsw-alias-button-ghost-active-fill);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-shadow-lv1);
+}
+
+.kb-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 4px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ 表单 */
+
+.kb-input,
+.kb-textarea,
+.kb-select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-specific-input-major);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  transition: border-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-input,
+.kb-select {
+  height: 32px;
+}
+
+.kb-select {
+  padding-right: 26px;
+}
+
+.kb-textarea {
+  min-height: 64px;
+  resize: vertical;
+  line-height: 20px;
+}
+
+.kb-input::placeholder,
+.kb-textarea::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
+.kb-input:hover,
+.kb-textarea:hover,
+.kb-select:hover {
+  border-color: var(--dsw-alias-border-l3);
+}
+
+.kb-input:focus-visible,
+.kb-textarea:focus-visible,
+.kb-select:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.kb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.kb-field__label {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+/* 字段标题行：左侧标题 + 右侧字数计数（摘要等有长度上限的字段） */
+.kb-field__label-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kb-field__counter {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-field__hint {
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-field__note {
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-form__note {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-form__more {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.kb-form__more-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-strong-11);
+}
+
+.kb-form__more-toggle:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-form__more-caret {
+  width: 12px;
+  height: 12px;
+  transition: transform var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-form__more-toggle[aria-expanded='true'] .kb-form__more-caret {
+  transform: rotate(180deg);
+}
+
+.kb-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  cursor: pointer;
+}
+
+.kb-check:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-check input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--dsw-alias-state-business-primary);
+}
+
+.kb-check--on {
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-check__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-check .kb-icon {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* 卡片内部输入框：焦点环用负偏移 outline 画在控件内侧，
+   既不外扩压到卡片边框，也不会「border 变色 + inset 阴影」叠成两层蓝框 */
+.kb-card :is(input, textarea):focus-visible,
+.kb-card :is(input, textarea):focus {
+  outline: none;
+}
+
+.kb-card :is(.kb-input, .kb-textarea):focus-visible,
+.kb-card :is(.kb-input, .kb-textarea):focus {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+}
+
+/* 快捷键帮助 */
+.kb-help__hint {
+  margin-bottom: 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-help__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kb-help__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 4px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.kb-help__row:first-child {
+  border-top: 0;
+}
+
+.kb-help__keys {
+  display: inline-flex;
+  gap: 3px;
+  min-width: 74px;
+}
+
+.kb-help__label {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+}
+
+/* 未发送的审批决定提示条 */
+.kb-unsent-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 var(--kb-pad-x);
+  padding: 7px 10px;
+  border-radius: var(--kb-r-ctl);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent);
+  color: var(--dsw-alias-state-warn-label);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-unsent-banner__text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ 标签 */
+
+.kb-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.kb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.kb-pill--count {
+  min-width: 20px;
+  justify-content: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 99px;
+  corner-shape: round;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-strong-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-pill--warn {
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.kb-pill--error {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.kb-pill--success {
+  background: var(--dsw-alias-state-success-tertiary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.kb-pill--business {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* ---------------------------------------------------------------- 状态点 */
+
+.kb-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  display: inline-block;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-label-caption);
+}
+
+.kb-dot--business {
+  background: var(--kb-status-running);
+}
+
+.kb-dot--warn {
+  background: var(--kb-status-needs);
+}
+
+.kb-dot--success {
+  background: var(--kb-status-done);
+}
+
+.kb-dot--error {
+  background: var(--kb-status-failed);
+}
+
+.kb-dot--tertiary {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--dsw-alias-label-caption);
+}
+
+.kb-dot--business::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  corner-shape: round;
+  border: 1.5px solid var(--kb-status-running);
+  opacity: 0.4;
+  animation: kb-dot-pulse 1.8s var(--ds-ease-in-out) infinite;
+}
+
+@keyframes kb-dot-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.45;
+  }
+  70% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ 浮层 */
+
+.kb-menu {
+  position: fixed;
+  z-index: 70;
+  min-width: 184px;
+  max-width: calc(100vw - 24px);
+  max-height: min(70dvh, 520px);
+  overflow-y: auto;
+  padding: 4px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-elevation-panel);
+  animation: kb-pop var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  text-align: left;
+}
+
+.kb-menu__item .kb-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-menu__item:hover,
+.kb-menu__item:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: none;
+}
+
+.kb-menu__item[aria-current='true'] {
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-menu__item:disabled {
+  color: var(--dsw-alias-label-caption);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.kb-menu__sep {
+  height: 0.5px;
+  margin: 4px 0;
+  background: var(--dsw-alias-border-l2);
+}
+
+/* ------------------------------------------------------------------- toast */
+
+.kb-toast-region {
+  position: fixed;
+  left: 50%;
+  top: 16px;
+  z-index: 130;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.kb-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(480px, calc(100vw - 32px));
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+  box-shadow: var(--dsw-elevation-panel);
+  font: var(--dsw-font-xxs-12);
+  pointer-events: auto;
+  animation: kb-toast-in var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-toast .kb-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.kb-toast__close {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-toast__close:hover {
+  opacity: 1;
+}
+
+/* -------------------------------------------------------- 空态 / 骨架 / 错误 */
+
+.kb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 12px;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: center;
+}
+
+.kb-empty__title {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-empty__hint {
+  max-width: 22em;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.kb-error__title {
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-s-strong-14);
+}
+
+.kb-error__hint {
+  max-width: 460px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+}
+
+.kb-error__code {
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxs-12);
+  font-family: var(--ds-font-family-code);
+}
+
+.kb-skeleton {
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-skeleton);
+  animation: kb-breathe 1.4s var(--ds-ease-in-out) infinite;
+}
+
+.kb-skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--kb-r-card);
+  background: var(--kb-surface-card);
+}
+
+.kb-skeleton-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px;
+}
+
+.kb-skeleton-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.kb-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  corner-shape: round;
+  border: 1.5px solid color-mix(in srgb, var(--dsw-alias-label-caption) 28%, transparent);
+  border-top-color: var(--dsw-alias-state-business-primary);
+  animation: kb-spin 0.8s linear infinite;
+}
+
+.kb-spin {
+  animation: kb-spin 1s linear infinite;
+}
+
+/* ------------------------------------------------------------------ 动画 */
+
+@keyframes kb-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kb-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes kb-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes kb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .kb-dot--business::after {
+    display: none;
+  }
+}
+
+
+.kb-tag--handoff {
+  flex: none;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+  font: var(--dsw-font-xxxs-strong-11);
+}
+
+/* lint-tokens-ignore: global-sheet */
+/* 卡片详情抽屉（宽屏右侧 400–520px；<720px 底部 sheet 见 responsive.css） */
+
+.kb-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--dsw-alias-bg-mask-2);
+  -webkit-backdrop-filter: var(--dsw-mask-blur);
+  backdrop-filter: var(--dsw-mask-blur);
+  animation: kb-fade var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-drawer {
+  display: flex;
+  flex-direction: column;
+  width: clamp(400px, 36vw, 520px);
+  max-width: 94vw;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-prominent);
+  animation: kb-slide-in var(--kb-dur-slow) var(--kb-ease-out);
+}
+
+.kb-drawer__grabber {
+  display: none;
+}
+
+@keyframes kb-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes kb-slide-in {
+  from {
+    transform: translateX(18px);
+    opacity: 0.6;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+.kb-drawer__header {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 12px 0 16px;
+}
+
+/* 标题区 + 操作按钮：只有这一行被按钮挤窄，摘要单独占满整行 */
+.kb-drawer__header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.kb-drawer__heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.kb-drawer__kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-drawer__warning {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.kb-drawer__title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.kb-drawer__title-row .kb-dot {
+  margin-top: 9px;
+}
+
+.kb-drawer__title {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font: 500 16px/24px var(--dsw-font-family);
+  word-break: break-word;
+}
+
+.kb-drawer__summary {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-s-14);
+  overflow-wrap: anywhere;
+  /* 摘要独占整行：头部操作区右边距 12 比正文内容 16 少 4，这里补回，
+     让摘要右边缘与正文（chips/元数据/composer）落在同一条线上 */
+  margin-right: 4px;
+}
+
+.kb-drawer__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.kb-drawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 16px 14px;
+}
+
+.kb-drawer__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.kb-drawer__section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.kb-drawer__section-title {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-strong-11);
+  letter-spacing: 0.02em;
+}
+
+/* 多会话时审批区块显示决定将发往哪个会话（与 Composer 的目标下拉一致） */
+.kb-drawer__target-hint {
+  margin: 0;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-drawer__text {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.kb-drawer__text--result {
+  padding: 10px 12px;
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-drawer__updated {
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-drawer__footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+/* ------------------------------------------------------------ 进度 / 清单 */
+
+.kb-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.kb-progress__bar {
+  height: 4px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-interactive-bg-hover);
+  overflow: hidden;
+}
+
+.kb-progress__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--kb-status-running);
+  transition: width var(--kb-dur-slow) var(--kb-ease-out);
+}
+
+.kb-progress__label {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-checklist__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kb-checklist__count {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-checklist__bar {
+  flex: 1;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-checklist__items {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.kb-checklist__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+}
+
+.kb-checklist__item--done {
+  color: var(--dsw-alias-label-tertiary);
+  text-decoration: line-through;
+}
+
+.kb-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 4px;
+  color: var(--dsw-alias-label-primary-foreground);
+  font: var(--dsw-font-xxxs-11);
+  line-height: 1;
+}
+
+.kb-checkbox--done {
+  background: var(--kb-status-done);
+  border-color: var(--kb-status-done);
+}
+
+/* --------------------------------------------------------------- 产物 */
+
+.kb-artifacts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kb-artifacts__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+}
+
+.kb-artifacts__item a {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-artifacts__path {
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-family: var(--ds-font-family-code);
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------- 会话 */
+
+.kb-session {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-session__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kb-session__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-base);
+}
+
+.kb-session__icon {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-session__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kb-session__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  white-space: nowrap;
+}
+
+.kb-session__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kb-session__primary {
+  flex: none;
+}
+
+/* 元信息行：运行状态 pill + 完整 session id（等宽小字，窄抽屉里省略并靠 title 看全） */
+.kb-session__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-session__id {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-caption);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-session__meta .kb-pill {
+  flex: none;
+}
+
+.kb-session__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.kb-session__hint {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-session__bind {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.kb-session__bind-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kb-session__bind-row .kb-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.kb-session__summary {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-session__row--target {
+  border-color: var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-session__create {
+  flex: none;
+}
+
+.kb-session__select-label {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+/* --------------------------------------------------------------- 元数据 */
+
+.kb-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin: 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-meta-grid > div {
+  min-width: 0;
+}
+
+.kb-meta-grid dt {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-meta-grid dd {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin: 1px 0 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  overflow-wrap: anywhere;
+}
+
+.kb-meta-grid__wide {
+  grid-column: 1 / -1;
+}
+
+.kb-meta-grid__code {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-family: var(--ds-font-family-code);
+}
+
+/* --------------------------------------------------------------- 回复框 */
+
+.kb-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kb-composer__input {
+  min-height: 54px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.kb-composer__hint {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-composer__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-composer__aux {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kb-composer__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kb-composer__footer .kb-btn {
+  margin-left: auto;
+}
+
+.kb-composer__meta {
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+
+/* --------------------------------------------------- 时间线分页 / 媒体网格 */
+.kb-drawer__timeline-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.kb-drawer__loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-media-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kb-media-thumb {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 88px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  text-decoration: none;
+}
+
+.kb-media-thumb img {
+  width: 88px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--kb-r-ctl);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-media-thumb span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ 回复目标 */
+.kb-composer__target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-composer__target-label {
+  flex: none;
+}
+
+.kb-composer__target-value {
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-composer__target-select {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 22px 0 8px;
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-composer__target-hint {
+  margin-left: auto;
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+}
+
+
+/* ------------------------------------------------- 进行中未绑定/内联新建会话（v1.2） */
+.kb-session__warn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-session__warn .kb-icon {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+
+.kb-session-create {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kb-session-create__title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-session-create__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+
+/* ------------------------------------------------- 交接摘要（v0.8） */
+.kb-drawer__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kb-handoff__copy {
+  flex: none;
+}
+
+.kb-handoff__summary {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.kb-handoff__next {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-handoff__label {
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-strong-11);
+}
+
+.kb-handoff__next p {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.kb-handoff__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+}
+
+.kb-handoff__meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.kb-handoff__meta dt {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-handoff__meta dd {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------- 会话归档/恢复（v0.11） */
+.kb-session__row--stack {
+  flex-wrap: wrap;
+}
+
+.kb-session__reason {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-session__badge {
+  flex: none;
+}
+
+.kb-session__warn--archived {
+  align-items: flex-start;
+  padding: 6px 8px;
+}
+
+/* 归档/恢复按钮与原因说明同行时允许换行，避免 400px 抽屉里操作区溢出 */
+.kb-session__actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 2px;
+}
+
+/* ------------------------------------------------- 卡片 Git 上下文（v0.14）*/
+/* 「分支 / 工作树」区块：简化 chips + Fork 风格多分支彩色提交图 + 多工作树列表。
+   泳道调色板 8 色只在 .kb-git 上定义（--kb-git-lane-0..7 = alias 令牌）；
+   亮暗主题只靠 alias 令牌，不写主题选择器。 */
+
+.kb-git {
+  --kb-git-lane-0: var(--dsw-alias-state-business-primary);
+  --kb-git-lane-1: var(--dsw-alias-state-success-primary);
+  --kb-git-lane-2: var(--dsw-alias-state-warn-primary);
+  --kb-git-lane-3: var(--dsw-alias-state-error-primary);
+  --kb-git-lane-4: var(--dsw-alias-state-success-secondary);
+  --kb-git-lane-5: var(--dsw-alias-state-error-secondary);
+  --kb-git-lane-6: var(--dsw-alias-state-warn-label);
+  --kb-git-lane-7: var(--dsw-alias-label-tertiary);
+  gap: 8px;
+}
+
+/* 6 色槽位：元素上叠加 kb-git__fork-cN 即可拿到 --kb-fork-color（连线/圆点/图例共用） */
+.kb-git__fork-c0 { --kb-fork-color: var(--kb-git-lane-0); }
+.kb-git__fork-c1 { --kb-fork-color: var(--kb-git-lane-1); }
+.kb-git__fork-c2 { --kb-fork-color: var(--kb-git-lane-2); }
+.kb-git__fork-c3 { --kb-fork-color: var(--kb-git-lane-3); }
+.kb-git__fork-c4 { --kb-fork-color: var(--kb-git-lane-4); }
+.kb-git__fork-c5 { --kb-fork-color: var(--kb-git-lane-5); }
+.kb-git__fork-c6 { --kb-fork-color: var(--kb-git-lane-6); }
+.kb-git__fork-c7 { --kb-fork-color: var(--kb-git-lane-7); }
+
+/* 人话版：一句话总结 + 关键事实表 + 提交图折叠 */
+.kb-git__summary {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: var(--kb-r-ctl);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, transparent);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  overflow-wrap: anywhere;
+}
+
+.kb-git__facts {
+  display: flex;
+  flex-direction: column;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  overflow: hidden;
+}
+
+.kb-git__fact {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-git__fact:first-child {
+  border-top: 0;
+}
+
+.kb-git__fact dt {
+  flex: none;
+  width: 76px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-git__fact dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.kb-git__fact-code {
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.kb-git__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  text-align: left;
+  cursor: pointer;
+}
+
+.kb-git__toggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-git__toggle:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.kb-git__toggle-icon {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-git__toggle[aria-expanded='true'] .kb-git__toggle-icon {
+  transform: rotate(180deg);
+}
+
+.kb-git__toggle-meta {
+  margin-left: auto;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-git__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-git__ab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 读屏专用：↑↓ 图形对读屏隐藏，这里播报「领先 N · 落后 M」 */
+.kb-git__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ------------------------------------------------------ Fork 风格提交图 */
+
+.kb-git__fork {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* 引用图例：彩色圆点 + 等宽名称 + ↑↓ + 当前/工作树徽标，换行不溢出 */
+.kb-git__fork-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.kb-git__fork-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.kb-git__fork-legend-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--kb-fork-color);
+}
+
+/* 远端引用：空心点 */
+.kb-git__fork-legend-dot--hollow {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--kb-fork-color);
+}
+
+.kb-git__fork-legend-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-git__fork-legend-more {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+/* 固定最大高度 + 内部滚动（overscroll 不带动抽屉） */
+.kb-git__fork-scroll {
+  max-height: 320px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+
+.kb-git__fork-rows {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.kb-git__fork-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.kb-git__fork-row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-git__fork-graph {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 22px;
+}
+
+.kb-git__fork-svg {
+  display: block;
+  overflow: visible;
+}
+
+.kb-git__fork-seg {
+  fill: none;
+  stroke: var(--kb-fork-color);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.kb-git__fork-dot {
+  fill: var(--kb-fork-color);
+  stroke: none;
+}
+
+/* 合并提交：外环（底色挖空）+ 内点，形成双环 */
+.kb-git__fork-merge-ring {
+  fill: var(--dsw-alias-bg-layer-1);
+  stroke: var(--kb-fork-color);
+  stroke-width: 1.5;
+}
+
+/* HEAD 提交：再加深一圈外环 */
+.kb-git__fork-head-ring {
+  fill: none;
+  stroke: var(--dsw-alias-label-primary);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.kb-git__fork-refs {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 45%;
+  overflow: hidden;
+}
+
+/* ref 徽标：本地分支 = 实心彩点 + 名称；远端 = 描边；HEAD = 深色底 */
+.kb-git__fork-ref {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 120px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 15px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.kb-git__fork-ref--head {
+  flex: none;
+  background: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.kb-git__fork-ref--remote {
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-git__fork-ref-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--kb-fork-color);
+}
+
+.kb-git__fork-ref-dot--hollow {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--kb-fork-color);
+}
+
+.kb-git__fork-ref-name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-git__fork-subject {
+  flex: 1 1 0%;
+  min-width: 60px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-git__fork-sha {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-git__fork-more {
+  padding-left: 4px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+/* ------------------------------------------------------------ 工作树列表 */
+
+.kb-git__worktrees {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kb-git__worktree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.kb-git__worktree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 4px 7px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-base);
+}
+
+.kb-git__worktree--current {
+  border-color: var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-git__worktree-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kb-git__worktree-branch {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-git__tag {
+  flex: none;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-git__tag--current {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.kb-git__worktree-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-caption);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 窄屏（390 竖屏 / 底部弹层）：图列已占 ~100px，行内 ref 徽标只保留 HEAD，
+   把宽度让给 commit 说明（分支名在顶部图例里仍可看全）。 */
+@media (max-width: 480px) {
+  .kb-git__fork-ref:not(.kb-git__fork-ref--head) {
+    display: none;
+  }
+}
+
+/* ---------- 原型外壳 ---------- */
+html, body { height: auto; }
+body.kb-demo-body {
+  margin: 0;
+  padding: 28px 24px 48px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  display: flex;
+  justify-content: center;
+}
+.kb-demo-wrap { width: 560px; max-width: 100%; display: flex; flex-direction: column; gap: 14px; }
+.kb-demo-head { display: flex; align-items: flex-start; gap: 10px; }
+.kb-demo-head h1 { margin: 0; font: 600 16px/24px var(--dsw-font-family); }
+.kb-demo-head p { margin: 4px 0 0; color: var(--dsw-alias-label-secondary); font: var(--dsw-font-xxs-12); }
+.kb-demo-theme {
+  margin-left: auto; flex: none; height: 28px; padding: 0 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2); border-radius: 8px;
+  background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12); cursor: pointer;
+}
+.kb-demo-theme:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.kb-demo-canvas {
+  padding: 14px 16px 16px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  min-height: 440px;
+}
+.kb-demo-canvas .kb-git { gap: 8px; }
+.kb-demo-canvas .kb-git__fork-scroll { max-height: 380px; }
+.kb-demo-canvas .kb-git__fork-seg,
+.kb-demo-canvas .kb-git__fork-dot,
+.kb-demo-canvas .kb-git__fork-merge-ring,
+.kb-demo-canvas .kb-git__fork-ref-dot,
+.kb-demo-canvas .kb-git__fork-legend-item { transition: opacity 120ms ease, font-weight 120ms ease; }
+.kb-demo-canvas .kb-git__fork-row { cursor: default; }
+.kb-demo-hint {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}
+.kb-demo-hint b { color: var(--dsw-alias-label-primary); font-weight: 600; }
+.kb-demo-legend-note { color: var(--dsw-alias-label-tertiary); font: var(--dsw-font-xxxs-11); }
+
+.kb-demo-canvas[data-hover-lane="0"] .kb-git__fork-seg:not(.kb-git__fork-c0),
+.kb-demo-canvas[data-hover-lane="0"] .kb-git__fork-dot:not(.kb-git__fork-c0),
+.kb-demo-canvas[data-hover-lane="0"] .kb-git__fork-merge-ring:not(.kb-git__fork-c0),
+.kb-demo-canvas[data-hover-lane="0"] .kb-git__fork-ref-dot:not(.kb-git__fork-c0) {
+  opacity: 0.18;
+}
+.kb-demo-canvas[data-hover-lane="0"] .kb-git__fork-legend-item:not(.is-active) { opacity: 0.4; }
+.kb-demo-canvas[data-hover-lane="0"] .kb-git__fork-legend-item.is-active { font-weight: 600; }
+
+
+.kb-demo-canvas[data-hover-lane="1"] .kb-git__fork-seg:not(.kb-git__fork-c1),
+.kb-demo-canvas[data-hover-lane="1"] .kb-git__fork-dot:not(.kb-git__fork-c1),
+.kb-demo-canvas[data-hover-lane="1"] .kb-git__fork-merge-ring:not(.kb-git__fork-c1),
+.kb-demo-canvas[data-hover-lane="1"] .kb-git__fork-ref-dot:not(.kb-git__fork-c1) {
+  opacity: 0.18;
+}
+.kb-demo-canvas[data-hover-lane="1"] .kb-git__fork-legend-item:not(.is-active) { opacity: 0.4; }
+.kb-demo-canvas[data-hover-lane="1"] .kb-git__fork-legend-item.is-active { font-weight: 600; }
+
+
+.kb-demo-canvas[data-hover-lane="2"] .kb-git__fork-seg:not(.kb-git__fork-c2),
+.kb-demo-canvas[data-hover-lane="2"] .kb-git__fork-dot:not(.kb-git__fork-c2),
+.kb-demo-canvas[data-hover-lane="2"] .kb-git__fork-merge-ring:not(.kb-git__fork-c2),
+.kb-demo-canvas[data-hover-lane="2"] .kb-git__fork-ref-dot:not(.kb-git__fork-c2) {
+  opacity: 0.18;
+}
+.kb-demo-canvas[data-hover-lane="2"] .kb-git__fork-legend-item:not(.is-active) { opacity: 0.4; }
+.kb-demo-canvas[data-hover-lane="2"] .kb-git__fork-legend-item.is-active { font-weight: 600; }
+
+
+.kb-demo-canvas[data-hover-lane="3"] .kb-git__fork-seg:not(.kb-git__fork-c3),
+.kb-demo-canvas[data-hover-lane="3"] .kb-git__fork-dot:not(.kb-git__fork-c3),
+.kb-demo-canvas[data-hover-lane="3"] .kb-git__fork-merge-ring:not(.kb-git__fork-c3),
+.kb-demo-canvas[data-hover-lane="3"] .kb-git__fork-ref-dot:not(.kb-git__fork-c3) {
+  opacity: 0.18;
+}
+.kb-demo-canvas[data-hover-lane="3"] .kb-git__fork-legend-item:not(.is-active) { opacity: 0.4; }
+.kb-demo-canvas[data-hover-lane="3"] .kb-git__fork-legend-item.is-active { font-weight: 600; }
+
+
+.kb-demo-canvas[data-hover-lane="4"] .kb-git__fork-seg:not(.kb-git__fork-c4),
+.kb-demo-canvas[data-hover-lane="4"] .kb-git__fork-dot:not(.kb-git__fork-c4),
+.kb-demo-canvas[data-hover-lane="4"] .kb-git__fork-merge-ring:not(.kb-git__fork-c4),
+.kb-demo-canvas[data-hover-lane="4"] .kb-git__fork-ref-dot:not(.kb-git__fork-c4) {
+  opacity: 0.18;
+}
+.kb-demo-canvas[data-hover-lane="4"] .kb-git__fork-legend-item:not(.is-active) { opacity: 0.4; }
+.kb-demo-canvas[data-hover-lane="4"] .kb-git__fork-legend-item.is-active { font-weight: 600; }
+
+
+.kb-demo-canvas[data-hover-lane="5"] .kb-git__fork-seg:not(.kb-git__fork-c5),
+.kb-demo-canvas[data-hover-lane="5"] .kb-git__fork-dot:not(.kb-git__fork-c5),
+.kb-demo-canvas[data-hover-lane="5"] .kb-git__fork-merge-ring:not(.kb-git__fork-c5),
+.kb-demo-canvas[data-hover-lane="5"] .kb-git__fork-ref-dot:not(.kb-git__fork-c5) {
+  opacity: 0.18;
+}
+.kb-demo-canvas[data-hover-lane="5"] .kb-git__fork-legend-item:not(.is-active) { opacity: 0.4; }
+.kb-demo-canvas[data-hover-lane="5"] .kb-git__fork-legend-item.is-active { font-weight: 600; }
+
+
+.kb-demo-canvas[data-hover-lane="6"] .kb-git__fork-seg:not(.kb-git__fork-c6),
+.kb-demo-canvas[data-hover-lane="6"] .kb-git__fork-dot:not(.kb-git__fork-c6),
+.kb-demo-canvas[data-hover-lane="6"] .kb-git__fork-merge-ring:not(.kb-git__fork-c6),
+.kb-demo-canvas[data-hover-lane="6"] .kb-git__fork-ref-dot:not(.kb-git__fork-c6) {
+  opacity: 0.18;
+}
+.kb-demo-canvas[data-hover-lane="6"] .kb-git__fork-legend-item:not(.is-active) { opacity: 0.4; }
+.kb-demo-canvas[data-hover-lane="6"] .kb-git__fork-legend-item.is-active { font-weight: 600; }
+
+
+.kb-demo-canvas[data-hover-lane="7"] .kb-git__fork-seg:not(.kb-git__fork-c7),
+.kb-demo-canvas[data-hover-lane="7"] .kb-git__fork-dot:not(.kb-git__fork-c7),
+.kb-demo-canvas[data-hover-lane="7"] .kb-git__fork-merge-ring:not(.kb-git__fork-c7),
+.kb-demo-canvas[data-hover-lane="7"] .kb-git__fork-ref-dot:not(.kb-git__fork-c7) {
+  opacity: 0.18;
+}
+.kb-demo-canvas[data-hover-lane="7"] .kb-git__fork-legend-item:not(.is-active) { opacity: 0.4; }
+.kb-demo-canvas[data-hover-lane="7"] .kb-git__fork-legend-item.is-active { font-weight: 600; }
+
+</style>
+</head>
+<body class="kb-demo-body">
+  <div class="kb-demo-wrap">
+    <div class="kb-demo-head">
+      <div>
+        <h1>hover 高亮泳道 · 交互原型</h1>
+        <p>鼠标移到图里任意一行：该提交所属的整条泳道（同色线 + 点 + ref 徽标）保持高亮，其它泳道淡出；移开恢复。无点击、无跳转。</p>
+      </div>
+      <button type="button" class="kb-demo-theme" id="kb-demo-theme">切换暗色</button>
+    </div>
+    <div class="kb-demo-hint" id="kb-demo-hint">当前没有悬停 · 试试鼠标移到下面的彩色行上</div>
+    <div class="kb-demo-canvas" id="kb-demo-canvas">
+<section class="kb-drawer__section kb-git"><h3 class="kb-drawer__section-title">工作线</h3><p class="kb-git__summary">当前就在主线「main」上。线上还没同步（本地多 27 处）。</p><dl class="kb-git__facts"><div class="kb-git__fact"><dt>在哪条工作线</dt><dd><code class="kb-git__fact-code" title="main">main</code></dd></div><div class="kb-git__fact"><dt>和主线比</dt><dd>就在主线上</dd></div><div class="kb-git__fact"><dt>和线上比</dt><dd>本地多 27 处未同步</dd></div><div class="kb-git__fact"><dt>工作副本</dt><dd><code class="kb-git__fact-code" title="/Users/roxor/Desktop/dsh/dsh kanban">主文件夹</code></dd></div></dl><button type="button" class="kb-git__toggle" aria-expanded="true"><span class="kb-icon kb-git__toggle-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m4 6 4 4 4-4"></path></svg></span><span>提交图</span><span class="kb-git__toggle-meta">48 个改动</span></button><div class="kb-git__advanced"><div class="kb-git__fork"><div class="kb-git__fork-legend" role="list" aria-label="引用图例"><span class="kb-git__fork-legend-item" role="listitem"><span class="kb-git__fork-legend-dot kb-git__fork-c0" aria-hidden="true"></span><code class="kb-git__fork-legend-name" title="HEAD">HEAD</code></span><span class="kb-git__fork-legend-item" role="listitem"><span class="kb-git__fork-legend-dot kb-git__fork-c0" aria-hidden="true"></span><code class="kb-git__fork-legend-name" title="main">main</code><span class="kb-git__ab" title="领先 27 · 落后 0"><span class="kb-git__sr">领先 27 · 落后 0</span><span aria-hidden="true">↑27</span><span aria-hidden="true">↓0</span></span><span class="kb-git__tag kb-git__tag--current">当前</span><span class="kb-git__tag">工作树</span></span><span class="kb-git__fork-legend-item" role="listitem"><span class="kb-git__fork-legend-dot kb-git__fork-c1 kb-git__fork-legend-dot--hollow" aria-hidden="true"></span><code class="kb-git__fork-legend-name" title="origin/main">origin/main</code></span><span class="kb-git__fork-legend-item" role="listitem"><span class="kb-git__fork-legend-dot kb-git__fork-c2" aria-hidden="true"></span><code class="kb-git__fork-legend-name" title="feat/fork-graph-viz">feat/fork-graph-viz</code><span class="kb-git__tag">工作树</span></span><span class="kb-git__fork-legend-item" role="listitem"><span class="kb-git__fork-legend-dot kb-git__fork-c3" aria-hidden="true"></span><code class="kb-git__fork-legend-name" title="feat/git-branch-viz">feat/git-branch-viz</code><span class="kb-git__tag">工作树</span></span><span class="kb-git__fork-legend-item" role="listitem"><span class="kb-git__fork-legend-dot kb-git__fork-c4" aria-hidden="true"></span><code class="kb-git__fork-legend-name" title="feat/m2-session-target">feat/m2-session-target</code><span class="kb-git__tag">工作树</span></span><span class="kb-git__fork-legend-item" role="listitem"><span class="kb-git__fork-legend-dot kb-git__fork-c0" aria-hidden="true"></span><code class="kb-git__fork-legend-name" title="feat/workline-badges">feat/workline-badges</code><span class="kb-git__tag">工作树</span></span><span class="kb-git__fork-legend-item" role="listitem"><span class="kb-git__fork-legend-dot kb-git__fork-c5" aria-hidden="true"></span><code class="kb-git__fork-legend-name" title="feat/workline-summary">feat/workline-summary</code><span class="kb-git__tag">工作树</span></span><span class="kb-git__fork-legend-item" role="listitem"><span class="kb-git__fork-legend-dot kb-git__fork-c6" aria-hidden="true"></span><code class="kb-git__fork-legend-name" title="wip/main-20261027">wip/main-20261027</code></span><span class="kb-git__fork-legend-item" role="listitem"><span class="kb-git__fork-legend-dot kb-git__fork-c7" aria-hidden="true"></span><code class="kb-git__fork-legend-name" title="fix/session-turn-failure">fix/session-turn-failure</code></span><span class="kb-git__fork-legend-more">还有 3 个引用</span></div><div class="kb-git__fork-scroll" role="group" aria-label="提交图"><ol class="kb-git__fork-rows" aria-label="提交图：48 个提交、10 个引用"><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-head-ring" cx="9" cy="11" r="7"></circle><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-refs"><span class="kb-git__fork-ref kb-git__fork-ref--head" title="HEAD">HEAD</span><span class="kb-git__fork-ref" title="main"><span class="kb-git__fork-ref-dot kb-git__fork-c0" aria-hidden="true"></span><code class="kb-git__fork-ref-name">main</code></span><span class="kb-git__fork-ref" title="feat/workline-badges"><span class="kb-git__fork-ref-dot kb-git__fork-c0" aria-hidden="true"></span><code class="kb-git__fork-ref-name">feat/workline-badges</code></span></span><span class="kb-git__fork-subject" title="docs(v0.14.1): 合入主线（78c3046）——纯前端改动，刷新看板即生效">docs(v0.14.1): 合入主线（78c3046）——纯前端改动，刷新看板即生效</span><code class="kb-git__fork-sha" title="226aa017e3cee122447e665b72396847226629e5
+roxorlt
+2026-10-28 16:11">226aa01</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 9 11 C 37 11, 79 17.6, 79 22"></path><circle class="kb-git__fork-merge-ring kb-git__fork-c0" cx="9" cy="11" r="4.8"></circle><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="2.2"></circle></svg></span><span class="kb-git__fork-subject" title="merge: feat/workline-summary → main（v0.14.1 详情抽屉「工作线」人话版）">merge: feat/workline-summary → main（v0.14.1 详情抽屉「工作线」人话版）</span><span class="kb-git__sr">合并提交</span><code class="kb-git__fork-sha" title="78c30465f5d010b6fbdd88d3820d4740713fe7b5
+roxorlt
+2026-10-28 16:11">78c3046</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 11"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 11 L 79 22"></path><circle class="kb-git__fork-dot kb-git__fork-c5" cx="79" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-refs"><span class="kb-git__fork-ref" title="feat/workline-summary"><span class="kb-git__fork-ref-dot kb-git__fork-c5" aria-hidden="true"></span><code class="kb-git__fork-ref-name">feat/workline-summary</code></span></span><span class="kb-git__fork-subject" title="feat(v0.14.1): 详情抽屉「工作线」人话版（面向非技术用户，方案 4 上线）">feat(v0.14.1): 详情抽屉「工作线」人话版（面向非技术用户，方案 4 上线）</span><code class="kb-git__fork-sha" title="a28aafc19d534ef22e1620682e4bf8c20c9109b7
+roxorlt
+2026-10-28 16:11">a28aafc</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 C 79 6.6, 9 11, 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(design): 分支可视化面向非技术用户的 4 个表达方案原型（卡片徽标 / 工作线总览 / 工作区地图 / 详情改写）">docs(design): 分支可视化面向非技术用户的 4 个表达方案原型（卡片徽标 / 工作线总览 / 工作区地图 / 详情改写）</span><code class="kb-git__fork-sha" title="f30889a111297913dcf387c67c673eeb54e73de8
+roxorlt
+2026-10-28 15:52">f30889a</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(v0.14.0): 合入主线（3d9e755）+ 合入后自测（170/170、241 例、tsc/build/令牌 lint 通过）">docs(v0.14.0): 合入主线（3d9e755）+ 合入后自测（170/170、241 例、tsc/build/令牌 lint 通过）</span><code class="kb-git__fork-sha" title="99deaea67a600257ecf484d9bd9ec5e23beafd06
+roxorlt
+2026-10-28 15:51">99deaea</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 9 11 C 20.200000000000003 11, 37 17.6, 37 22"></path><circle class="kb-git__fork-merge-ring kb-git__fork-c0" cx="9" cy="11" r="4.8"></circle><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="2.2"></circle></svg></span><span class="kb-git__fork-subject" title="merge: feat/fork-graph-viz → main（v0.14.0 Fork 风格多分支提交图 + 远端跟踪 chip）">merge: feat/fork-graph-viz → main（v0.14.0 Fork 风格多分支提交图 + 远端跟踪 chip）</span><span class="kb-git__sr">合并提交</span><code class="kb-git__fork-sha" title="3d9e7555bc1209b59f2b44c9c51e05e50652cc15
+roxorlt
+2026-10-28 15:50">3d9e755</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 L 37 11"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 11 L 37 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 37 11 C 25.799999999999997 11, 9 17.6, 9 22"></path><circle class="kb-git__fork-merge-ring kb-git__fork-c2" cx="37" cy="11" r="4.8"></circle><circle class="kb-git__fork-dot kb-git__fork-c2" cx="37" cy="11" r="2.2"></circle></svg></span><span class="kb-git__fork-refs"><span class="kb-git__fork-ref" title="feat/fork-graph-viz"><span class="kb-git__fork-ref-dot kb-git__fork-c2" aria-hidden="true"></span><code class="kb-git__fork-ref-name">feat/fork-graph-viz</code></span></span><span class="kb-git__fork-subject" title="merge: main（v0.13.0 真实宿主复验 / v0.10.0 收件箱合入）→ feat/fork-graph-viz（v0.14.0）">merge: main（v0.13.0 真实宿主复验 / v0.10.0 收件箱合入）→ feat/fork-graph-viz（v0.14.0）</span><span class="kb-git__sr">合并提交</span><code class="kb-git__fork-sha" title="eb571ba78d1ed0983ce137227c8121112039c24a
+roxorlt
+2026-10-28 15:50">eb571ba</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 L 37 11"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 11 L 37 22"></path><circle class="kb-git__fork-dot kb-git__fork-c2" cx="37" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.14.0): 补回「远端跟踪」chip，回应分支图反馈">fix(v0.14.0): 补回「远端跟踪」chip，回应分支图反馈</span><code class="kb-git__fork-sha" title="a20b6189d2dd55172418d1478bf295907433d440
+roxorlt
+2026-10-28 15:28">a20b618</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 L 37 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(v0.10.0): 决策日志真实宿主验收补齐（宿主 v0.13.0；live requested+resolved 落事件）">docs(v0.10.0): 决策日志真实宿主验收补齐（宿主 v0.13.0；live requested+resolved 落事件）</span><code class="kb-git__fork-sha" title="5278d6c3aac719300c3ebc10b706be82c9ab8a4e
+roxorlt
+2026-10-28 15:22">5278d6c</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 L 37 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(v0.10.0): 原生收件箱分支合入主线（8035ba3）+ 合入后自测与真实宿主刷新验收（§1.28）">docs(v0.10.0): 原生收件箱分支合入主线（8035ba3）+ 合入后自测与真实宿主刷新验收（§1.28）</span><code class="kb-git__fork-sha" title="f4833e1421c1de31f6513bcbade85b0a89c45767
+roxorlt
+2026-10-28 14:33">f4833e1</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 L 37 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 9 11 C 37 11, 79 17.6, 79 22"></path><circle class="kb-git__fork-merge-ring kb-git__fork-c0" cx="9" cy="11" r="4.8"></circle><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="2.2"></circle></svg></span><span class="kb-git__fork-subject" title="merge: feat/native-approval-inbox → main（v0.10.0 原生待确认收件箱合并；按版本序补记 CHANGELOG v0.10.0 段 + uiSession 注入声明）">merge: feat/native-approval-inbox → main（v0.10.0 原生待确认收件箱合并；按版本序补记 CHANGELOG v0.10.0 段 + uiSession 注入声明）</span><span class="kb-git__sr">合并提交</span><code class="kb-git__fork-sha" title="8035ba3e91545701a734c471c179ba784e2cee71
+roxorlt
+2026-10-28 14:27">8035ba3</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 L 37 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(v0.13.0): 重启桌面 DSH 后真实宿主复验（health=0.13.0）+ 6 张证据截图">docs(v0.13.0): 重启桌面 DSH 后真实宿主复验（health=0.13.0）+ 6 张证据截图</span><code class="kb-git__fork-sha" title="69c53d70bce7edecb7ed4b7c9297eb0d9a4880d0
+roxorlt
+2026-10-28 13:59">69c53d7</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 L 37 11"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 11 L 37 22"></path><circle class="kb-git__fork-dot kb-git__fork-c2" cx="37" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="feat(v0.14.0): 「分支 / 工作树」升级为 Fork 风格多分支提交图">feat(v0.14.0): 「分支 / 工作树」升级为 Fork 风格多分支提交图</span><code class="kb-git__fork-sha" title="057709822c7ec968aaaa74d5a287040558ba853b
+roxorlt
+2026-10-27 22:57">0577098</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 C 37 6.6, 9 11, 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(v0.13.0): 合入主线（97ad6da）+ dist 删旧重建 + 合入后自测（§1.27）">docs(v0.13.0): 合入主线（97ad6da）+ dist 删旧重建 + 合入后自测（§1.27）</span><code class="kb-git__fork-sha" title="e27dd987c9443c726d623c0a147d3353c9cc5698
+roxorlt
+2026-10-27 22:33">e27dd98</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c3" d="M 9 11 C 25.8 11, 51 17.6, 51 22"></path><circle class="kb-git__fork-merge-ring kb-git__fork-c0" cx="9" cy="11" r="4.8"></circle><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="2.2"></circle></svg></span><span class="kb-git__fork-subject" title="merge: feat/git-branch-viz → main（v0.13.0 卡片详情「分支 / 工作树」可视化）">merge: feat/git-branch-viz → main（v0.13.0 卡片详情「分支 / 工作树」可视化）</span><span class="kb-git__sr">合并提交</span><code class="kb-git__fork-sha" title="97ad6daf455ff5bcb6e3524a33bf051306806638
+roxorlt
+2026-10-27 22:32">97ad6da</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c3" d="M 51 0 L 51 11"></path><path class="kb-git__fork-seg kb-git__fork-c3" d="M 51 11 L 51 22"></path><circle class="kb-git__fork-dot kb-git__fork-c3" cx="51" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-refs"><span class="kb-git__fork-ref" title="feat/git-branch-viz"><span class="kb-git__fork-ref-dot kb-git__fork-c3" aria-hidden="true"></span><code class="kb-git__fork-ref-name">feat/git-branch-viz</code></span></span><span class="kb-git__fork-subject" title="feat(v0.13.0): 卡片详情「分支 / 工作树」可视化（只读 Git 上下文 + 两泳道提交图）">feat(v0.13.0): 卡片详情「分支 / 工作树」可视化（只读 Git 上下文 + 两泳道提交图）</span><code class="kb-git__fork-sha" title="95762defc004538deec095c23443971fc6f06781
+roxorlt
+2026-10-27 16:21">95762de</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c3" d="M 51 0 C 51 6.6, 9 11, 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(v0.11.0): 会话归档真实宿主 UI 验收（宿主 v0.12.0；批量归档 15 个历史会话）+ 6 张证据截图">docs(v0.11.0): 会话归档真实宿主 UI 验收（宿主 v0.12.0；批量归档 15 个历史会话）+ 6 张证据截图</span><code class="kb-git__fork-sha" title="f65b4f191525e6c1c711db48c4e4084c83998365
+roxorlt
+2026-10-27 15:56">f65b4f1</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(v0.12.0): 重启桌面 DSH 后真实宿主复验结果（health=0.12.0）">docs(v0.12.0): 重启桌面 DSH 后真实宿主复验结果（health=0.12.0）</span><code class="kb-git__fork-sha" title="f9843a1b8b0b56c88b58a16f0aab8af89345b36e
+roxorlt
+2026-10-27 09:43">f9843a1</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(v0.12.0): 合并后真实 DSH 宿主复验记录（§1.25）+ 13 张证据截图">docs(v0.12.0): 合并后真实 DSH 宿主复验记录（§1.25）+ 13 张证据截图</span><code class="kb-git__fork-sha" title="e30c6b5cac493f9270e4464d4c589677f13ee8b7
+roxorlt
+2026-10-27 09:34">e30c6b5</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c4" d="M 9 11 C 31.400000000000002 11, 65 17.6, 65 22"></path><circle class="kb-git__fork-merge-ring kb-git__fork-c0" cx="9" cy="11" r="4.8"></circle><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="2.2"></circle></svg></span><span class="kb-git__fork-subject" title="merge: feat/m2-session-target → v0.12.0（多会话主会话切换 + 回复/审批目标）">merge: feat/m2-session-target → v0.12.0（多会话主会话切换 + 回复/审批目标）</span><span class="kb-git__sr">合并提交</span><code class="kb-git__fork-sha" title="547f46c0217611797e52c1f569d685c4f95919e8
+roxorlt
+2026-10-27 09:14">547f46c</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c4" d="M 65 0 L 65 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="feat(v0.10.0+v0.11.0): 决策日志 / 会话归档联动 / 会话运行失败同步（重启后验收）">feat(v0.10.0+v0.11.0): 决策日志 / 会话归档联动 / 会话运行失败同步（重启后验收）</span><code class="kb-git__fork-sha" title="b602285ae3409604231f810d8a31fd41acf8af64
+roxorlt
+2026-10-27 09:09">b602285</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c4" d="M 65 0 L 65 11"></path><path class="kb-git__fork-seg kb-git__fork-c4" d="M 65 11 L 65 22"></path><circle class="kb-git__fork-dot kb-git__fork-c4" cx="65" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-refs"><span class="kb-git__fork-ref" title="feat/m2-session-target"><span class="kb-git__fork-ref-dot kb-git__fork-c4" aria-hidden="true"></span><code class="kb-git__fork-ref-name">feat/m2-session-target</code></span></span><span class="kb-git__fork-subject" title="feat(v0.12.0): 多会话主会话切换写时间线 + 回复/审批目标下拉">feat(v0.12.0): 多会话主会话切换写时间线 + 回复/审批目标下拉</span><code class="kb-git__fork-sha" title="ad30d2a3cb20ca0da16810f6d33cd5d1bfbc7128
+roxorlt
+2026-10-27 08:56">ad30d2a</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c4" d="M 65 0 L 65 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c6" d="M 93 11 L 93 22"></path><circle class="kb-git__fork-dot kb-git__fork-c6" cx="93" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-refs"><span class="kb-git__fork-ref" title="wip/main-20261027"><span class="kb-git__fork-ref-dot kb-git__fork-c6" aria-hidden="true"></span><code class="kb-git__fork-ref-name">wip/main-20261027</code></span></span><span class="kb-git__fork-subject" title="wip: v0.10.0 决策日志 + v0.11.0 会话归档/失败同步（未验证快照，2026-10-27）">wip: v0.10.0 决策日志 + v0.11.0 会话归档/失败同步（未验证快照，2026-10-27）</span><code class="kb-git__fork-sha" title="d50efc94968c23d7046d464d92cc320eac76ddf4
+DSH Agent
+2026-10-27 08:48">d50efc9</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c4" d="M 65 0 L 65 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c6" d="M 93 0 L 93 22"></path><path class="kb-git__fork-seg kb-git__fork-c7" d="M 107 11 L 107 22"></path><circle class="kb-git__fork-dot kb-git__fork-c7" cx="107" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-refs"><span class="kb-git__fork-ref" title="fix/session-turn-failure"><span class="kb-git__fork-ref-dot kb-git__fork-c7" aria-hidden="true"></span><code class="kb-git__fork-ref-name">fix/session-turn-failure</code></span></span><span class="kb-git__fork-subject" title="feat(v0.9.6): 会话运行失败同步到卡片（turn/end error/interrupted/signed-out；自动置失败与恢复）">feat(v0.9.6): 会话运行失败同步到卡片（turn/end error/interrupted/signed-out；自动置失败与恢复）</span><code class="kb-git__fork-sha" title="b3485bc3055972d675fb4a374dba289256160e2a
+DSH Agent
+2026-10-23 17:58">b3485bc</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c4" d="M 65 0 C 65 6.6, 9 11, 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c6" d="M 93 0 C 93 6.6, 9 11, 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c7" d="M 107 0 C 107 6.6, 9 11, 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(v0.9.5): 补充审批提交即改列的生效方式（需重启 DSH）">docs(v0.9.5): 补充审批提交即改列的生效方式（需重启 DSH）</span><code class="kb-git__fork-sha" title="25871b41c3b80955709e762bdc046e7297e11b4e
+roxorlt
+2026-10-23 17:05">25871b4</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 9 11 C 20.200000000000003 11, 37 17.6, 37 22"></path><circle class="kb-git__fork-merge-ring kb-git__fork-c0" cx="9" cy="11" r="4.8"></circle><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="2.2"></circle></svg></span><span class="kb-git__fork-subject" title="merge: 审批提交即改列（fix/approval-resolve-outcome → v0.9.5）">merge: 审批提交即改列（fix/approval-resolve-outcome → v0.9.5）</span><span class="kb-git__sr">合并提交</span><code class="kb-git__fork-sha" title="814c17e71da9337d795d175297937539850ad2fe
+roxorlt
+2026-10-23 17:05">814c17e</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 L 37 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="chore(v0.9.4): 收口并行会话累计改动（UI 精简 / 多题审批翻页 / 抽屉加宽 / 对齐修复）">chore(v0.9.4): 收口并行会话累计改动（UI 精简 / 多题审批翻页 / 抽屉加宽 / 对齐修复）</span><code class="kb-git__fork-sha" title="ffe9ed45e23d9c0ff369ae6cfc5c444d12a21ba0
+roxorlt
+2026-10-23 17:02">ffe9ed4</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 L 37 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 11"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 11 L 79 22"></path><circle class="kb-git__fork-dot kb-git__fork-c5" cx="79" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="feat(v0.10.0): 原生待确认收件箱合并（工具授权 / Agent 提问 / 计划审批）">feat(v0.10.0): 原生待确认收件箱合并（工具授权 / Agent 提问 / 计划审批）</span><code class="kb-git__fork-sha" title="71e602ded9d830c40b4bb25fe55d7f6c9a0cea3f
+roxorlt
+2026-10-23 16:06">71e602d</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 22"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 L 79 22"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 L 37 11"></path><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 11 L 37 22"></path><circle class="kb-git__fork-dot kb-git__fork-c2" cx="37" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.9.1): 审批提交后卡片立即改列（选项 outcome；默认批准进行中/驳回待办）">fix(v0.9.1): 审批提交后卡片立即改列（选项 outcome；默认批准进行中/驳回待办）</span><code class="kb-git__fork-sha" title="ed6d5583efdd741f4727a04de54872cc6fcf10c2
+roxorlt
+2026-10-23 15:56">ed6d558</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c2" d="M 37 0 C 37 6.6, 9 11, 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c5" d="M 79 0 C 79 6.6, 9 11, 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-refs"><span class="kb-git__fork-ref kb-git__fork-ref--remote" title="origin/main"><span class="kb-git__fork-ref-dot kb-git__fork-c1 kb-git__fork-ref-dot--hollow" aria-hidden="true"></span><span class="kb-git__sr">远端</span><code class="kb-git__fork-ref-name">origin/main</code></span></span><span class="kb-git__fork-subject" title="feat(v0.8.0): handoff 交接摘要字段（服务端/工具/详情展示/新会话续接）">feat(v0.8.0): handoff 交接摘要字段（服务端/工具/详情展示/新会话续接）</span><code class="kb-git__fork-sha" title="7da8fff34ff454406b964a7f01fbeec9f9a60e0d
+roxorlt
+2026-10-23 15:32">7da8fff</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.7.3): 已完成列内拖动不再因空白落点掉进「查看全部」">fix(v0.7.3): 已完成列内拖动不再因空白落点掉进「查看全部」</span><code class="kb-git__fork-sha" title="2eec1c7c9bfb850759798e038ed9bbd6df3591cf
+roxorlt
+2026-10-23 15:29">2eec1c7</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.7.2): 详情抽屉「摘要」宽度与正文内容对齐">fix(v0.7.2): 详情抽屉「摘要」宽度与正文内容对齐</span><code class="kb-git__fork-sha" title="422a7ab11e452bc6ddf00d57bade64e8064ad12e
+roxorlt
+2026-10-23 15:02">422a7ab</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.7.2): 竖屏触摸板横滑在整块看板生效 + 轴向锁定不混滚">fix(v0.7.2): 竖屏触摸板横滑在整块看板生效 + 轴向锁定不混滚</span><code class="kb-git__fork-sha" title="184c301dc7ac3f08f97dc08304c817e438625812
+roxorlt
+2026-10-23 15:00">184c301</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.7.1): 卡片内输入框聚焦态双层蓝框">fix(v0.7.1): 卡片内输入框聚焦态双层蓝框</span><code class="kb-git__fork-sha" title="82e0ff109bc363bfb59c3432a819d1f83fb9f90c
+roxorlt
+2026-10-23 14:51">82e0ff1</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.7.1): 折叠卡页脚「未绑定会话」文案与右侧按钮干涉">fix(v0.7.1): 折叠卡页脚「未绑定会话」文案与右侧按钮干涉</span><code class="kb-git__fork-sha" title="270e42a3066f58fb0a13b3d6b3491cc06a5f49cc
+roxorlt
+2026-10-23 14:50">270e42a</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="feat(v0.7.0): 新建卡片工作区/目录/会话建议 + 进行中自动建会话处理 + 详情先选目录补建">feat(v0.7.0): 新建卡片工作区/目录/会话建议 + 进行中自动建会话处理 + 详情先选目录补建</span><code class="kb-git__fork-sha" title="e723c91eeb15628f8a25287d2c8d064409d3cb26
+roxorlt
+2026-10-23 11:53">e723c91</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs(v1): kanban 视觉审计报告（craft 2.8/5，3 批迭代 + 14 张基线截图）">docs(v1): kanban 视觉审计报告（craft 2.8/5，3 批迭代 + 14 张基线截图）</span><code class="kb-git__fork-sha" title="8ca39233e730c0c123de26e8552dc8f42ea1ba07
+roxorlt
+2026-10-23 09:24">8ca3923</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.6.1): 恢复点卡片非交互区展开/收起 + 键盘 Enter/Space 对齐规范">fix(v0.6.1): 恢复点卡片非交互区展开/收起 + 键盘 Enter/Space 对齐规范</span><code class="kb-git__fork-sha" title="353f3de863a54cce8c1898394fa70ee41bf6c1f6
+roxorlt
+2026-10-23 09:21">353f3de</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="feat(v0.6.0): 返回看板气泡与输入框右对齐 + 来源卡片高亮 + ui-animation skill">feat(v0.6.0): 返回看板气泡与输入框右对齐 + 来源卡片高亮 + ui-animation skill</span><code class="kb-git__fork-sha" title="9356c8fce7ea362c5b478db532e135ee38398e69
+roxorlt
+2026-10-23 09:14">9356c8f</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.5.1): 会话返回看板改为输入框上方条件气泡 + OpenDesign 设计/动效 skill 调研">fix(v0.5.1): 会话返回看板改为输入框上方条件气泡 + OpenDesign 设计/动效 skill 调研</span><code class="kb-git__fork-sha" title="fc55e23d946fc66bef6ebadcf2ba279b0208190b
+roxorlt
+2026-10-22 21:32">fc55e23</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="feat(v0.5.0): 待办卡开始推进（移列+启动会话）与会话头部返回看板">feat(v0.5.0): 待办卡开始推进（移列+启动会话）与会话头部返回看板</span><code class="kb-git__fork-sha" title="6b3159a0bd2de019724224e012eb0bd6a19f8024
+roxorlt
+2026-10-22 13:32">6b3159a</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="feat(v0.4.0): 批量选择/批量归档移动 + 已完成自动归档 + 设计规范">feat(v0.4.0): 批量选择/批量归档移动 + 已完成自动归档 + 设计规范</span><code class="kb-git__fork-sha" title="a4ce48ad8f395e63e368c6d50dd7ff1dd88da36f
+roxorlt
+2026-10-22 13:25">a4ce48a</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="chore(v0.3.2): 种子示例卡统一加「示例」标签并修正过时描述">chore(v0.3.2): 种子示例卡统一加「示例」标签并修正过时描述</span><code class="kb-git__fork-sha" title="c7056e66fa08ed89a89e1e678f2923772498e4a5
+roxorlt
+2026-10-22 12:54">c7056e6</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs: 外部 dsh:// deep link 确认不做，仅保留应用内打开会话">docs: 外部 dsh:// deep link 确认不做，仅保留应用内打开会话</span><code class="kb-git__fork-sha" title="3cb43e2a7092263535a24d8a750c4cc812139c93
+roxorlt
+2026-10-22 12:51">3cb43e2</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.3.1): 列表展开审批动作改为左对齐 + mockup/规范同步">fix(v0.3.1): 列表展开审批动作改为左对齐 + mockup/规范同步</span><code class="kb-git__fork-sha" title="03f185de8f80eb3a242d7468eb0bb46c7a2b34fa
+roxorlt
+2026-10-21 18:13">03f185d</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="feat(v0.3): 多问题审批（questions[]/answers）+ Web 逐题组件 + 工具 schema">feat(v0.3): 多问题审批（questions[]/answers）+ Web 逐题组件 + 工具 schema</span><code class="kb-git__fork-sha" title="fffaa590d5b9c4d40ed14f4daaba4eac0ed720e4
+roxorlt
+2026-10-21 17:46">fffaa59</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="fix(v0.2.1): 修复 12 项实测问题 + DSH 0.2.1 会话 API 兼容 + 安全区/主题/快捷键">fix(v0.2.1): 修复 12 项实测问题 + DSH 0.2.1 会话 API 兼容 + 安全区/主题/快捷键</span><code class="kb-git__fork-sha" title="216e88305e3ceabf7111c8596f98baf39edf3a20
+roxorlt
+2026-10-21 16:47">216e883</code></li><li class="kb-git__fork-row"><span class="kb-git__fork-graph" style="width: 116px;"><svg class="kb-git__fork-svg" width="116" height="22" viewBox="0 0 116 22" aria-hidden="true" focusable="false"><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 0 L 9 11"></path><path class="kb-git__fork-seg kb-git__fork-c0" d="M 9 11 L 9 22"></path><circle class="kb-git__fork-dot kb-git__fork-c0" cx="9" cy="11" r="4"></circle></svg></span><span class="kb-git__fork-subject" title="docs: 验证记录版本标注更新">docs: 验证记录版本标注更新</span><code class="kb-git__fork-sha" title="d9948c3fe820fb956b49127d86655a45d43f290e
+roxorlt
+2026-10-21 13:18">d9948c3</code></li></ol></div><p class="kb-git__fork-more">仅显示最近 48 个提交</p></div><div class="kb-git__worktrees"><ul class="kb-git__worktree-list" aria-label="工作树列表"><li class="kb-git__worktree kb-git__worktree--current"><span class="kb-git__worktree-main"><code class="kb-git__worktree-branch" title="main">main</code><span class="kb-git__tag">主工作树</span><span class="kb-git__tag kb-git__tag--current">当前</span><span class="kb-git__ab" title="领先 27 · 落后 0"><span class="kb-git__sr">领先 27 · 落后 0</span><span aria-hidden="true">↑27</span><span aria-hidden="true">↓0</span></span></span><span class="kb-git__worktree-path" title="/Users/roxor/Desktop/dsh/dsh kanban">dsh/dsh kanban</span></li><li class="kb-git__worktree"><span class="kb-git__worktree-main"><code class="kb-git__worktree-branch" title="feat/fork-graph-viz">feat/fork-graph-viz</code><span class="kb-git__ab" title="领先 21 · 落后 0"><span class="kb-git__sr">领先 21 · 落后 0</span><span aria-hidden="true">↑21</span><span aria-hidden="true">↓0</span></span></span><span class="kb-git__worktree-path" title="/Users/roxor/Desktop/dsh/dsh kanban/.agents/worktrees/feat/fork-graph-viz">feat/fork-graph-viz</span></li><li class="kb-git__worktree"><span class="kb-git__worktree-main"><code class="kb-git__worktree-branch" title="feat/git-branch-viz">feat/git-branch-viz</code><span class="kb-git__ab" title="领先 11 · 落后 0"><span class="kb-git__sr">领先 11 · 落后 0</span><span aria-hidden="true">↑11</span><span aria-hidden="true">↓0</span></span></span><span class="kb-git__worktree-path" title="/Users/roxor/Desktop/dsh/dsh kanban/.agents/worktrees/feat/git-branch-viz">feat/git-branch-viz</span></li><li class="kb-git__worktree"><span class="kb-git__worktree-main"><code class="kb-git__worktree-branch" title="feat/m2-session-target">feat/m2-session-target</code><span class="kb-git__ab" title="领先 5 · 落后 0"><span class="kb-git__sr">领先 5 · 落后 0</span><span aria-hidden="true">↑5</span><span aria-hidden="true">↓0</span></span></span><span class="kb-git__worktree-path" title="/Users/roxor/Desktop/dsh/dsh kanban/.agents/worktrees/feat/m2-session-target">feat/m2-session-target</span></li><li class="kb-git__worktree"><span class="kb-git__worktree-main"><code class="kb-git__worktree-branch" title="feat/workline-badges">feat/workline-badges</code><span class="kb-git__ab" title="领先 27 · 落后 0"><span class="kb-git__sr">领先 27 · 落后 0</span><span aria-hidden="true">↑27</span><span aria-hidden="true">↓0</span></span></span><span class="kb-git__worktree-path" title="/Users/roxor/Desktop/dsh/dsh kanban/.agents/worktrees/feat/workline-badges">feat/workline-badges</span></li><li class="kb-git__worktree"><span class="kb-git__worktree-main"><code class="kb-git__worktree-branch" title="feat/workline-summary">feat/workline-summary</code><span class="kb-git__ab" title="领先 25 · 落后 0"><span class="kb-git__sr">领先 25 · 落后 0</span><span aria-hidden="true">↑25</span><span aria-hidden="true">↓0</span></span></span><span class="kb-git__worktree-path" title="/Users/roxor/Desktop/dsh/dsh kanban/.agents/worktrees/feat/workline-summary">feat/workline-summary</span></li></ul></div></div></section>
+    </div>
+    <p class="kb-demo-legend-note">数据来自真实仓库（dsh-kanban，48 个提交、7 条工作线）；样式与详情抽屉一致。</p>
+  </div>
+<script>
+  const canvas = document.getElementById('kb-demo-canvas');
+  const hint = document.getElementById('kb-demo-hint');
+  const legendItems = [...canvas.querySelectorAll('.kb-git__fork-legend-item')];
+  legendItems.forEach((item) => {
+    const dot = item.querySelector('.kb-git__fork-legend-dot');
+    item.dataset.lane = dot ? ([...dot.classList].find((c) => /kb-git__fork-c\d+$/.test(c)) || '') : '';
+  });
+  const rows = [...canvas.querySelectorAll('.kb-git__fork-row')];
+  rows.forEach((row) => {
+    const dot = row.querySelector('.kb-git__fork-dot');
+    const laneClass = dot ? ([...dot.classList].find((c) => /kb-git__fork-c\d+$/.test(c)) || '') : '';
+    const lane = laneClass.match(/c(\d+)$/)?.[1];
+    if (lane === undefined) return;
+    row.addEventListener('mouseenter', () => {
+      canvas.dataset.hoverLane = lane;
+      legendItems.forEach((item) => item.classList.toggle('is-active', item.dataset.lane === laneClass));
+      const names = legendItems.filter((item) => item.dataset.lane === laneClass).map((item) => item.querySelector('.kb-git__fork-legend-name')?.textContent || '').filter(Boolean);
+      hint.innerHTML = names.length ? '正在高亮：<b>' + names.join(' / ') + '</b>（同色泳道与其提交）' : '正在高亮这条泳道';
+    });
+    row.addEventListener('mouseleave', () => {
+      delete canvas.dataset.hoverLane;
+      legendItems.forEach((item) => item.classList.remove('is-active'));
+      hint.textContent = '当前没有悬停 · 试试鼠标移到下面的彩色行上';
+    });
+  });
+  const themeBtn = document.getElementById('kb-demo-theme');
+  themeBtn.addEventListener('click', () => {
+    const dark = document.documentElement.dataset.kanbanTheme === 'dark';
+    if (dark) { delete document.documentElement.dataset.kanbanTheme; themeBtn.textContent = '切换暗色'; }
+    else { document.documentElement.dataset.kanbanTheme = 'dark'; themeBtn.textContent = '切换亮色'; }
+  });
+</script>
+</body>
+</html>

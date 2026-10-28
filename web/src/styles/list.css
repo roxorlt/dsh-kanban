@@ -344,3 +344,16 @@
   font: var(--dsw-font-xxxs-11);
   white-space: nowrap;
 }
+
+/* ------------------------------------------ 列表行「工作线」徽标（v0.15）*/
+/* 与摘要左缘对齐；徽标不渲染（主线/无 cwd）时整行隐藏，不占高度。 */
+
+.kb-list__workline {
+  display: flex;
+  min-width: 0;
+  padding: 0 12px 6px 29px;
+}
+
+.kb-list__workline:empty {
+  display: none;
+}
