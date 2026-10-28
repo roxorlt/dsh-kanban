@@ -7,11 +7,12 @@
  *
  * 纯只读：唯一交互是点击卡片 mini 项打开详情抽屉；数据由 useWorkspaces + groupCardsByWorktree 提供。
  */
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { Card } from '../types';
 import { useI18n } from '../i18n';
 import type { Translate } from '../i18n';
 import { STATUS_TONE } from '../lib/status';
+import { IconChevronDown } from './Icons';
 import { shortenPath } from '../lib/forkGraph';
 import { countBoundSessions, groupCardsByWorktree } from '../lib/useWorkspaces';
 import type { WorkspaceRepoGroup, WorkspaceWorktreeGroup, WorkspacesState } from '../lib/useWorkspaces';
@@ -126,14 +127,30 @@ function WorktreeRow({ repo, worktree, onOpenCard }: WorktreeRowProps) {
 interface RepoSectionProps {
   repo: WorkspaceRepoGroup;
   onOpenCard: (cardId: string) => void;
+  collapsed: boolean;
+  onToggle: (root: string) => void;
 }
 
-/** 一个仓库一块：仓库头 + 该仓库所有工作副本。 */
-function RepoSection({ repo, onOpenCard }: RepoSectionProps) {
+/** 一个仓库一块：可展开/收起的仓库头 + 该仓库所有工作副本。 */
+function RepoSection({ repo, onOpenCard, collapsed, onToggle }: RepoSectionProps) {
   const { t } = useI18n();
+  const panelId = `kb-workspace-panel-${encodeURIComponent(repo.root)}`;
   return (
-    <section className="kb-workspace__repo" aria-label={repo.name}>
+    <section className={`kb-workspace__repo${collapsed ? ' kb-workspace__repo--collapsed' : ''}`} aria-label={repo.name}>
       <header className="kb-workspace__repo-head">
+        <button
+          type="button"
+          className="kb-workspace__repo-toggle"
+          aria-expanded={!collapsed}
+          aria-controls={panelId}
+          aria-label={t(collapsed ? 'workspace.expandRepo' : 'workspace.collapseRepo', { name: repo.name })}
+          title={t(collapsed ? 'workspace.expandRepo' : 'workspace.collapseRepo', { name: repo.name })}
+          onClick={() => onToggle(repo.root)}
+        >
+          <span className={`kb-workspace__repo-chevron${collapsed ? '' : ' kb-workspace__repo-chevron--open'}`} aria-hidden="true">
+            <IconChevronDown />
+          </span>
+        </button>
         <h2 className="kb-workspace__repo-name" title={repo.root}>
           {repo.name}
         </h2>
@@ -144,11 +161,17 @@ function RepoSection({ repo, onOpenCard }: RepoSectionProps) {
           {t('workspace.repoMeta', { worktrees: repo.worktrees.length, cards: repo.cardCount })}
         </span>
       </header>
-      <ul className="kb-workspace__worktrees">
-        {repo.worktrees.map((worktree) => (
-          <WorktreeRow key={worktree.path} repo={repo} worktree={worktree} onOpenCard={onOpenCard} />
-        ))}
-      </ul>
+      {collapsed ? (
+        <p className="kb-workspace__repo-collapsed-hint">
+          {t('workspace.repoCollapsed', { count: repo.worktrees.length })}
+        </p>
+      ) : (
+        <ul className="kb-workspace__worktrees" id={panelId}>
+          {repo.worktrees.map((worktree) => (
+            <WorktreeRow key={worktree.path} repo={repo} worktree={worktree} onOpenCard={onOpenCard} />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -173,9 +196,41 @@ function UnassignedSection({ cards, onOpenCard }: UnassignedSectionProps) {
   );
 }
 
+const COLLAPSED_REPOS_STORAGE_KEY = 'dsh-kanban.workspaces.collapsed';
+
+/** 读取记住的「已收起仓库」（localStorage 不可用时静默返回空）。 */
+function readCollapsedRepos(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_REPOS_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function storeCollapsedRepos(roots: Set<string>): void {
+  try {
+    localStorage.setItem(COLLAPSED_REPOS_STORAGE_KEY, JSON.stringify([...roots]));
+  } catch {
+    // 隐私模式/配额满：忽略，本次会话内仍可收起
+  }
+}
+
 /** 「工作区」视图：顶部摘要 + 按仓库分块 + 未归属块。只读（点击卡片打开详情）。 */
 export function WorkspaceView({ cards, workspaces, onOpenCard }: WorkspaceViewProps) {
   const { t } = useI18n();
+  const [collapsedRepos, setCollapsedRepos] = useState<Set<string>>(readCollapsedRepos);
+  const toggleRepo = useCallback((root: string) => {
+    setCollapsedRepos((prev) => {
+      const next = new Set(prev);
+      if (next.has(root)) next.delete(root);
+      else next.add(root);
+      storeCollapsedRepos(next);
+      return next;
+    });
+  }, []);
   const groups = useMemo(
     () => groupCardsByWorktree(cards, workspaces.repos),
     [cards, workspaces.repos],
@@ -213,7 +268,13 @@ export function WorkspaceView({ cards, workspaces, onOpenCard }: WorkspaceViewPr
       <header className="kb-workspace__summary">{summary}</header>
       {!groups.repos.length ? <p className="kb-workspace__hint">{t('workspace.noReposHint')}</p> : null}
       {groups.repos.map((repo) => (
-        <RepoSection key={repo.root} repo={repo} onOpenCard={onOpenCard} />
+        <RepoSection
+          key={repo.root}
+          repo={repo}
+          onOpenCard={onOpenCard}
+          collapsed={collapsedRepos.has(repo.root)}
+          onToggle={toggleRepo}
+        />
       ))}
       {groups.unassigned.length ? (
         <UnassignedSection cards={groups.unassigned} onOpenCard={onOpenCard} />
