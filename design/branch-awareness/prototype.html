@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分支可视化 · 给非技术用户看的表达方案（原型 v0.1）</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f5f6f7;
+    --bg-hover: rgba(38, 49, 72, 0.06);
+    --text: #0f1115;
+    --text-2: #61666b;
+    --text-3: #81858c;
+    --text-4: #adb2b8;
+    --border: rgba(0, 0, 0, 0.1);
+    --border-strong: rgba(0, 0, 0, 0.16);
+    --blue: #4176e6;
+    --blue-soft: #e4edfd;
+    --green: #22c55e;
+    --green-soft: #e6faed;
+    --amber: #f59e0b;
+    --amber-soft: #fef5e7;
+    --red: #ec1313;
+    --red-soft: #fdeaea;
+    --code: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 32px 56px;
+    background: var(--bg-soft);
+    color: var(--text);
+    font: 13px/20px var(--font);
+  }
+  .page { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 26px; }
+  .page-title { font-size: 20px; line-height: 28px; font-weight: 600; margin: 0; }
+  .page-sub { margin: 6px 0 0; color: var(--text-2); }
+  .concepts {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 14px 16px;
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+  }
+  .concept b { display: block; font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .concept span { color: var(--text-2); font-size: 12px; line-height: 18px; }
+  .concept b em { font-style: normal; color: var(--text-3); font-weight: 400; font-size: 11px; margin-left: 4px; }
+
+  .screen {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .screen-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 16px 20px 12px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .variant-tag {
+    flex: none;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--text);
+    color: #fff;
+    font-size: 11px;
+    line-height: 18px;
+  }
+  .screen-head h2 { margin: 0; font-size: 15px; line-height: 22px; font-weight: 600; }
+  .screen-head p { margin: 0; color: var(--text-2); font-size: 12px; }
+  .screen-body { padding: 18px 20px 20px; }
+  .notes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 22px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 0.5px dashed var(--border);
+    color: var(--text-2);
+    font-size: 12px;
+  }
+  .notes b { color: var(--text); font-weight: 600; }
+
+  /* grid 里的小标签不要被拉满整格 */
+  .list-row > *, .ov-row > *, .wt-card > * { justify-self: start; }
+  .list-row > *, .ov-row > * { min-width: 0; }
+  .ov-row > .rel, .ov-row > .wt-name { justify-self: stretch; }
+  .wt-card > .wt-head, .wt-card > .cards-mini { justify-self: stretch; }
+
+  /* ---------- 通用小组件 ---------- */
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .dot--blue { background: var(--blue); }
+  .dot--green { background: var(--green); }
+  .dot--amber { background: var(--amber); }
+  .dot--gray { background: var(--text-4); }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--bg-soft);
+    color: var(--text-2);
+    font-size: 11px;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+  .pill--blue { background: var(--blue-soft); color: var(--blue); }
+  .pill--green { background: var(--green-soft); color: #15803d; }
+  .pill--amber { background: var(--amber-soft); color: #b45309; }
+  .pill--red { background: var(--red-soft); color: var(--red); }
+  .mono { font-family: var(--code); font-size: 11px; }
+  .muted { color: var(--text-3); }
+  .cap { color: var(--text-4); font-size: 11px; }
+
+  /* 卡片（V1） */
+  .board-mock { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+  .board-col { display: flex; flex-direction: column; gap: 10px; }
+  .col-head { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12px; font-weight: 600; padding: 0 2px; }
+  .col-head .cap { font-weight: 400; }
+  .card {
+    padding: 12px 14px;
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  }
+  .card + .card { margin-top: 10px; }
+  .card-title { font-size: 13px; line-height: 20px; font-weight: 600; margin: 0 0 4px; }
+  .card-text { margin: 0 0 8px; color: var(--text-2); font-size: 12px; line-height: 18px; }
+  .card-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .branch-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 7px;
+    border: 0.5px solid var(--border);
+    background: var(--bg-soft);
+    font-size: 11px;
+    color: var(--text-2);
+  }
+  .branch-tag b { color: var(--text); font-weight: 500; }
+  .branch-tag--active { border-color: rgba(65, 118, 230, 0.35); background: #f4f8ff; }
+  .branch-tag--done { border-color: rgba(34, 197, 94, 0.35); background: #f4fdf7; }
+  .branch-tag--warn { border-color: rgba(245, 158, 11, 0.4); background: #fffaf0; }
+
+  /* 列表（V1 备选） */
+  .list-mock { border: 0.5px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .list-row { display: grid; grid-template-columns: 1.4fr 1fr 0.9fr 0.9fr; gap: 10px; padding: 9px 12px; border-top: 0.5px solid var(--border); font-size: 12px; align-items: center; }
+  .list-row:first-child { border-top: 0; }
+  .list-head { background: var(--bg-soft); color: var(--text-3); font-size: 11px; }
+
+  /* 总览（V2） */
+  .overview {
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .overview-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    background: var(--bg-soft);
+    border-bottom: 0.5px solid var(--border);
+  }
+  .overview-head h3 { margin: 0; font-size: 13px; font-weight: 600; }
+  .overview-head .cap { margin-left: auto; }
+  .tab { display: inline-flex; padding: 2px; border-radius: 8px; background: rgba(0, 0, 0, 0.05); gap: 2px; }
+  .tab span { padding: 3px 10px; border-radius: 6px; font-size: 11px; color: var(--text-3); }
+  .tab .on { background: #fff; color: var(--text); box-shadow: 0 0 0 0.5px var(--border); }
+  .ov-row {
+    display: grid;
+    grid-template-columns: 26px 1.35fr 0.9fr 1.1fr 1fr 0.85fr;
+    gap: 10px;
+    align-items: center;
+    padding: 11px 14px;
+    border-top: 0.5px solid var(--border);
+    font-size: 12px;
+  }
+  .ov-row:first-of-type { border-top: 0; }
+  .ov-row--selected { background: #f7faff; }
+  .ov-row:hover { background: var(--bg-hover); }
+  .wt-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .wt-name b { font-weight: 600; font-size: 12px; }
+  .bar { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: rgba(0,0,0,.06); }
+  .bar i { display: block; height: 100%; }
+  .rel { display: flex; flex-direction: column; gap: 4px; }
+  .rel span { color: var(--text-2); font-size: 11px; }
+
+  /* 工作区地图（V3） */
+  .wt-map { display: flex; flex-direction: column; gap: 10px; }
+  .wt-card {
+    display: grid;
+    grid-template-columns: 30px 1.25fr 1.35fr 0.9fr;
+    gap: 14px;
+    align-items: center;
+    padding: 12px 14px;
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+  }
+  .folder-icon {
+    width: 26px; height: 22px; border-radius: 5px;
+    background: var(--bg-soft);
+    border: 0.5px solid var(--border);
+    position: relative;
+  }
+  .folder-icon::before {
+    content: ""; position: absolute; left: 3px; top: -4px;
+    width: 10px; height: 4px; border-radius: 3px 3px 0 0;
+    background: var(--bg-soft); border: 0.5px solid var(--border); border-bottom: 0;
+  }
+  .wt-head { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .wt-head b { font-size: 12px; }
+  .cards-mini { display: flex; flex-direction: column; gap: 4px; }
+  .cards-mini span { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 11px; }
+
+  /* 抽屉详情（V4） */
+  .drawer-mock {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 20px;
+    align-items: start;
+  }
+  .board-faded { opacity: 0.45; filter: saturate(0.7); }
+  .drawer {
+    border: 0.5px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+  }
+  .drawer-head { padding: 14px 16px 10px; border-bottom: 0.5px solid var(--border); }
+  .drawer-head .cap { margin-bottom: 4px; }
+  .drawer-head h3 { margin: 0; font-size: 15px; line-height: 22px; font-weight: 600; }
+  .summary-strip {
+    margin: 12px 16px 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f4f8ff;
+    color: var(--text);
+    font-size: 12px;
+    line-height: 19px;
+  }
+  .summary-strip b { color: var(--blue); font-weight: 600; }
+  .kv { margin: 12px 16px 16px; border: 0.5px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .kv-row { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 8px 12px; border-top: 0.5px solid var(--border); font-size: 12px; }
+  .kv-row:first-child { border-top: 0; }
+  .kv-row dt { color: var(--text-3); margin: 0; }
+  .kv-row dd { margin: 0; color: var(--text); }
+  .advanced {
+    margin: 0 16px 16px;
+    padding: 10px 12px;
+    border: 0.5px dashed var(--border);
+    border-radius: 10px;
+    color: var(--text-2);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .advanced .mono { color: var(--text-3); }
+
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 6px 18px;
+    padding: 12px 16px;
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+    color: var(--text-2);
+    font-size: 12px;
+  }
+  .legend b { color: var(--text); font-weight: 600; }
+  .recommend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .rec {
+    padding: 14px 16px;
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: 12px;
+  }
+  .rec h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+  .rec p { margin: 0; color: var(--text-2); font-size: 12px; line-height: 18px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1 class="page-title">分支可视化 · 给「不问代码」的人看的方案（原型 v0.1）</h1>
+    <p class="page-sub">同一份看板数据，四种表达。目标是：不用懂 git，也能回答「这张卡在哪条线上、做完没有、和主线/线上差多少」。</p>
+  </header>
+
+  <section class="concepts" aria-label="术语对照">
+    <div class="concept"><b>工作线 <em>分支</em></b><span>一条独立的改动线。可以随便改，不影响主线。</span></div>
+    <div class="concept"><b>主线 <em>main</em></b><span>大家共用的主版本。工作线最后要并回主线。</span></div>
+    <div class="concept"><b>线上 <em>远端 / GitHub</em></b><span>别人能看到的那一份。工作线可以只在自己电脑上。</span></div>
+    <div class="concept"><b>工作副本 <em>worktree</em></b><span>同一个项目的另一个文件夹，可以几条线同时开工。</span></div>
+  </section>
+
+  <!-- ============ V1 卡片面徽标 ============ -->
+  <section class="screen" id="v1">
+    <div class="screen-head">
+      <span class="variant-tag">方案 1</span>
+      <h2>卡片上直接写「工作线状态」</h2>
+      <p>最低成本：不打开详情就能扫到</p>
+    </div>
+    <div class="screen-body">
+      <div class="board-mock">
+        <div class="board-col">
+          <div class="col-head"><span class="dot dot--blue"></span>进行中 <span class="cap">4</span></div>
+          <article class="card">
+            <h3 class="card-title">修复审批卡住不动的 bug</h3>
+            <p class="card-text">提交审批后偶尔卡在「待确认」，已定位到状态同步逻辑。</p>
+            <div class="card-foot">
+              <span class="branch-tag branch-tag--warn"><span class="dot dot--amber"></span>工作线 <b>fix/approval-stuck</b></span>
+              <span class="pill pill--amber">比主线多 3 处改动</span>
+              <span class="pill">还没同步线上</span>
+            </div>
+          </article>
+          <article class="card">
+            <h3 class="card-title">看板详情里的分支图看不清</h3>
+            <p class="card-text">按「像 Fork 那样的多分支图」重做，已合入主线。</p>
+            <div class="card-foot">
+              <span class="branch-tag branch-tag--done"><span class="dot dot--green"></span>工作线 <b>feat/fork-graph-viz</b></span>
+              <span class="pill pill--green">已并入主线</span>
+              <span class="pill pill--green">已同步线上</span>
+            </div>
+          </article>
+        </div>
+        <div class="board-col">
+          <div class="col-head"><span class="dot dot--gray"></span>列表视图里同样能看 <span class="cap">不用点开卡片</span></div>
+          <div class="list-mock">
+            <div class="list-row list-head"><span>卡片</span><span>工作线</span><span>和主线比</span><span>线上</span></div>
+            <div class="list-row"><span>修复审批卡住不动的 bug</span><span class="mono">fix/approval-stuck</span><span class="pill pill--amber">多 3 / 少 0</span><span class="pill">未同步</span></div>
+            <div class="list-row"><span>看板详情分支图重做</span><span class="mono">feat/fork-graph-viz</span><span class="pill pill--green">已并入</span><span class="pill pill--green">已同步</span></div>
+            <div class="list-row"><span>整理发布说明</span><span class="mono">docs/release-notes</span><span class="pill pill--amber">多 1 / 少 2</span><span class="pill">未同步</span></div>
+            <div class="list-row"><span>老分支清理</span><span class="mono">chore/legacy-cleanup</span><span class="pill">落后主线 5</span><span class="pill">本地</span></div>
+          </div>
+          <div class="notes">
+            <span><b>数据前提：</b>卡片要记录「属于哪条工作线」。可由 agent 开始推进 / 新建会话时自动写入。</span>
+          </div>
+        </div>
+      </div>
+      <div class="notes">
+        <span><b>优点：</b>零点击成本，看板、列表、搜索结果里都能用。</span>
+        <span><b>代价：</b>卡片会多一行信息；需要数据映射。</span>
+        <span><b>建议文案：</b>「工作线」而不是「分支」，「多 3 处改动 / 已并入主线 / 还没同步」而不是 ↑3↓0。</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ V2 看板分支总览 ============ -->
+  <section class="screen" id="v2">
+    <div class="screen-head">
+      <span class="variant-tag">方案 2</span>
+      <h2>看板顶部「工作线总览」</h2>
+      <p>回答「现在有几条线在跑、各自到哪一步」</p>
+    </div>
+    <div class="screen-body">
+      <div class="overview">
+        <div class="overview-head">
+          <h3>工作线</h3>
+          <span class="cap">8 条 · 2 条在进行 · 6 条已并入主线</span>
+          <div class="tab" style="margin-left:auto"><span class="on">按工作线</span><span>按卡片</span></div>
+        </div>
+        <div class="ov-row ov-row--selected">
+          <span class="dot dot--blue"></span>
+          <span class="wt-name"><b>fix/approval-stuck</b><span class="cap">2 张卡片 · 最近改动 12 分钟前</span></span>
+          <span class="pill pill--blue">进行中</span>
+          <div class="rel"><div class="bar"><i style="width:62%;background:var(--blue)"></i><i style="width:0"></i></div><span>比主线多 3 处改动 · 少 0</span></div>
+          <span class="pill">还没同步到线上</span>
+          <span class="mono muted">工作副本 · 主文件夹</span>
+        </div>
+        <div class="ov-row">
+          <span class="dot dot--blue"></span>
+          <span class="wt-name"><b>feat/branch-badge</b><span class="cap">1 张卡片 · 最近改动 1 小时前</span></span>
+          <span class="pill pill--blue">进行中</span>
+          <div class="rel"><div class="bar"><i style="width:40%;background:var(--blue)"></i></div><span>比主线多 5 处改动 · 少 2</span></div>
+          <span class="pill">还没同步到线上</span>
+          <span class="mono muted">.worktrees/feat-branch-badge</span>
+        </div>
+        <div class="ov-row">
+          <span class="dot dot--green"></span>
+          <span class="wt-name"><b>feat/fork-graph-viz</b><span class="cap">3 张卡片 · 最近改动 昨天 22:51</span></span>
+          <span class="pill pill--green">已并入主线</span>
+          <div class="rel"><div class="bar"><i style="width:100%;background:var(--green)"></i></div><span>和主线完全一致</span></div>
+          <span class="pill pill--green">已同步线上</span>
+          <span class="mono muted">已合入 · 可归档</span>
+        </div>
+        <div class="ov-row">
+          <span class="dot dot--amber"></span>
+          <span class="wt-name"><b>docs/release-notes</b><span class="cap">1 张卡片 · 最近改动 3 天前</span></span>
+          <span class="pill pill--amber">停滞</span>
+          <div class="rel"><div class="bar"><i style="width:80%;background:var(--amber)"></i></div><span>比主线多 1 处 · 少 5 处</span></div>
+          <span class="pill">还没同步线上</span>
+          <span class="mono muted">工作副本 · .worktrees/docs</span>
+        </div>
+      </div>
+      <div class="notes">
+        <span><b>点一条工作线：</b>看板只显示这条线的卡片；再点「按卡片」视图恢复。</span>
+        <span><b>优点：</b>一次看清所有线、卡在哪些线、哪些已并入主线、哪些停滞。</span>
+        <span><b>数据前提：</b>卡片 ↔ 工作线映射 + 现有 git 数据（v0.14 已具备）。</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ V3 并行工作区地图 ============ -->
+  <section class="screen" id="v3">
+    <div class="screen-head">
+      <span class="variant-tag">方案 3</span>
+      <h2>「并行工作区」地图</h2>
+      <p>回答「哪个任务开在哪个文件夹里」——worktree 场景专用</p>
+    </div>
+    <div class="screen-body">
+      <div class="wt-map">
+        <div class="wt-card">
+          <span class="folder-icon"></span>
+          <div class="wt-head"><b>dsh kanban（主文件夹）</b><span class="cap">主线 · 3 张卡片在跑 · 有未提交改动</span></div>
+          <div class="cards-mini">
+            <span><span class="dot dot--blue"></span>分支图反馈整理</span>
+            <span><span class="dot dot--blue"></span>决策日志验收</span>
+            <span><span class="dot dot--gray"></span>发布说明更新</span>
+          </div>
+          <span class="pill pill--amber">有未保存改动</span>
+        </div>
+        <div class="wt-card">
+          <span class="folder-icon"></span>
+          <div class="wt-head"><b>.worktrees/feat-branch-badge</b><span class="cap">工作副本：feat/branch-badge · 1 张卡片 · 干净</span></div>
+          <div class="cards-mini"><span><span class="dot dot--blue"></span>卡片加工作线徽标</span></div>
+          <span class="pill">可以安全合入</span>
+        </div>
+        <div class="wt-card">
+          <span class="folder-icon"></span>
+          <div class="wt-head"><b>.worktrees/feat-fork-graph-viz</b><span class="cap">工作副本：feat/fork-graph-viz · 已完成</span></div>
+          <div class="cards-mini"><span><span class="dot dot--green"></span>分支图重做（已并入主线）</span></div>
+          <span class="pill pill--green">可删除工作副本</span>
+        </div>
+      </div>
+      <div class="notes">
+        <span><b>优点：</b>解决「同时开了几个文件夹、哪个任务在哪」；能提示未保存改动 / 可安全清理。</span>
+        <span><b>数据：</b>git worktree 列表 + 卡片 cwd / 会话 cwd（现有接口已有）。</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ V4 详情抽屉改写 ============ -->
+  <section class="screen" id="v4">
+    <div class="screen-head">
+      <span class="variant-tag">方案 4</span>
+      <h2>详情抽屉：先说人话，图作为「进阶」</h2>
+      <p>不改 v0.14 的图，只改它上面的文案与信息顺序</p>
+    </div>
+    <div class="screen-body">
+      <div class="drawer-mock">
+        <div class="board-faded">
+          <div class="board-col">
+            <div class="col-head"><span class="dot dot--blue"></span>进行中</div>
+            <article class="card"><h3 class="card-title">分支图反馈整理</h3><p class="card-text">汇总反馈、合入 v0.14…</p></article>
+            <article class="card"><h3 class="card-title">决策日志验收</h3><p class="card-text">真实宿主事件补齐…</p></article>
+          </div>
+        </div>
+        <div class="drawer">
+          <div class="drawer-head">
+            <div class="cap">DSH 看板 · 进行中 · dsh-kanban</div>
+            <h3>看板详情里的分支图看不清</h3>
+          </div>
+          <div class="summary-strip">
+            这张卡片在 <b>「feat/branch-badge」工作线</b>上：<b>比主线多 3 处改动</b>，<b>还没同步到线上</b>；主线在那之后又有 <b>1 处改动</b>没并进来。
+          </div>
+          <div class="kv">
+            <div class="kv-row"><dt>在哪条线</dt><dd>feat/branch-badge（工作副本：.worktrees/feat-branch-badge）</dd></div>
+            <div class="kv-row"><dt>和主线比</dt><dd>多 3 处改动 · 少 1 处改动</dd></div>
+            <div class="kv-row"><dt>和线上比</dt><dd>还没同步（本地 3 处改动只在你的电脑上）</dd></div>
+            <div class="kv-row"><dt>什么时候做完</dt><dd>并回主线后，这张卡会自动显示「已并入主线」</dd></div>
+            <div class="kv-row"><dt>其它工作线</dt><dd>看板共有 8 条工作线，其中 2 条在进行</dd></div>
+          </div>
+          <div class="advanced">
+            <span class="pill">进阶</span>
+            查看提交图（给需要细看的人）<span class="mono muted" style="margin-left:auto">共 45 个改动 · 展开 ›</span>
+          </div>
+        </div>
+      </div>
+      <div class="notes">
+        <span><b>优点：</b>非技术用户先得到结论；图与 ↑↓ 折叠在「进阶」里，不影响专业用户。</span>
+        <span><b>数据：</b>v0.14 的 git 数据可直接支撑，基本只改前端文案与顺序。</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="legend">
+    <span><b>统一用词：</b></span>
+    <span>分支 → 工作线</span>
+    <span>主分支 / main → 主线</span>
+    <span>远端 / origin → 线上</span>
+    <span>提交 → 改动（处）</span>
+    <span>worktree → 工作副本</span>
+    <span>ahead / behind → 多 N 处 / 少 N 处</span>
+    <span>merge → 并入主线</span>
+    <span>dirty → 有未保存改动</span>
+  </section>
+
+  <section>
+    <h2 class="page-title" style="font-size:15px;line-height:22px;margin-bottom:10px">建议落地顺序</h2>
+    <div class="recommend">
+      <div class="rec"><h4>第一步：方案 4（改写详情抽屉）</h4><p>只改前端文案与顺序，数据已具备，立刻能让非技术用户看懂单张卡片。</p></div>
+      <div class="rec"><h4>第二步：方案 1（卡片徽标）</h4><p>配合「agent 开始推进时把工作线写到卡片」，在看板/列表/搜索里直接显示。</p></div>
+      <div class="rec"><h4>第三步：方案 2（工作线总览）</h4><p>解决「多张卡片、多条线」的总览问题；方案 3 作为进阶的并行工作区面板。</p></div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
