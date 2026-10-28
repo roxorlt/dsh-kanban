@@ -414,7 +414,7 @@
 | 分支 | `feat/git-branch-viz`（基于 `f65b4f1`；已合入主线 merge `97ad6da`，见 §1.27） |
 | 已知限制 | 远端只识别 `origin`（无 origin 时只显示本地关系）；提交图只比较当前分支与主分支/上游两条线，不画任意多分支拓扑；抽屉打开期间不自动刷新（4s 缓存 + 打开时请求，契约 §1）；工作树列表上限 8 个（多余数量提示）；桌面真实宿主复验见 §1.27（合入主线并重启 DSH 后执行） |
 
-## 1.27 v0.13.0 合入主线与真实宿主复验（2026-10-27）
+## 1.27 v0.13.0 合入主线与真实宿主复验（2026-10-27 合入 / 10-28 重启复验）
 
 | 项 | 结果 |
 |---|---|
@@ -422,7 +422,15 @@
 | 版本头 | `package.json` / `web/package.json` → **0.13.0**；`files` 含 `lib/git.js`；`CHANGELOG` v0.13.0 置顶；README 状态行 / 功能 / 已验证 / 截图表已含 v0.13 |
 | dist 重建 | 合并后先删除旧产物（`rm -rf web/dist`）再 `npm --prefix web run build`（`tsc --noEmit && vite build`）：`index-D4ScdgBg.css`（93.79 KB，gzip 14.30 KB）/ `index-uM6BVSce.js`（376.16 KB，gzip 113.03 KB），与分支构建内容哈希一致（可复现），重建后工作树干净 |
 | 合入后自测 | 服务端 `node --test test/*.test.mjs` **162/162**；Web `vitest` **25 文件 / 249 测试**；`tsc --noEmit` 0 error；令牌 lint 9 个 CSS 0 error / 0 warning |
-| 桌面 DSH 重启后真实宿主 | **待重启后复验**（health 应为 0.13.0；真实卡片详情出现「分支 / 工作树」区块、非 git 卡隐藏、暗色与 390 竖屏抽查） |
+| 桌面 DSH 重启后真实宿主（**2026-10-28 13:57 重启**，端口 56161 → **49463**，进程 PID 28038） | `GET /api/kanban/health` → **`version:"0.13.0"`**、`dataDir:"~/.dsh-kanban"`、revision 351；`/dsh-kanban/` 引用 **`assets/index-D4ScdgBg.css` / `assets/index-uM6BVSce.js`**，与本地 `web/dist` 同名且字节一致（93,791 / 383,470 B）——重启后加载的是合并后构建产物；真实数据 **52 张卡**正常读出。重启口径：首次提交「已重启」时宿主进程实际未退出（PID 32933 启动于 10-27 13:37、health 仍 0.12.0、端口仍 56161），macOS 上需 **⌘Q / 菜单「退出」** 真正结束进程后再打开，第二次重启才生效 |
+| 真实卡「分支 / 工作树」区块（真实宿主 UI 脚本 **44/44 断言 PASS**） | 打开真实卡 `card-a57f6dbf`（cwd=主仓库）：区块出现；chips 3 个（分支 `main` 未推送 / 工作树「主工作树」/ 远端跟踪 `origin/main` ↑13↓0）；两泳道图 12 行 + 分叉点 1 个，refs `HEAD` / `main` / `origin/main`；**工作树列表 4 行**（`main` 当前 + `feat/fork-graph-viz` ↑14 / `feat/git-branch-viz` ↑11 / `feat/m2-session-target` ↑5），当前工作树高亮唯一；截图见下 |
+| 演示仓库分叉场景（真实宿主 API 脚本 **42/42 断言 PASS**） | `node scripts/demo-git-repo.mjs` → 6 张临时卡：`feat/graph` linked worktree（`isWorktree=true`、base ↑3↓1、upstream 本地 1 提交未推、3 个工作树且当前高亮）；`feat/long` base ↑15（12 行上限下分叉点仍可见、中段「还有 3 个提交」）；主仓库 `base.kind=upstream`（origin/main ↑1↓1）；非 git / 目录不存在 / 无 cwd 分别返回 `not_git` / `missing` / `no_cwd`；真实 linked worktree（`.agents/worktrees/feat/git-branch-viz`）卡返回 `isWorktree=true`、分支 `feat/git-branch-viz`；临时卡全部归档，`/state` 无残留 |
+| 隐藏与降级 | 非 git / 无 cwd / 目录不存在三种卡片抽屉中 `.kb-git` 整块隐藏且无占位；全程 **console error 0、pageerror 0、`/api/kanban/` 4xx/5xx 0** |
+| 暗色 / 390 竖屏 | Chromium 1440×900 DPR2 暗色下区块与分叉点正常；390×844 竖屏区块出现，抽屉 `scrollWidth == clientWidth`（390/390）、区块 358/358，无横向溢出；长 subject 省略 |
+| 旧接口回归 | 重启后 `GET /decisions/meta`（35 条、waiting 0）、`GET /sessions/archive`（`available:true`）与 v0.13 的 `GET /cards/:id/git` 共存；`/state` 52 卡正常 |
+| 截图 | `docs/assets/screens/git-realhost-section-real-card.png`（真实卡区块元素级：chips + 两泳道 + 分叉点 + **4 工作树列表**）、`git-realhost-existing-card.png`（真实卡右侧抽屉全貌）、`git-realhost-worktree-light.png`（演示 linked worktree 全貌）、`git-realhost-worktree-dark.png`（暗色）、`git-realhost-worktree-portrait.png`（390 竖屏）、`git-realhost-hidden-nogit.png`（非 git 卡：区块隐藏、无报错） |
+| 一次性脚本 | 真实宿主 UI 脚本 `/tmp/realhost-verify/verify.mjs`（44 断言 + `--expect-version` / `--real-card`）、API 脚本 `/tmp/lead-v013/realhost-check.py`（42 断言）、完整 results JSON 与原始截图均在 `/tmp/lead-v013/`，属一次性验证资产，未纳入仓库 |
+| 生效方式 | v0.13.0 含服务端改动（`lib/git.js` / `lib/routes.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。旧服务端（< v0.13）无该接口时前端按 404 静默隐藏。**已于 2026-10-28 13:57 重启桌面 DSH 完成，health=0.13.0** |
 
 ## 2. 自动化测试
 
@@ -602,3 +610,13 @@ curl -s "http://127.0.0.1:4609/api/kanban/cards/<cardId>/git" | python3 -m json.
 #    非 git / 无 cwd / 目录不存在的卡片该区块不出现；390 竖屏与暗色主题同样复查
 #    本次 16 项 Playwright 断言脚本与截图脚本为一次性资产，保留在 /tmp/git-viz-verify/tools/（未入库），
 #    结果与证据见 §1.26。
+
+# ⑤ v0.13.0 重启桌面 DSH 后的真实宿主复验（一次性脚本，未入库；端口取重启后启 runtime context）
+#    UI：44 项断言（含 --expect-version / --real-card；--cleanup 自动归档临时卡）
+node /tmp/realhost-verify/verify.mjs --base http://127.0.0.1:<新端口> \
+  --out /tmp/lead-v013/shots-realhost --cleanup --expect-version 0.13.0 --real-card card-a57f6dbf
+#    API：42 项断言（health / dist 一致性 / 真实卡 4 工作树 / 演示仓库分叉 / 不可用原因 / 旧接口回归）
+python3 /tmp/lead-v013/realhost-check.py --base http://127.0.0.1:<新端口> \
+  --repo "/Users/roxor/Desktop/dsh/dsh kanban" --demo-root /tmp/dsh-kanban-git-demo \
+  --expect-version 0.13.0 --real-card card-a57f6dbf --out /tmp/lead-v013/realhost-results.json
+#    结果与证据见 §1.27；重启口径：需 ⌘Q / 菜单「退出」真正结束宿主进程，仅关窗口不会重载服务端

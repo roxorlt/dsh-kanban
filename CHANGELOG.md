@@ -12,9 +12,9 @@
 - 测试：服务端 `node --test` **162/162**（新增 `test/git.test.mjs` 8 例：普通 / detached / 分叉 + linked worktree / upstream 领先落后 / origin/HEAD 探测 / 11→8 工作树截断 / 提交上限 / 全部不可用原因 / `?cwd=` 采用与忽略；`test/routes.test.mjs` +4 例：404 / 405 / 200 available true·false / HEAD / `?cwd=` 候选）；Web `vitest` **25 文件 / 249 测试**（新增 `gitGraph` 24 例，含分叉点优先截断、工作树计数隐藏）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 9 个 CSS 0 error / 0 warning。
 - 真实数据验收：`node scripts/demo-git-repo.mjs` 造演示仓库（main 与 origin/main 分叉、`feat/graph` / `feat/long` 两个 linked worktree、非 git 目录），`scripts/dev-server.mjs` 起独立服务 + 6 张真实卡片；Chromium 1440×900 DPR2 / 390×844、亮/暗共 **16 项 Playwright 断言全过**、console error 0 / pageerror 0 / 4xx 0、无横向溢出；`feat/long` 领先 15 条时 12 行上限下分叉点仍可见（9 ahead + 3 shared + 中段「还有 3 个提交」）；非 git / 无 `cwd` / 目录不存在三种卡区块整块隐藏；`?cwd=` 跨仓库候选被忽略。证据 `docs/assets/screens/git-branch-*.png`（8 张），验证记录 `docs/06-verification.md` §1.26。
 - 版本与服务端文件白名单：`package.json` / `web/package.json` → **0.13.0**，`files` 补 `lib/git.js`（否则发版缺文件、`lib/routes.js` 的 import 会在宿主里失败）。
-- 生效方式：含服务端改动（`lib/git.js` / `lib/routes.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。旧服务端（< v0.13）无该接口时前端按 404 静默隐藏，其余功能不受影响。
+- 生效方式：含服务端改动（`lib/git.js` / `lib/routes.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。旧服务端（< v0.13）无该接口时前端按 404 静默隐藏，其余功能不受影响。**已于 2026-10-28 重启桌面 DSH 验证 `health=0.13.0`**，`/dsh-kanban/` 服务的 dist 与合并后构建同名同字节。
 - 已知限制：只比较「当前分支 vs 主分支/上游」两条泳道，不画任意多分支拓扑；远端只识别 `origin`；数据是打开详情时的快照（4s 缓存），不随新提交自动刷新；工作树列表上限 8 个。
-- 分支：`feat/git-branch-viz`（基于 `f65b4f1`）；已合入主线（merge `97ad6da`，2026-10-27，合入时无冲突），真实宿主复验待重启桌面 DSH 后执行（步骤见 docs/06 §6，结果见 §1.27）。
+- 分支与真实宿主：`feat/git-branch-viz`（基于 `f65b4f1`）已合入主线（merge `97ad6da`，2026-10-27，合入时无冲突）；2026-10-28 13:57 重启桌面 DSH（端口 56161 → 49463）后真实宿主复验通过：health=0.13.0、真实卡 `card-a57f6dbf`（cwd=主仓库）区块出现且工作树列表 4 行（main 当前 + feat/fork-graph-viz / feat/git-branch-viz / feat/m2-session-target）、两泳道 12 行含分叉点；演示仓库 linked worktree / 领先 15 截断 / 非 git·无 cwd·目录不存在隐藏 / 暗色 / 390 竖屏；真实宿主 UI 44/44 + API 42/42 断言全过、console error 0 / pageerror 0 / 4xx 0，v0.10/v0.11 接口共存（证据 `docs/assets/screens/git-realhost-*.png`，记录 docs/06 §1.27）。
 
 ## v0.12.0 — 2026-10-27
 
