@@ -533,8 +533,8 @@
 | 单测 | 服务端 `node --test` **206/206**（新增 14：Phase A 字段 + 软删/删分支/脏/未合并/主副本/卡片占用/任意路径/locked/trash 过期/缓存失效）；Web `vitest` **27 文件 / 294 例**（新增 21：状态分类/清理判定/错误码/归一化）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 10 CSS 0/0 |
 | 真实浏览器验收（dev-server + 演示仓库真实 git；1440×900） | 工作区展示 2 仓库 13 工作副本：`feat/cleanup-demo` 可安全清理（已并入主线/没有远端/干净）、`feat/graph`/`feat/long` 按钮 disabled「有卡片在跑」、主工作副本 disabled「主工作副本不能清理」；安全清理 → 第一层确认（删分支默认勾选）→ 成功 toast「已清理并删除本地分支 feat/cleanup-demo（回收站保留 7 天）」、行消失、`git worktree list` 移除、目录进 trash；未合并 `feat/unmerged-demo` → 第二层危险确认列出「还有 1 处改动没并入主线」→ 勾选后清理成功（未勾删分支则分支保留）；全程 console error 0 / 4xx 0（cleanup 预期 200） |
 | 截图 | `docs/assets/screens/git-workspaces-cleanup-light.png`、`-cleanup-dialog.png`、`-cleanup-danger.png` |
-| 生效方式 | 含服务端改动，**需合入 main 并重启 DSH**；回收站 `~/.dsh-kanban/trash`（7 天自动清理） |
-| 分支 | `feat/worktree-cleanup`（基于 v0.16.1 主线 `0d92b04`）；版本 0.17.0 |
+| 生效方式 | 含服务端改动，**已合入 main（merge `8d37ba7`），需重启 DSH 后生效**；回收站 `~/.dsh-kanban/trash`（7 天自动清理） |
+| 分支 | `feat/worktree-cleanup`（基于 v0.16.1 主线 `0d92b04`），**已合入 main（merge `8d37ba7`）**；版本 0.17.0；合入后自测 206/206、294 例通过 |
 
 ## 2. 自动化测试
 
