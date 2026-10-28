@@ -478,8 +478,8 @@
 | 单测 | Web `vitest` **26 文件 / 248 测试**（新增 worklineSummary 7 例：feature 多主线+未关联线上、已并入主线、就在主线、线上落后/分叉、游离 HEAD、截断计数、无 graph）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 9 CSS 0 error / 0 warning；服务端无改动（170/170 不变） |
 | 真实浏览器验收（dev-server + 真实仓库卡 + 演示仓库 worktree 卡；1440×900 DPR2 / 390×844，亮/暗） | 真实主分支卡：总结「当前就在主线「main」上。线上还没同步（本地多 24 处）。」、事实表 4 行正确、折叠默认收起；点击后展开 48 提交多泳道图（点击前 `.kb-git__fork` 不存在、点击后出现），顶部图例、合并双环、工作树列表正常。演示仓库 `feat/graph` 卡：总结「这张卡片在「feat/graph」工作线上。比主线多 1 处改动，主线还有 5 处没并进来。线上还没同步（本地多 1 处）。」、事实表 4 行正确；展开后 18 行图 + 3 个工作树。390 竖屏抽屉 `scrollWidth==clientWidth`（无横向溢出）、暗色主题正常；全程 **console error 0 / pageerror 0** |
 | 截图 | `docs/assets/screens/git-workline-collapsed-light.png`（默认折叠的人话版）、`git-workline-collapsed-dark.png`、`git-workline-feature-light.png`（feature 分支卡）、`git-workline-expanded-light.png`（展开提交图）、`git-workline-portrait-light.png`（390 竖屏） |
-| 生效方式 | 纯前端改动，**合入 main 后刷新看板即生效，无需重启 DSH**；服务端接口与数据未改（v0.14 `graph` 不变） |
-| 分支 | `feat/workline-summary`（基于 v0.14.0 主线 `f30889a`）；合入后 README / CHANGELOG / 版本号同步为 **0.14.1** |
+| 生效方式 | 纯前端改动，**已合入 main（merge `78c3046`），刷新看板即生效、无需重启 DSH**；服务端接口与数据未改（v0.14 `graph` 不变）。注意：`/api/kanban/health` 的版本号在重启前仍显示 0.14.0（服务端进程未重启），前端已是 0.14.1 |
+| 分支 | `feat/workline-summary`（基于 v0.14.0 主线 `f30889a`），**已合入 main（merge `78c3046`）**；README / CHANGELOG / 版本号同步为 **0.14.1** |
 
 ## 2. 自动化测试
 
