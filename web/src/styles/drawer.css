@@ -799,6 +799,10 @@
   font: var(--dsw-font-xxxs-11);
 }
 
+.kb-git__chip--muted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .kb-git__chip-label {
   flex: none;
   color: var(--dsw-alias-label-caption);

@@ -1,14 +1,14 @@
 /**
  * 详情抽屉「分支 / 工作树」区块（docs/contracts/06-git-context.md §5）。
  *
- * 结构：标题 → 简化 chips（当前分支 / 工作树 / 游离 HEAD）→ Fork 风格多泳道提交图
+ * 结构：标题 → chips（当前分支 / 工作树 / 远端跟踪 / 游离 HEAD）→ Fork 风格多泳道提交图
  * → 多工作树列表（>1 时）。
  *
  * 数据来自 `git.graph`（v0.14）：缺失（旧服务端）、不可用、或没有任何提交时整块返回 null，
  * 静默隐藏（不回退 v0.13 的两泳道示意）。
  */
 import { useMemo } from 'react';
-import type { Card, GitBase, GitCurrent, GitWorktree, SessionRow } from '../types';
+import type { Card, GitBase, GitCurrent, GitUpstream, GitWorktree, SessionRow } from '../types';
 import { useI18n } from '../i18n';
 import { buildForkGraph, shortenPath, shouldShowWorktreeCounts } from '../lib/forkGraph';
 import { pathBasename } from '../lib/suggestions';
@@ -20,8 +20,8 @@ interface GitBranchSectionProps {
   sessions: SessionRow[];
 }
 
-/** 简化 chips：当前分支（等宽）/ 工作树 / 游离 HEAD 提示。 */
-function GitChips({ current }: { current: GitCurrent }) {
+/** chips：当前分支（等宽）/ 工作树 / 远端跟踪（↑↓ 相对 upstream）/ 游离 HEAD 提示。 */
+function GitChips({ current, upstream }: { current: GitCurrent; upstream: GitUpstream | null }) {
   const { t } = useI18n();
   const worktreeName = current.isWorktree
     ? pathBasename(current.worktree) || shortenPath(current.worktree)
@@ -41,6 +41,20 @@ function GitChips({ current }: { current: GitCurrent }) {
           {worktreeName}
         </code>
       </span>
+      {upstream ? (
+        <span className="kb-git__chip">
+          <span className="kb-git__chip-label">{t('git.upstream')}</span>
+          <code className="kb-git__chip-value" title={upstream.ref}>
+            {upstream.ref}
+          </code>
+          <AheadBehind ahead={upstream.ahead} behind={upstream.behind} />
+        </span>
+      ) : (
+        <span className="kb-git__chip kb-git__chip--muted">
+          <span className="kb-git__chip-label">{t('git.upstream')}</span>
+          <span className="kb-git__chip-note">{t('git.noUpstream')}</span>
+        </span>
+      )}
     </div>
   );
 }
@@ -113,7 +127,7 @@ export function GitBranchSection({ card, sessions }: GitBranchSectionProps) {
   return (
     <section className="kb-drawer__section kb-git">
       <h3 className="kb-drawer__section-title">{t('git.title')}</h3>
-      <GitChips current={git.current} />
+      <GitChips current={git.current} upstream={git.upstream} />
       <ForkGraph layout={layout} worktreeBranches={worktreeBranches} />
       {git.worktrees.length > 1 ? (
         <GitWorktrees worktrees={git.worktrees} truncated={git.worktreesTruncated ?? 0} base={git.base} />
