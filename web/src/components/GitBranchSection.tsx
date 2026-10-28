@@ -1,18 +1,21 @@
 /**
- * 详情抽屉「分支 / 工作树」区块（docs/contracts/06-git-context.md §5）。
+ * 详情抽屉「工作线」区块（docs/contracts/06-git-context.md §5，v0.14.1 人话版）。
  *
- * 结构：标题 → chips（当前分支 / 工作树 / 远端跟踪 / 游离 HEAD）→ Fork 风格多泳道提交图
- * → 多工作树列表（>1 时）。
+ * 结构：标题 → 一句话人话总结 → 关键事实表（在哪条工作线 / 和主线比 / 和线上比 / 工作副本）
+ * → 「提交图」折叠区（Fork 风格多泳道图 + 多工作树列表，默认收起）。
  *
  * 数据来自 `git.graph`（v0.14）：缺失（旧服务端）、不可用、或没有任何提交时整块返回 null，
  * 静默隐藏（不回退 v0.13 的两泳道示意）。
  */
-import { useMemo } from 'react';
-import type { Card, GitBase, GitCurrent, GitUpstream, GitWorktree, SessionRow } from '../types';
+import { useMemo, useState } from 'react';
+import type { Card, GitBase, GitWorktree, SessionRow } from '../types';
 import { useI18n } from '../i18n';
+import type { I18nKey } from '../i18n';
 import { buildForkGraph, shortenPath, shouldShowWorktreeCounts } from '../lib/forkGraph';
-import { pathBasename } from '../lib/suggestions';
+import { buildWorklineSummary } from '../lib/worklineSummary';
+import type { WorklineSummary } from '../lib/worklineSummary';
 import { useCardGit } from '../lib/useCardGit';
+import { IconChevronDown } from './Icons';
 import { AheadBehind, ForkGraph } from './ForkGraph';
 
 interface GitBranchSectionProps {
@@ -20,43 +23,86 @@ interface GitBranchSectionProps {
   sessions: SessionRow[];
 }
 
-/** chips：当前分支（等宽）/ 工作树 / 远端跟踪（↑↓ 相对 upstream）/ 游离 HEAD 提示。 */
-function GitChips({ current, upstream }: { current: GitCurrent; upstream: GitUpstream | null }) {
-  const { t } = useI18n();
-  const worktreeName = current.isWorktree
-    ? pathBasename(current.worktree) || shortenPath(current.worktree)
-    : t('git.mainWorktree');
-  return (
-    <div className="kb-git__chips">
-      <span className="kb-git__chip">
-        <span className="kb-git__chip-label">{t('git.branch')}</span>
-        <code className="kb-git__chip-value" title={current.branch ?? undefined}>
-          {current.branch ?? t('git.head')}
-        </code>
-        {current.detached ? <span className="kb-git__chip-note">{t('git.detached')}</span> : null}
-      </span>
-      <span className="kb-git__chip">
-        <span className="kb-git__chip-label">{t('git.worktree')}</span>
-        <code className="kb-git__chip-value" title={current.worktree}>
-          {worktreeName}
-        </code>
-      </span>
-      {upstream ? (
-        <span className="kb-git__chip">
-          <span className="kb-git__chip-label">{t('git.upstream')}</span>
-          <code className="kb-git__chip-value" title={upstream.ref}>
-            {upstream.ref}
-          </code>
-          <AheadBehind ahead={upstream.ahead} behind={upstream.behind} />
-        </span>
-      ) : (
-        <span className="kb-git__chip kb-git__chip--muted">
-          <span className="kb-git__chip-label">{t('git.upstream')}</span>
-          <span className="kb-git__chip-note">{t('git.noUpstream')}</span>
-        </span>
-      )}
-    </div>
-  );
+type Translate = (key: I18nKey, params?: Record<string, string | number>) => string;
+
+/** 「和主线比」的一句话。 */
+function mainSentence(summary: WorklineSummary, t: Translate): string {
+  switch (summary.mainRelation) {
+    case 'main':
+      return t('git.summaryOnMain', { branch: summary.branch ?? '' });
+    case 'same':
+      return t('git.summaryMainSame');
+    case 'merged':
+      return summary.behindMain > 0
+        ? t('git.summaryMergedBehind', { count: summary.behindMain })
+        : t('git.summaryMerged');
+    case 'behind-only':
+      return t('git.summaryBehindOnly', { count: summary.behindMain });
+    case 'ahead-only':
+      return t('git.summaryAheadOnly', { count: summary.aheadMain });
+    case 'ahead-behind':
+      return t('git.summaryAheadBehind', { count: summary.aheadMain, behind: summary.behindMain });
+  }
+}
+
+/** 与线上（upstream）关系的一句话。 */
+function remoteSentence(summary: WorklineSummary, t: Translate): string {
+  switch (summary.remoteRelation) {
+    case 'no-upstream':
+      return t('git.summaryNoUpstream');
+    case 'synced':
+      return t('git.summarySynced');
+    case 'ahead':
+      return t('git.summaryUpstreamAhead', { count: summary.aheadUpstream });
+    case 'behind':
+      return t('git.summaryUpstreamBehind', { count: summary.behindUpstream });
+    case 'diverged':
+      return t('git.summaryUpstreamDiverged', { ahead: summary.aheadUpstream, behind: summary.behindUpstream });
+  }
+}
+
+/** 整段总结：位置 + 和主线 + 和线上，都是完整句子直接拼接。 */
+function summaryText(summary: WorklineSummary, t: Translate): string {
+  if (summary.position === 'detached') return t('git.summaryDetached');
+  if (summary.position === 'main') {
+    return t('git.summaryOnMain', { branch: summary.branch ?? '' }) + remoteSentence(summary, t);
+  }
+  return t('git.summaryFeature', { branch: summary.branch ?? '' }) + mainSentence(summary, t) + remoteSentence(summary, t);
+}
+
+/** 事实表的「和主线比」短语。 */
+function mainFact(summary: WorklineSummary, t: Translate): string {
+  if (summary.position === 'main') return t('git.factOnMain');
+  switch (summary.mainRelation) {
+    case 'same':
+      return t('git.factSame');
+    case 'merged':
+      return t('git.factMerged');
+    case 'behind-only':
+      return t('git.factBehind', { count: summary.behindMain });
+    case 'ahead-only':
+      return t('git.factAhead', { count: summary.aheadMain });
+    case 'ahead-behind':
+      return `${t('git.factAhead', { count: summary.aheadMain })} · ${t('git.factBehind', { count: summary.behindMain })}`;
+    default:
+      return t('git.factOnMain');
+  }
+}
+
+/** 事实表的「和线上比」短语。 */
+function remoteFact(summary: WorklineSummary, t: Translate): string {
+  switch (summary.remoteRelation) {
+    case 'no-upstream':
+      return t('git.factRemoteNoUpstream');
+    case 'synced':
+      return t('git.factRemoteSynced');
+    case 'ahead':
+      return t('git.factRemoteAhead', { count: summary.aheadUpstream });
+    case 'behind':
+      return t('git.factRemoteBehind', { count: summary.behindUpstream });
+    case 'diverged':
+      return t('git.factRemoteDiverged', { ahead: summary.aheadUpstream, behind: summary.behindUpstream });
+  }
 }
 
 interface GitWorktreesProps {
@@ -66,7 +112,7 @@ interface GitWorktreesProps {
   base: GitBase | null;
 }
 
-/** 多工作树列表：分支、主工作树/当前徽标、相对主分支 ↑↓、路径末两段（title 全文）。 */
+/** 多工作树列表（折叠区内，给需要看其它工作副本的人）。 */
 function GitWorktrees({ worktrees, truncated, base }: GitWorktreesProps) {
   const { t } = useI18n();
   return (
@@ -105,14 +151,19 @@ function GitWorktrees({ worktrees, truncated, base }: GitWorktreesProps) {
 }
 
 /**
- * 「分支 / 工作树」区块：数据不可用 / 读取失败 / 旧服务端无 graph 时返回 null（整块静默隐藏）。
- * 读取中同样不占位（git 探测通常 <150ms，避免骨架闪烁）。
+ * 「工作线」区块：非技术用户先看人话总结与事实表，提交图折叠为进阶。
+ * 数据不可用 / 读取失败 / 旧服务端无 graph 时返回 null（整块静默隐藏）。
  */
 export function GitBranchSection({ card, sessions }: GitBranchSectionProps) {
   const { t } = useI18n();
+  const [graphOpen, setGraphOpen] = useState(false);
   const { git } = useCardGit(card, sessions);
   const layout = useMemo(
     () => (git && git.available && git.graph ? buildForkGraph(git.graph) : null),
+    [git],
+  );
+  const summary = useMemo(
+    () => (git && git.available && git.graph ? buildWorklineSummary(git) : null),
     [git],
   );
   const worktreeBranches = useMemo(() => {
@@ -123,14 +174,57 @@ export function GitBranchSection({ card, sessions }: GitBranchSectionProps) {
     }
     return branches;
   }, [git]);
-  if (!git || !git.available || !layout || layout.rows.length === 0) return null;
+  if (!git || !git.available || !layout || !summary || layout.rows.length === 0) return null;
+
   return (
     <section className="kb-drawer__section kb-git">
       <h3 className="kb-drawer__section-title">{t('git.title')}</h3>
-      <GitChips current={git.current} upstream={git.upstream} />
-      <ForkGraph layout={layout} worktreeBranches={worktreeBranches} />
-      {git.worktrees.length > 1 ? (
-        <GitWorktrees worktrees={git.worktrees} truncated={git.worktreesTruncated ?? 0} base={git.base} />
+      <p className="kb-git__summary">{summaryText(summary, t)}</p>
+      <dl className="kb-git__facts">
+        <div className="kb-git__fact">
+          <dt>{t('git.factBranch')}</dt>
+          <dd>
+            <code className="kb-git__fact-code" title={summary.branch ?? undefined}>
+              {summary.branch ?? t('git.detached')}
+            </code>
+          </dd>
+        </div>
+        <div className="kb-git__fact">
+          <dt>{t('git.factMain')}</dt>
+          <dd>{mainFact(summary, t)}</dd>
+        </div>
+        <div className="kb-git__fact">
+          <dt>{t('git.factRemote')}</dt>
+          <dd>{remoteFact(summary, t)}</dd>
+        </div>
+        <div className="kb-git__fact">
+          <dt>{t('git.factWorktree')}</dt>
+          <dd>
+            <code className="kb-git__fact-code" title={summary.worktreePath}>
+              {summary.isWorktree ? shortenPath(summary.worktreePath) : t('git.factWorktreeMain')}
+            </code>
+          </dd>
+        </div>
+      </dl>
+      <button
+        type="button"
+        className="kb-git__toggle"
+        aria-expanded={graphOpen}
+        onClick={() => setGraphOpen((open) => !open)}
+      >
+        <span className="kb-icon kb-git__toggle-icon" aria-hidden="true">
+          <IconChevronDown />
+        </span>
+        <span>{t('git.graphToggle')}</span>
+        <span className="kb-git__toggle-meta">{t('git.graphToggleMeta', { count: summary.commitCount })}</span>
+      </button>
+      {graphOpen ? (
+        <div className="kb-git__advanced">
+          <ForkGraph layout={layout} worktreeBranches={worktreeBranches} />
+          {git.worktrees.length > 1 ? (
+            <GitWorktrees worktrees={git.worktrees} truncated={git.worktreesTruncated ?? 0} base={git.base} />
+          ) : null}
+        </div>
       ) : null}
     </section>
   );

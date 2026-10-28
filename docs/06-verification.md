@@ -467,6 +467,20 @@
 | 分支 | `feat/fork-graph-viz`（基于 `e27dd98`，与主工作区并行会话隔离）；**已合入主线 merge `3d9e755`**（合入前先把 main `5278d6c` 合进分支并解决 README / docs 06 文档冲突，v0.14 章节顺延为 §1.29）；合入后自测 170/170、241 例、tsc/build/令牌 lint 通过 |
 | 已知限制 | 最多 10 条引用 / 48 个提交（更早历史与多余引用给「还有 N 个」提示）、远端只识别 `origin`、打开详情时的快照（4s 缓存）不自动刷新、只读无搜索/过滤/展开交互；`origin/main` 这类指向主干祖先的引用在图上只作为 ref 徽标出现、不单独画线 |
 
+## 1.30 v0.14.1（详情抽屉「工作线」人话版，面向非技术用户，2026-10-28）
+
+| 项 | 结果 |
+|---|---|
+| 背景 | 用户对分支图反馈的出发点是「**不懂代码的用户也能看懂**」，并要求先落地原型方案 4（`design/branch-awareness/`）：先说人话、图折叠为进阶；同时明确原型里的解释性文案（如「给需要细看的人」）不要出现在正式功能里 |
+| Web 结构（仅前端） | 详情抽屉区块标题改为「工作线」：① **一句话总结**（例：「这张卡片在「feat/branch-badge」工作线上。比主线多 3 处改动，主线还有 1 处没并进来。线上还没同步（本地多 3 处）。」）；② **关键事实表**：在哪条工作线 / 和主线比 / 和线上比 / 工作副本；③ **「提交图」折叠按钮**（默认收起，`aria-expanded` + 箭头旋转，右侧显示改动数）→ 展开后是 v0.14 的 Fork 风格多泳道图 + 多工作树列表。原 chips（分支 / 工作树 / 远端跟踪 ↑↓）移除，技术符号只保留在折叠区 |
+| 纯逻辑 | 新增 `web/src/lib/worklineSummary.ts`（`buildWorklineSummary`）：把 `current/base/upstream/graph` 翻译成结构化结论——位置（`detached` / `main` / `feature`）、与主线关系（`main` / `same` / `merged` / `ahead-only` / `ahead-behind` / `behind-only`）、与线上关系（`no-upstream` / `synced` / `ahead` / `behind` / `diverged`）；组件只负责用 zh/en 模板拼句子，7 例单测覆盖各分支 |
+| 文案与去技术化 | 统一用「工作线 / 主线 / 线上 / 改动（处） / 工作副本 / 并入主线 / 未同步」等口语词；正式界面不出现「给需要细看的人」这类原型注释；英文文案同步（zh/en 各新增 33 条 `git.*`） |
+| 单测 | Web `vitest` **26 文件 / 248 测试**（新增 worklineSummary 7 例：feature 多主线+未关联线上、已并入主线、就在主线、线上落后/分叉、游离 HEAD、截断计数、无 graph）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 9 CSS 0 error / 0 warning；服务端无改动（170/170 不变） |
+| 真实浏览器验收（dev-server + 真实仓库卡 + 演示仓库 worktree 卡；1440×900 DPR2 / 390×844，亮/暗） | 真实主分支卡：总结「当前就在主线「main」上。线上还没同步（本地多 24 处）。」、事实表 4 行正确、折叠默认收起；点击后展开 48 提交多泳道图（点击前 `.kb-git__fork` 不存在、点击后出现），顶部图例、合并双环、工作树列表正常。演示仓库 `feat/graph` 卡：总结「这张卡片在「feat/graph」工作线上。比主线多 1 处改动，主线还有 5 处没并进来。线上还没同步（本地多 1 处）。」、事实表 4 行正确；展开后 18 行图 + 3 个工作树。390 竖屏抽屉 `scrollWidth==clientWidth`（无横向溢出）、暗色主题正常；全程 **console error 0 / pageerror 0** |
+| 截图 | `docs/assets/screens/git-workline-collapsed-light.png`（默认折叠的人话版）、`git-workline-collapsed-dark.png`、`git-workline-feature-light.png`（feature 分支卡）、`git-workline-expanded-light.png`（展开提交图）、`git-workline-portrait-light.png`（390 竖屏） |
+| 生效方式 | 纯前端改动，**合入 main 后刷新看板即生效，无需重启 DSH**；服务端接口与数据未改（v0.14 `graph` 不变） |
+| 分支 | `feat/workline-summary`（基于 v0.14.0 主线 `f30889a`）；合入后 README / CHANGELOG / 版本号同步为 **0.14.1** |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

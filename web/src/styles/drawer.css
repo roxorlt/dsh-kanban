@@ -777,51 +777,105 @@
 .kb-git__fork-c6 { --kb-fork-color: var(--kb-git-lane-6); }
 .kb-git__fork-c7 { --kb-fork-color: var(--kb-git-lane-7); }
 
-.kb-git__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 6px;
-  min-width: 0;
+/* 人话版：一句话总结 + 关键事实表 + 提交图折叠 */
+.kb-git__summary {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: var(--kb-r-ctl);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, transparent);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  overflow-wrap: anywhere;
 }
 
-.kb-git__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  max-width: 100%;
-  height: 22px;
-  padding: 0 7px;
+.kb-git__facts {
+  display: flex;
+  flex-direction: column;
   border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
-  background: var(--dsw-alias-bg-base);
-  color: var(--dsw-alias-label-secondary);
+  border-radius: var(--kb-r-ctl);
+  overflow: hidden;
+}
+
+.kb-git__fact {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-git__fact:first-child {
+  border-top: 0;
+}
+
+.kb-git__fact dt {
+  flex: none;
+  width: 76px;
+  color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxxs-11);
 }
 
-.kb-git__chip--muted {
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.kb-git__chip-label {
-  flex: none;
-  color: var(--dsw-alias-label-caption);
-}
-
-.kb-git__chip-value {
+.kb-git__fact dd {
   min-width: 0;
-  overflow: hidden;
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.kb-git__fact-code {
   color: var(--dsw-alias-label-primary);
   font-family: var(--ds-font-family-code);
   font-size: 11px;
   line-height: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-.kb-git__chip-note {
+.kb-git__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  text-align: left;
+  cursor: pointer;
+}
+
+.kb-git__toggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-git__toggle:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.kb-git__toggle-icon {
   flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  transition: transform var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-git__toggle[aria-expanded='true'] .kb-git__toggle-icon {
+  transform: rotate(180deg);
+}
+
+.kb-git__toggle-meta {
+  margin-left: auto;
   color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-git__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .kb-git__ab {
