@@ -10,7 +10,7 @@
 - Web（新增 `forkGraph.ts` / `ForkGraph.tsx`，替换 v0.13 的 `gitGraph.ts` 两泳道实现）：`buildForkGraph` 纯函数布局——refs 顺序做泳道种子（同 sha 共用泳道）、泳道状态机 `{sha,color,active}`、提交取最左期望泳道、**第一父一律沿用当前泳道**（主干颜色稳定，多泳道期望同一父提交时在父行画汇入曲线后释放）、其余父提交占空闲槽位 / 追加列、槽位复用且不左移；`ForkGraph.tsx` 渲染图例（彩点 + ↑↓ + 当前/工作树徽标 + refsTruncated）、每行 SVG（竖直段 + 三次贝塞尔汇入/出弯 + 合并双环 + HEAD 外环）、ref 徽标 + subject 单行省略 + 短 sha（`title` 给完整 sha/作者/时间）、320px 内滚动 + `overscroll-behavior: contain`、`truncated` 行提示；`GitBranchSection` 简化为 chips（当前分支 / 工作树 / 远端跟踪 `origin/xxx ↑N ↓M` / 游离 HEAD）+ ForkGraph + 多工作树列表；8 色调色板（business/success/warn/error/success-secondary/error-secondary/warn-label/label-tertiary，全部 alias 令牌）；≤480px 行内 ref 徽标只留 HEAD 把宽度让给 commit 说明。
 - 细节：`origin/main` 这类指向主干祖先的远端引用在图上作为 ref 徽标出现、不单独画线（其泳道与主干汇合）；`base.kind='main'` 时主工作树行 ↑0↓0 仍隐藏；无 `graph`（旧服务端）整块隐藏。
 - 测试：服务端 `node --test` **170/170**（v0.14 新增 8 例：合并多父、引用优先级/去重/工作树分支/origin-HEAD 过滤、track 五种形态、48 条截断、refs 上限、老分支 tip 被截、detached HEAD）；Web `vitest` **25 文件 / 241 测试**（forkGraph **16 例**：线性、两分支汇合、合并双父、主干颜色稳定、多泳道期望同一父可达、槽位复用/不左移、refs 同 sha、ref tip 不在 commits、HEAD 标记、8 色循环、截断透传、空 commits）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 9 CSS 0 error / 0 warning。
-- 验证：真实数据 = 本仓库（10 refs / 40 提交 / 3 个合并 / 4 个工作树）+ 多分支演示仓库（`node scripts/demo-git-repo.mjs`：5 分支 / 2 合并 / 3 工作树 / 18 提交，含 `origin/main` 分叉与 `feat/long` 长分支）；Chromium 1440×900 DPR2 / 390×844、亮/暗共 **26 项 Playwright 断言全过**、console error 0 / pageerror 0 / 4xx 0、无横向溢出；主干颜色经真实数据核对修复（修复前 main 主干在中段被 origin/main 的泳道接管由蓝变绿，修复后 33 行全部 lane0/color0）。证据 `docs/assets/screens/git-fork-*.png`（8 张），验证记录 `docs/06-verification.md` §1.28。
+- 验证：真实数据 = 本仓库（10 refs / 40 提交 / 3 个合并 / 4 个工作树）+ 多分支演示仓库（`node scripts/demo-git-repo.mjs`：5 分支 / 2 合并 / 3 工作树 / 18 提交，含 `origin/main` 分叉与 `feat/long` 长分支）；Chromium 1440×900 DPR2 / 390×844、亮/暗共 **26 项 Playwright 断言全过**、console error 0 / pageerror 0 / 4xx 0、无横向溢出；主干颜色经真实数据核对修复（修复前 main 主干在中段被 origin/main 的泳道接管由蓝变绿，修复后 33 行全部 lane0/color0）。证据 `docs/assets/screens/git-fork-*.png`（8 张），验证记录 `docs/06-verification.md` §1.29。
 - 生效方式：含服务端改动（`lib/git.js`），需**合入主线并重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。
 - 已知限制：最多 10 条引用 / 48 个提交（更早历史提示「还有 N 个」）、远端只识别 `origin`、打开详情时的快照（4s 缓存）不自动刷新、无搜索/过滤交互。
 - 分支：`feat/fork-graph-viz`（基于 `e27dd98`，与主工作区并行会话隔离）；v0.13.0 已由并行会话合入主线（`97ad6da` / `e27dd98`），本版待合入。
@@ -27,9 +27,9 @@
 - 测试：服务端 `node --test` **162/162**（新增 `test/git.test.mjs` 8 例：普通 / detached / 分叉 + linked worktree / upstream 领先落后 / origin/HEAD 探测 / 11→8 工作树截断 / 提交上限 / 全部不可用原因 / `?cwd=` 采用与忽略；`test/routes.test.mjs` +4 例：404 / 405 / 200 available true·false / HEAD / `?cwd=` 候选）；Web `vitest` **25 文件 / 249 测试**（新增 `gitGraph` 24 例，含分叉点优先截断、工作树计数隐藏）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 9 个 CSS 0 error / 0 warning。
 - 真实数据验收：`node scripts/demo-git-repo.mjs` 造演示仓库（main 与 origin/main 分叉、`feat/graph` / `feat/long` 两个 linked worktree、非 git 目录），`scripts/dev-server.mjs` 起独立服务 + 6 张真实卡片；Chromium 1440×900 DPR2 / 390×844、亮/暗共 **16 项 Playwright 断言全过**、console error 0 / pageerror 0 / 4xx 0、无横向溢出；`feat/long` 领先 15 条时 12 行上限下分叉点仍可见（9 ahead + 3 shared + 中段「还有 3 个提交」）；非 git / 无 `cwd` / 目录不存在三种卡区块整块隐藏；`?cwd=` 跨仓库候选被忽略。证据 `docs/assets/screens/git-branch-*.png`（8 张），验证记录 `docs/06-verification.md` §1.26。
 - 版本与服务端文件白名单：`package.json` / `web/package.json` → **0.13.0**，`files` 补 `lib/git.js`（否则发版缺文件、`lib/routes.js` 的 import 会在宿主里失败）。
-- 生效方式：含服务端改动（`lib/git.js` / `lib/routes.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。旧服务端（< v0.13）无该接口时前端按 404 静默隐藏，其余功能不受影响。
+- 生效方式：含服务端改动（`lib/git.js` / `lib/routes.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。旧服务端（< v0.13）无该接口时前端按 404 静默隐藏，其余功能不受影响。**已于 2026-10-28 重启桌面 DSH 验证 `health=0.13.0`**，`/dsh-kanban/` 服务的 dist 与合并后构建同名同字节。
 - 已知限制：只比较「当前分支 vs 主分支/上游」两条泳道，不画任意多分支拓扑；远端只识别 `origin`；数据是打开详情时的快照（4s 缓存），不随新提交自动刷新；工作树列表上限 8 个。
-- 分支：`feat/git-branch-viz`（基于 `f65b4f1`）；已合入主线（merge `97ad6da`，2026-10-27，合入时无冲突），真实宿主复验待重启桌面 DSH 后执行（步骤见 docs/06 §6，结果见 §1.27）。
+- 分支与真实宿主：`feat/git-branch-viz`（基于 `f65b4f1`）已合入主线（merge `97ad6da`，2026-10-27，合入时无冲突）；2026-10-28 13:57 重启桌面 DSH（端口 56161 → 49463）后真实宿主复验通过：health=0.13.0、真实卡 `card-a57f6dbf`（cwd=主仓库）区块出现且工作树列表 4 行（main 当前 + feat/fork-graph-viz / feat/git-branch-viz / feat/m2-session-target）、两泳道 12 行含分叉点；演示仓库 linked worktree / 领先 15 截断 / 非 git·无 cwd·目录不存在隐藏 / 暗色 / 390 竖屏；真实宿主 UI 44/44 + API 42/42 断言全过、console error 0 / pageerror 0 / 4xx 0，v0.10/v0.11 接口共存（证据 `docs/assets/screens/git-realhost-*.png`，记录 docs/06 §1.27）。
 
 ## v0.12.0 — 2026-10-27
 
@@ -117,6 +117,30 @@
 - 服务端 `npm test` **127/127** 通过：新增 `test/decisions.test.mjs` 23 例（追加格式与 0600、确定性 sha1 id 固定向量、筛选与游标、派生 state、坏行容忍与 seq 不重号、回填与不重复回填、以 `log_initialized` 判定初始化、收口感知回填、degraded 回填、重复 id 分页、历史遗留 pending 同步、启动回填与 live 写串行、seed demo 补请求、多题 + 自定义回答 + 备注、无效 UTF-8 导出、已有文件收紧 0600、store 接线、日志失败中止、归档 / 离开 / seed 收口、trimmed）；`domain` / `store` / `routes` / `tools` / `index` 各自增量（含启动回填、首启种子卡审批、seed demo 落盘与 HEAD 等集成用例）。
 - 真实数据冒烟（`~/.dsh-kanban/data.json` 的副本，未写原文件）：启动 dev-server 回填出 26 条历史事件（13 条 `approval_requested` + 12 条 `approval_resolved` + 1 条 `log_initialized`），其中 1 条仍在等待（`state=waiting`）；`/decisions`、`/decisions/meta`、`/decisions/export` 均返回预期结果，导出与日志文件逐字节一致；6 个非法参数均 400；重启不重复回填、实时请求/提交/归档收口实测通过。
 - 契约：见 `docs/contracts/05-decision-log.md`。
+
+### 新增：原生待确认收件箱合并（M2「审批收件箱合并」）
+
+- 说明：本节为并行会话（`feat/native-approval-inbox` → `71e602d`）的合并记录，**2026-10-28 合入主线时补记**：功能代码在此之前已随 v0.9.4 收口提交（`ffe9ed4`）进入主线，本次合并补齐 `package.json` 的 `@deepseek-ai/dsh-client-ui-session` 注入声明、变更日志与验证记录（`docs/06-verification.md` §1.28）。
+
+- 目标：把 DSH 原生的**工具授权**（沙箱越权 / 工具 `ask`）、**Agent 提问**（`ask_user_question`）与**计划审批**（`exit_plan_mode` 的 plan-review）合并进看板「待你确认」列，与业务审批卡片同屏，区分**来源**与**风险等级**，并可在看板内直接作答。
+- 数据来源：客户端插件注入宿主公开服务 `uiSession`，只读 `sessionStatus.pendingInteraction` 投影（每会话最高优先级一项）；不抢占 `approval/request` waterfall，不复制状态、不新增审计路径。
+- 客户端桥（契约 04）：新增 `kanban:pending` 全量快照推送（attach / `kanban:ready` 各推一次，`uiSession` 变化与提问倒计时 250ms 节流），新增 `pending.answerApproval` / `pending.answerQuestion` / `pending.dismiss` 三个白名单方法；作答直接调用宿主 pending 对象的 `answer()/dismiss()`，与原生 composer 共用同一条决定与审计，先答先得。
+- Web：`lib/nativeInbox.ts` 纯函数负责风险三档（`danger-full-access`→高、`workspace-write`→中、变更/执行类工具→中、其余→低；提问=低（信息确认）、计划审批=中（批准后执行））、宿主 `displayReason` 多语言解析、计划审批派生（对齐宿主 `planReviewOf` 条件）、会话↔卡片关联与排序；`NativeInbox` 渲染来源徽标 / 风险 chip（悬浮显示分级依据）/ 工具名 / 申请原因 / 会话名 / 关联卡片 / 倒计时 / 允许一次·拒绝·回答·审阅计划·打开会话；`NativeAnswerModal` 支持多题（单选、多选、自定义文本、逐题跳过）与计划审批（同意执行 / 要求修改）。
+- 「待你确认」列与列表视图接入收件区；列计数仍为卡片数、收件区单独计数，工具栏「待你确认」总数包含原生项；收件区不参与卡片拖拽 / 多选 / 批量操作。
+- 降级：旧版宿主没有 `uiSession` 服务时父页面不推送、收件区不渲染、业务审批不受影响；独立预览模式不渲染。
+- 已知限制：每会话只镜像宿主投影的最高优先级一项（与原生 composer 一致）；提问草稿以原生 composer 为准；看板作答不冻结宿主倒计时；未命名提问不提供「取消请求」入口；原生持久策略（always allow）不在看板提供。
+
+### 验证
+
+- 单元/集成：根 `npm test` 85/85（新增 `test/client-pending.test.mjs` 14 例，用真实 `lib/client.js` + 假宿主验证推送/过滤/排序/作答/陈旧项/错误码）；Web vitest 17 文件 / 137 测试（新增 `nativeInbox.test.ts` 27 例）；`tsc` 0 error；`vite build` 成功；令牌 lint 9 文件 0 error / 0 warning。
+- Mock 宿主（真实 web 构建 + 真实 postMessage 协议）：4 项（高风险工具授权 / 中风险工具授权 / 两题 Agent 提问 / 计划审批）按风险→来源排序渲染；允许一次后项消失；未作答提交给出校验提示；多题作答提交后项消失；窄屏 390px 与暗色主题可用；Tab 焦点可到「允许一次」；console 0 error。截图 `design/screens/native-inbox-*.png`。
+- **真实宿主 DSH 0.2.1-rc.2 端到端**（隔离 profile + 真实模型 deepseek-flash，Playwright 驱动 GUI）：
+  - 工具授权：让 agent 以 `sandbox_permissions: danger-full-access` 调 bash → 看板收件区出现「工具授权 / 高风险 / 会话：执行看板审批端到端验证 / 申请原因」；点「允许一次」→ 宿主 `approval/decided: allowed-once`（asked 后 0.7s）→ bash 正常执行并返回标记（会话日志 `tool/result` 非错误）→ 收件项消失。截图 `native-inbox-real-host.png`、`native-inbox-real-allowed.png`。
+  - Agent 提问：agent 调 `ask_user_question`（单选「继续/停止」）→ 看板出现「Agent 提问 / 低风险」；在收件区点「回答」→ 选择「继续」→ 提交后收件项消失；会话日志 `tool/result` 为 `{"answers":[{"id":"continue_verify","selected":["继续"]}]}`（答案经宿主正确送达）。截图 `native-inbox-real-question*.png`。
+  - 原生 composer 作答：在同一真实宿主里从原生审批框点「允许一次」→ 会话日志 `approval/decided: allowed-once` 且工具成功；看板项随同一 `uiSession` 投影消失（该项所在会话在本轮后被清理，收件区归零的对照见 `native-inbox-real-allowed.png`）。
+  - 期间修复：跳过按钮在弹窗里被拉伸成整行（`align-self:flex-start`）；`kb-column__body` 内卡片列表补 `role=list` 语义容器。
+- 复跑：`docs/contracts/04-native-inbox.md` §8 给出验收对照；证据截图同步到 `docs/assets/screens/`。
+- 合入主线（2026-10-28，合并提交 `8035ba3`）：11 个文件冲突按版本序解决；本条所述代码在此前已随 v0.9.4 收口提交 `ffe9ed4` 进入主线，本次补齐 `@deepseek-ai/dsh-client-ui-session` 注入声明、本段变更日志与 `docs/assets/screens/native-inbox-*.png` 证据，**无代码 / 行为变更、版本号仍为 0.13.0**。合并后根 `node --test` 162/162、Web vitest 25 文件 / 249 测试、`tsc` 0 error、`vite build` 通过（`web/dist` 重建后文件名与字节不变）、令牌 lint 9 CSS 0/0；真实宿主（`health=0.13.0`）刷新后「待你确认」列顶部出现原生收件项，看板内作答一次成功（来源「Agent 提问」/「低风险」→ 选「收件区作答链路 OK」→ 提交后收件区归零、答案回送到发起会话），证据 `design/screens/native-inbox-merged-realhost-01…04-*.png`，记录 `docs/06-verification.md` §1.28。
 
 ## v0.9.5 — 2026-10-23
 

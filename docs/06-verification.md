@@ -301,7 +301,8 @@
 | 回填去重 / 历史遗留 pending | 回填按确定性 `id` 去重、收口感知（已有 resolved/unresolved 不再补）；历史遗留 pending 与回填在同一个 `store.update` 事务内静默置为 `dismissed`，启动窗口 live 写不会交错，重复启动幂等；单测覆盖「先有实时事件再回填」「重复 id 分页不死循环」「遗留 pending 同步」「启动回填 + live 归档只产生一条收口」等。 |
 | 评审加固（P2） | 坏行后 seq 不重号；已有文件 append 时收紧为 0600；导出返回原始字节（invalid UTF-8 不替换）并与写队列串行；`data_reset` 与 seed demo 补请求顺序按契约记录；首启 / seed demo 的种子卡先规范化，首个生命周期即可请求审批。 |
 | 单测 | `npm test` **127/127**（`test/decisions.test.mjs` 新增 23 例；`domain` / `store` / `routes` / `tools` / `index` 各自增量）。 |
-| 真实宿主（2026-10-27 重启到 v0.11.0 后） | `/api/kanban/decisions/meta`：`exists=true`、`sizeBytes=63485`、`entries=31`、`byType={approval_requested:15, approval_resolved:15, log_initialized:1}`、`waiting=0`、`skippedLines=0`；说明恢复启动回填与实时写入在真实宿主可用。列表 / 导出 / 只读工具与「新审批提交后落两条事件」待按验收卡逐项走查。 |
+| 真实宿主首次启用（2026-10-27 重启到 v0.11.0 后） | `/api/kanban/decisions/meta`：`exists=true`、`sizeBytes=63485`、`entries=31`、`byType={approval_requested:15, approval_resolved:15, log_initialized:1}`、`waiting=0`、`skippedLines=0`；说明恢复启动回填与实时写入在真实宿主可用。列表 / 导出 / 只读工具与「新审批提交后落两条事件」已由 2026-10-28 验收行补齐。 |
+| 真实宿主验收补齐（2026-10-28，宿主 **v0.13.0**，桌面 DSH 13:57 重启、端口 49463） | `GET /api/kanban/health` → `version:"0.13.0"`（v0.10 决策日志能力随 v0.11 / v0.12 / v0.13 一并加载）。`decisions.jsonl` **37 条** = 回填 26（含 `log_initialized`，`counts.entries=25`）+ 实时 11；`/decisions/meta`：`entries=37`、`skippedLines=0`、`waiting=0`（与看板待确认 0 一致）、`byType={approval_requested:18, approval_resolved:18, log_initialized:1}`、权限 `0600`、`data.json` 无 `__decisions` 字段。`GET /decisions`：`limit=3` 时 `hasMore=true` / `nextBefore` 有效；`type`、`state=resolved`、`cardId` 筛选命中；非法 `type` / `state` / `since` → `400 BAD_REQUEST`。`GET /decisions/export`：`content-type: application/x-ndjson; charset=utf-8`、`content-disposition: attachment; filename="decisions-20261028.jsonl"`、`content-length=78184`，与 `decisions.jsonl` `cmp` 逐字节一致（37 行）。`kanban_decisions` 只读工具可读（返回 `file` / `hint`，`waitedMs` / `resolution.labels` / `outcomeColumn` 可查）。**新审批提交落两条实时事件**：验收卡在真实宿主发起审批 → `approval_requested`（`dec-18b4b8fe3ef9`，seq 36，`source=live`，revision 386，14:04:07 实时落盘）+ 用户提交后 `approval_resolved`（`dec-d60cc9eea645`，seq 37，`requestId=dec-18b4b8fe3ef9`、同 `approvalId=ap-d6a567b0`、`decision=approved`、`resolution.labels=["验收通过，继续收尾"]`、`waitedMs=4668596`（≈77.8 分钟）、`outcomeColumn=running`，15:21:55 实时落盘）。回填日志行：宿主从 Finder 启动、stdout 无持久日志，无法事后回看；以 `log_initialized` 事件（`counts.entries=25`）+ 后续多次重启未重复回填为等价持久证据。 |
 | 生效方式 | 纯服务端改动（`lib/decisions.js` 新增，`store` / `domain` / `routes` / `tools` / `index` / dev-server 接线），**重启 DSH 后生效**；前端代码未改，无需重建 `web/dist`。 |
 | 截图 | 无（后端数据能力，以命令输出与接口响应为证据）。 |
 
@@ -401,7 +402,7 @@
 
 ## 1.26 v0.13.0（卡片详情 Git 分支 / 工作树可视化，2026-10-27）
 
-> 注：本版「两泳道示意」已被 **v0.14.0 的 Fork 风格多分支提交图**取代（见 §1.28）；本节与 `git-branch-*.png` 保留为 v0.13 历史证据。
+> 注：本版「两泳道示意」已被 **v0.14.0 的 Fork 风格多分支提交图**取代（见 §1.29）；本节与 `git-branch-*.png` 保留为 v0.13 历史证据。
 
 | 项 | 结果 |
 |---|---|
@@ -416,7 +417,7 @@
 | 分支 | `feat/git-branch-viz`（基于 `f65b4f1`；已合入主线 merge `97ad6da`，见 §1.27） |
 | 已知限制 | 远端只识别 `origin`（无 origin 时只显示本地关系）；提交图只比较当前分支与主分支/上游两条线，不画任意多分支拓扑；抽屉打开期间不自动刷新（4s 缓存 + 打开时请求，契约 §1）；工作树列表上限 8 个（多余数量提示）；桌面真实宿主复验见 §1.27（合入主线并重启 DSH 后执行） |
 
-## 1.27 v0.13.0 合入主线与真实宿主复验（2026-10-27）
+## 1.27 v0.13.0 合入主线与真实宿主复验（2026-10-27 合入 / 10-28 重启复验）
 
 | 项 | 结果 |
 |---|---|
@@ -424,9 +425,32 @@
 | 版本头 | `package.json` / `web/package.json` → **0.13.0**；`files` 含 `lib/git.js`；`CHANGELOG` v0.13.0 置顶；README 状态行 / 功能 / 已验证 / 截图表已含 v0.13 |
 | dist 重建 | 合并后先删除旧产物（`rm -rf web/dist`）再 `npm --prefix web run build`（`tsc --noEmit && vite build`）：`index-D4ScdgBg.css`（93.79 KB，gzip 14.30 KB）/ `index-uM6BVSce.js`（376.16 KB，gzip 113.03 KB），与分支构建内容哈希一致（可复现），重建后工作树干净 |
 | 合入后自测 | 服务端 `node --test test/*.test.mjs` **162/162**；Web `vitest` **25 文件 / 249 测试**；`tsc --noEmit` 0 error；令牌 lint 9 个 CSS 0 error / 0 warning |
-| 桌面 DSH 重启后真实宿主 | **待重启后复验**（health 应为 0.13.0；真实卡片详情出现「分支 / 工作树」区块、非 git 卡隐藏、暗色与 390 竖屏抽查） |
+| 桌面 DSH 重启后真实宿主（**2026-10-28 13:57 重启**，端口 56161 → **49463**，进程 PID 28038） | `GET /api/kanban/health` → **`version:"0.13.0"`**、`dataDir:"~/.dsh-kanban"`、revision 351；`/dsh-kanban/` 引用 **`assets/index-D4ScdgBg.css` / `assets/index-uM6BVSce.js`**，与本地 `web/dist` 同名且字节一致（93,791 / 383,470 B）——重启后加载的是合并后构建产物；真实数据 **52 张卡**正常读出。重启口径：首次提交「已重启」时宿主进程实际未退出（PID 32933 启动于 10-27 13:37、health 仍 0.12.0、端口仍 56161），macOS 上需 **⌘Q / 菜单「退出」** 真正结束进程后再打开，第二次重启才生效 |
+| 真实卡「分支 / 工作树」区块（真实宿主 UI 脚本 **44/44 断言 PASS**） | 打开真实卡 `card-a57f6dbf`（cwd=主仓库）：区块出现；chips 3 个（分支 `main` 未推送 / 工作树「主工作树」/ 远端跟踪 `origin/main` ↑13↓0）；两泳道图 12 行 + 分叉点 1 个，refs `HEAD` / `main` / `origin/main`；**工作树列表 4 行**（`main` 当前 + `feat/fork-graph-viz` ↑14 / `feat/git-branch-viz` ↑11 / `feat/m2-session-target` ↑5），当前工作树高亮唯一；截图见下 |
+| 演示仓库分叉场景（真实宿主 API 脚本 **42/42 断言 PASS**） | `node scripts/demo-git-repo.mjs` → 6 张临时卡：`feat/graph` linked worktree（`isWorktree=true`、base ↑3↓1、upstream 本地 1 提交未推、3 个工作树且当前高亮）；`feat/long` base ↑15（12 行上限下分叉点仍可见、中段「还有 3 个提交」）；主仓库 `base.kind=upstream`（origin/main ↑1↓1）；非 git / 目录不存在 / 无 cwd 分别返回 `not_git` / `missing` / `no_cwd`；真实 linked worktree（`.agents/worktrees/feat/git-branch-viz`）卡返回 `isWorktree=true`、分支 `feat/git-branch-viz`；临时卡全部归档，`/state` 无残留 |
+| 隐藏与降级 | 非 git / 无 cwd / 目录不存在三种卡片抽屉中 `.kb-git` 整块隐藏且无占位；全程 **console error 0、pageerror 0、`/api/kanban/` 4xx/5xx 0** |
+| 暗色 / 390 竖屏 | Chromium 1440×900 DPR2 暗色下区块与分叉点正常；390×844 竖屏区块出现，抽屉 `scrollWidth == clientWidth`（390/390）、区块 358/358，无横向溢出；长 subject 省略 |
+| 旧接口回归 | 重启后 `GET /decisions/meta`（35 条、waiting 0）、`GET /sessions/archive`（`available:true`）与 v0.13 的 `GET /cards/:id/git` 共存；`/state` 52 卡正常 |
+| 截图 | `docs/assets/screens/git-realhost-section-real-card.png`（真实卡区块元素级：chips + 两泳道 + 分叉点 + **4 工作树列表**）、`git-realhost-existing-card.png`（真实卡右侧抽屉全貌）、`git-realhost-worktree-light.png`（演示 linked worktree 全貌）、`git-realhost-worktree-dark.png`（暗色）、`git-realhost-worktree-portrait.png`（390 竖屏）、`git-realhost-hidden-nogit.png`（非 git 卡：区块隐藏、无报错） |
+| 一次性脚本 | 真实宿主 UI 脚本 `/tmp/realhost-verify/verify.mjs`（44 断言 + `--expect-version` / `--real-card`）、API 脚本 `/tmp/lead-v013/realhost-check.py`（42 断言）、完整 results JSON 与原始截图均在 `/tmp/lead-v013/`，属一次性验证资产，未纳入仓库 |
+| 生效方式 | v0.13.0 含服务端改动（`lib/git.js` / `lib/routes.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。旧服务端（< v0.13）无该接口时前端按 404 静默隐藏。**已于 2026-10-28 13:57 重启桌面 DSH 完成，health=0.13.0** |
 
-## 1.28 v0.14.0（卡片详情「分支 / 工作树」升级为 Fork 风格多分支提交图，2026-10-27）
+## 1.28 v0.10.0 原生待确认收件箱合入主线（2026-10-28）
+
+| 项 | 结果 |
+| --- | --- |
+| 合并 | `feat/native-approval-inbox`（`71e602d`，标注 v0.10.0）→ `main`，合并提交 **`8035ba3`**（2026-10-28）。主工作区干净、其他会话的 v0.13.0 提交已全部落盘后执行 |
+| 关键发现 | 该特性源码早已随 v0.9.4 收口提交（`ffe9ed4`）进入主线：`web/src/lib/nativeInbox.ts`、`NativeInbox.tsx`、`NativeAnswerModal.tsx`、`styles/inbox.css`、`test/client-pending.test.mjs`、`docs/contracts/04-native-inbox.md` 与分支**字节一致**，`App.tsx` / `bridge.ts` / `BoardView.tsx` / `lib/client.js` 也已含原生收件接线（取主线版本）。因此本次合并的实际增量 = CHANGELOG 的 v0.10.0 收件箱段 + `package.json` 的 `@deepseek-ai/dsh-client-ui-session` 注入声明 + 13 张 `docs/assets/screens/native-inbox-*.png`；**无代码 / 行为变更，无版本号变更（仍是 0.13.0）** |
+| 冲突解决（11 个） | `package.json` / `web/package.json` 版本保持 **0.13.0**（仅补 `dsh-client-ui-session` 注入，与 `lib/client.js` 的 `ctx.inject(["uiSession"])` 对齐）；`lib/client.js`（保留 v0.11 的 `archivedSessionIds` 推送）、`web/src/App.tsx`、`bridge.ts`、`components/BoardView.tsx` 取主线；`README.md`、`docs/04-architecture.md` 取主线（主线是超集，§5.4 原生收件与代码地图齐备）；`docs/06` 分支的 v0.10 验证记录改写为本 §（原编号 1.15 与主线 v0.9.0 段冲突，按版本序另起 1.28）；`web/dist/index.html` 取主线并在合并后重建 |
+| 卫生 | 丢弃分支误提交的 `web/node_modules` 绝对路径软链（120000 blob；合并检出时曾覆盖本地依赖目录，已 `npm ci` 重装 98 包）；丢弃分支携带的 `web/dist` 旧构建产物（`index-Bh9ckJyG.js` / `index-HKKRtcqK.css`） |
+| 自动化复跑（合并后） | 根 `node --test` **162/162**；Web `vitest` **25 文件 / 249 测试**；`tsc --noEmit` **0 error**；`vite build` 通过且 `web/dist` 重建后文件名与字节同合并前（`index-uM6BVSce.js` / `index-D4ScdgBg.css`）；令牌 lint 9 CSS **0 error / 0 warning** |
+| 真实宿主刷新验收（桌面宿主端口 49463，`health=0.13.0`） | 无头 Chromium 带宿主 auth cookie 打开 GUI → 侧栏「看板」→ iframe 实际加载 `./assets/index-uM6BVSce.js` + `./assets/index-D4ScdgBg.css`（= 合并后 dist），桥 `ready:true` / `pendingCount:0` / console error 0 / pageerror 0；随后在本会话发起一次真实 `ask_user_question`（自动验收探针）→ 看板「待你确认」列顶部「来自 DSH 会话」收件区出现该项（来源「Agent 提问」/「低风险」/ 会话名 / 关联卡片 /「1 个问题」）→ 看板内点「回答」→ 作答弹窗呈现 2 个选项 → 选「收件区作答链路 OK」→「提交全部回答」→ 收件项与弹窗消失、桥 `pendingCount` 归 0、toast「回答已提交」，同一份答案经宿主 pending 对象回送到发起提问的会话（工具返回 `{"answers":[{"id":"native-inbox-probe","selected":["收件区作答链路 OK"]}]}`） |
+| 截图 | `design/screens/native-inbox-merged-realhost-01-board.png`（刷新后看板）、`-02-pending.png`（收件项出现）、`-03-modal.png`（作答弹窗）、`-04-answered.png`（作答后收件区归零）；同步 `docs/assets/screens/` |
+| 脚本 | `/tmp/dsh-cdp/{cdp.mjs,accept-realhost.mjs}`（一次性验收脚本，未入库） |
+| 已知事项 | CHANGELOG 的 v0.10.0 段现同时记录「决策日志」与「原生待确认收件箱」两个特性（两者代码都随 v0.10 上线，收件箱段为 2026-10-28 补记）；分支上旧测试计数（85/85、vitest 17/137）保留为分支时点记录，合并后以 §2 的 162/162、25/249 为准 |
+| 生效方式 | 本次无服务端 / 前端代码变更，刷新看板即与主线一致；宿主版本仍是 0.13.0 |
+
+## 1.29 v0.14.0（卡片详情「分支 / 工作树」升级为 Fork 风格多分支提交图，2026-10-27）
 
 | 项 | 结果 |
 |---|---|
@@ -639,4 +663,13 @@ node scripts/dev-server.mjs --port 4611 --data /tmp/git-viz-verify/data/data.jso
 #    打开 http://127.0.0.1:4611/dsh-kanban/ 双击卡片：详情抽屉出现「分支 / 工作树」多泳道图，
 #    滚到中段可见合并/分叉曲线；非 git / 无 cwd / 目录不存在三种卡区块不出现；390 竖屏与暗色复查。
 #    本次 26 项 Playwright 断言脚本与截图脚本为一次性资产，保留在 /tmp/git-viz-verify/tools/（未入库），
-#    结果与证据见 §1.28。
+#    结果与证据见 §1.29。
+# ⑤ v0.13.0 重启桌面 DSH 后的真实宿主复验（一次性脚本，未入库；端口取重启后启 runtime context）
+#    UI：44 项断言（含 --expect-version / --real-card；--cleanup 自动归档临时卡）
+node /tmp/realhost-verify/verify.mjs --base http://127.0.0.1:<新端口> \
+  --out /tmp/lead-v013/shots-realhost --cleanup --expect-version 0.13.0 --real-card card-a57f6dbf
+#    API：42 项断言（health / dist 一致性 / 真实卡 4 工作树 / 演示仓库分叉 / 不可用原因 / 旧接口回归）
+python3 /tmp/lead-v013/realhost-check.py --base http://127.0.0.1:<新端口> \
+  --repo "/Users/roxor/Desktop/dsh/dsh kanban" --demo-root /tmp/dsh-kanban-git-demo \
+  --expect-version 0.13.0 --real-card card-a57f6dbf --out /tmp/lead-v013/realhost-results.json
+#    结果与证据见 §1.27；重启口径：需 ⌘Q / 菜单「退出」真正结束宿主进程，仅关窗口不会重载服务端

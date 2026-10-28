@@ -3,7 +3,7 @@
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里的原生看板插件。
 **卡片是控制面，DSH 会话是执行面**：你在看板里管理"要做什么、到哪了、需要你决定什么"，agent 在会话里执行，并通过原生工具把进展写回卡片。卡片内回复会直接进入绑定的 DSH 会话，会话里的决定也会回到卡片。
 
-> 状态：v0.14.0（分支 `feat/fork-graph-viz`，基于 v0.13.0 主线 `e27dd98`，待合入），已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写 → 会话归档 → 多会话回复目标 → 卡片 Git 分支 / 工作树可视化）。v0.9.2 起含服务端改动（审批自定义回答、摘要上限），v0.10.0 决策日志、v0.11.0 会话归档联动 + 会话运行失败同步、v0.12.0 多会话目标下拉与主会话切换时间线、v0.13.0 卡片 Git 分支 / 工作树、v0.14.0 Fork 风格多分支提交图同样含服务端改动，**都需要重启 DSH 后生效**；纯前端修复刷新看板即可。数据存本机 `~/.dsh-kanban/data.json`，决策日志另存同目录 `decisions.jsonl`（只追加）。
+> 状态：v0.14.0（分支 `feat/fork-graph-viz`，基于 v0.13.0 主线 `e27dd98`，待合入；v0.13.0 已合入主线 `97ad6da` 并于 2026-10-28 重启桌面 DSH 后 `health=0.13.0`、真实宿主复验通过），已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写 → 会话归档 → 多会话回复目标 → 卡片 Git 分支 / 工作树可视化 → 原生待确认收件箱）。v0.9.2 起含服务端改动（审批自定义回答、摘要上限），v0.10.0 决策日志 / 原生待确认收件箱、v0.11.0 会话归档联动 + 会话运行失败同步、v0.12.0 多会话目标下拉与主会话切换时间线、v0.13.0 卡片 Git 分支 / 工作树、v0.14.0 Fork 风格多分支提交图同样含服务端改动，**都需要重启 DSH 后生效**；纯前端修复刷新看板即可。数据存本机 `~/.dsh-kanban/data.json`，决策日志另存同目录 `decisions.jsonl`（只追加）。
 > 仓库：[github.com/roxorlt/dsh-kanban](https://github.com/roxorlt/dsh-kanban)
 
 ![看板视图（真实 DSH 内）](docs/assets/screens/embedded-board-light.png)
@@ -38,8 +38,8 @@
 ## 已验证
 
 - 服务端 `node --test`：**170/170 通过**（v0.13 Git 上下文 12 例 + v0.14 多分支 graph 8 例）；Web `tsc` + Vite 构建通过，vitest 25 文件 / 241 测试，令牌 lint 0 error / 0 warning。
-- v0.14.0 Fork 风格多分支提交图：详情抽屉「分支 / 工作树」区块升级为多泳道彩色提交图（本地分支 + origin 引用 ≤10 条、最近 48 提交、合并提交多父曲线、主干颜色稳定、8 色调色板、320px 内滚动、图例带 ↑↓/当前/工作树徽标）。在**本仓库真实数据**（10 refs / 40 提交 / 3 个合并 / 4 个工作树）与多分支演示仓库（2 个合并、5 个分支、3 个工作树、18 提交）上验收：Chromium 1440×900 DPR2 + 390×844、亮/暗共 **26 项断言全过**、console 0 error / pageerror 0 / 4xx 0、无横向溢出；非 git / 无 cwd / 目录不存在三种卡区块整块隐藏（证据 `docs/assets/screens/git-fork-*.png`，详见 docs/06 §1.28）。含服务端改动，需合入主线并重启 DSH 后生效。
-- v0.13.0 卡片 Git 分支 / 工作树可视化（**已被 v0.14 的 Fork 风格多泳道图取代**，历史证据保留在 docs/06 §1.26）：详情抽屉新增只读区块；含服务端改动，已合入主线（merge `97ad6da`），真实宿主复验见 docs/06 §1.27。
+- v0.14.0 Fork 风格多分支提交图：详情抽屉「分支 / 工作树」区块升级为多泳道彩色提交图（本地分支 + origin 引用 ≤10 条、最近 48 提交、合并提交多父曲线、主干颜色稳定、8 色调色板、320px 内滚动、图例带 ↑↓/当前/工作树徽标、chips 含远端跟踪）。在**本仓库真实数据**（10 refs / 40 提交 / 3 个合并 / 4 个工作树）与多分支演示仓库（5 分支 / 2 合并 / 3 工作树 / 18 提交）上验收：Chromium 1440×900 DPR2 + 390×844、亮/暗共 **26 项断言全过**、console 0 error / pageerror 0 / 4xx 0、无横向溢出；非 git / 无 cwd / 目录不存在三种卡区块整块隐藏（证据 `docs/assets/screens/git-fork-*.png`，详见 docs/06 §1.29）。含服务端改动，需合入主线并重启 DSH 后生效。
+- v0.13.0 卡片 Git 分支 / 工作树可视化（**已被 v0.14 的 Fork 风格多泳道图取代**，历史证据见 docs/06 §1.26 / §1.27）：详情抽屉新增只读「分支 / 工作树」区块；含服务端改动，已合入主线（merge `97ad6da`），**2026-10-28 重启桌面 DSH 后 `health=0.13.0`**，真实宿主复验通过（真实卡 `card-a57f6dbf` 区块出现且列出 4 个工作树、两泳道图 12 行含分叉点；演示仓库 linked worktree / 截断 / 非 git·无 cwd·目录不存在隐藏 / 暗色 / 390 竖屏共 44 + 42 项断言全过，证据 `docs/assets/screens/git-realhost-*.png`）。
 - v0.12.0 多会话主会话切换与回复/审批目标：合并后服务端 150/150、Web vitest 24 文件 / 225 测试；`设为主会话` 写入 `session_primary` 时间线（「主会话切换为「X」」，已是主会话幂等不重复），Composer 上方「回复/审批目标」下拉默认主会话、设为主会话后默认跟随，回复与审批决定都发到选中会话；隔离真实 DSH 宿主（0.1.5-rc.2 + 真实插件 + 3 个真实会话，Playwright）4/4 验收全过、console 0 error、0 个 4xx（截图 `design/screens/m2-merged-host-*.png`）；2026-10-27 09:41 重启桌面 DSH 后 `/api/kanban/health` 返回 0.12.0、真实数据与 v0.10/v0.11 接口共存（全部证据见 docs/06 §1.25）。
 - v0.11.0 会话归档联动：真实 Chromium E2E（真服务端路由 + 假 workspaceRegistry + 假父页面桥）覆盖归档/恢复/停止并归档/共享会话阻塞/待确认阻塞/批量预览+执行/时间线活动，10 项断言全过；真实宿主需重启 DSH 加载服务端 v0.11 后复验（证据 `design/screens/session-archive-e2e-*.png`）。
 - v0.11.0 会话运行失败同步：并入后服务端 149/149（本特性 12 例覆盖失败判定口径、主会话过滤、同轮去重、自动置失败/恢复、监听器接线与开关）；dev-server 冒烟正常；真实宿主失败复验在重启 DSH 后执行（步骤见 docs/06 §1.23）。
@@ -81,6 +81,16 @@
 | ![多泳道图](docs/assets/screens/git-fork-graph-light.png) | ![暗色](docs/assets/screens/git-fork-graph-dark.png) |
 
 | 合并 / 分叉曲线细节（滚到中段） | 多工作树卡片 |
+| --- | --- |
+| ![曲线细节](docs/assets/screens/git-fork-graph-detail-light.png) | ![多工作树](docs/assets/screens/git-fork-graph-worktree-light.png) |
+
+| 看板 + 右侧详情全貌 | 390 竖屏 |
+| --- | --- |
+| ![看板](docs/assets/screens/git-fork-board-light.png) | ![竖屏](docs/assets/screens/git-fork-graph-portrait.png) |
+
+| v0.13 真实宿主：真实卡区块（历史，已被 v0.14 取代） | v0.13 真实宿主：390 竖屏（历史） |
+| --- | --- |
+| ![真实宿主区块](docs/assets/screens/git-realhost-section-real-card.png) | ![真实宿主竖屏](docs/assets/screens/git-realhost-worktree-portrait.png) |
 | --- | --- |
 | ![曲线细节](docs/assets/screens/git-fork-graph-detail-light.png) | ![多工作树](docs/assets/screens/git-fork-graph-worktree-light.png) |
 
