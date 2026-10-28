@@ -3,7 +3,7 @@
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）里的原生看板插件。
 **卡片是控制面，DSH 会话是执行面**：你在看板里管理"要做什么、到哪了、需要你决定什么"，agent 在会话里执行，并通过原生工具把进展写回卡片。卡片内回复会直接进入绑定的 DSH 会话，会话里的决定也会回到卡片。
 
-> 状态：v0.16.0（分支 `feat/workspace-view`，基于 v0.15.0 主线 `9acf3f0`；v0.14/0.14.1/0.15 已合入主线，0.14 已在真实宿主验证），已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写 → 会话归档 → 多会话回复目标 → 卡片 Git 分支 / 工作树可视化 → 原生待确认收件箱）。v0.9.2 起含服务端改动（审批自定义回答、摘要上限），v0.10.0 决策日志 / 原生待确认收件箱、v0.11.0 会话归档联动 + 会话运行失败同步、v0.12.0 多会话目标下拉与主会话切换时间线、v0.13.0 卡片 Git 分支 / 工作树、v0.14.0 Fork 风格多分支提交图、v0.15.0 卡片工作线徽标、v0.16.0 工作区视图同样含服务端改动，**都需要重启 DSH 后生效**；纯前端修复刷新看板即可。数据存本机 `~/.dsh-kanban/data.json`，决策日志另存同目录 `decisions.jsonl`（只追加）。
+> 状态：v0.16.0（已合入主线 `aeb5ba4`；v0.14/0.14.1/0.15 已合入主线，0.14 已在真实宿主验证），已在 DSH `0.1.5-rc.2` / 桌面 `0.2.1-rc.2` 上完成端到端验证（安装 → 侧栏 → 全屏面板 → 会话桥 → agent 工具 → 审批回写 → 会话归档 → 多会话回复目标 → 卡片 Git 分支 / 工作树可视化 → 原生待确认收件箱）。v0.9.2 起含服务端改动（审批自定义回答、摘要上限），v0.10.0 决策日志 / 原生待确认收件箱、v0.11.0 会话归档联动 + 会话运行失败同步、v0.12.0 多会话目标下拉与主会话切换时间线、v0.13.0 卡片 Git 分支 / 工作树、v0.14.0 Fork 风格多分支提交图、v0.15.0 卡片工作线徽标、v0.16.0 工作区视图同样含服务端改动，**都需要重启 DSH 后生效**；纯前端修复刷新看板即可。数据存本机 `~/.dsh-kanban/data.json`，决策日志另存同目录 `decisions.jsonl`（只追加）。
 > 仓库：[github.com/roxorlt/dsh-kanban](https://github.com/roxorlt/dsh-kanban)
 
 ![看板视图（真实 DSH 内）](docs/assets/screens/embedded-board-light.png)
@@ -40,7 +40,7 @@
 ## 已验证
 
 - 服务端 `node --test`：**192/192 通过**（v0.13 Git 上下文 12 + v0.14 graph 8 + v0.15 批量摘要 11 + v0.16 工作区地图 11）；Web `tsc` + Vite 构建通过，vitest 27 文件 / 273 测试，令牌 lint 10 CSS 0 error / 0 warning。
-- v0.16.0「工作区」视图 + 提交图 hover 高亮：工作区视图按仓库分块列工作副本/卡片/会话/未保存改动（服务端 `/git/workspaces` 按仓库缓存、`dirs[]` 精确归组解决 realpath 前缀问题）；hover 悬停提交行或图例项高亮同色泳道、其它淡出（180ms、reduced-motion 关闭、无布局变化）。dev-server + 真实/演示仓库验证：2 仓库/10 工作副本/卡片归组与 dirty 正确、点击 mini 卡片开详情、390 竖屏无溢出；hover 120 条淡出/24 条保持/图例同步；console 0 error / 4xx 0（截图 `docs/assets/screens/git-workspaces-*.png`、`git-workline-hover-*.png`，见 docs/06 §1.32）。
+- v0.16.0「工作区」视图 + 提交图 hover 高亮：工作区视图按仓库分块列工作副本/卡片/会话/未保存改动（服务端 `/git/workspaces` 按仓库缓存、`dirs[]` 精确归组解决 realpath 前缀问题）；hover 悬停提交行或图例项高亮同色泳道、其它淡出（180ms、reduced-motion 关闭、无布局变化）。含服务端改动，**已合入主线（merge `aeb5ba4`），重启 DSH 后生效**（hover 为纯前端，刷新即可）。dev-server + 真实/演示仓库验证：2 仓库/10 工作副本/卡片归组与 dirty 正确、点击 mini 卡片开详情、390 竖屏无溢出；hover 120 条淡出/24 条保持/图例同步；console 0 error / 4xx 0（截图 `docs/assets/screens/git-workspaces-*.png`、`git-workline-hover-*.png`，见 docs/06 §1.32）。
 - v0.15.0 卡片 / 列表「工作线」徽标：派生式（不落卡片字段），按仓库去重批量摘要（服务端 10s 缓存 / 前端 15s 缓存 + 20s 刷新），只对非主线 feature 显示，失败显示「工作线未知」；dev-server + 真实/演示仓库数据在看板、列表、亮/暗、390 竖屏验证（主线/无 cwd/非 git 不显示、目录不存在显示未知、无横向溢出、console 0 error，截图 `docs/assets/screens/git-workline-badges-*.png`，见 docs/06 §1.31）。另交付可交互 hover 高亮泳道 demo（`design/branch-awareness/hover-lane-demo.html`）与按项目/仓库分组的方案 2/3 原型。含服务端改动，**已合入主线（merge `e1fbe81`），重启 DSH 后生效**。
 - v0.14.1「工作线」人话版（面向非技术用户）：详情抽屉默认展示一句话总结（在哪条工作线、比主线多/少多少、线上是否同步）+ 关键事实表；提交图与多工作树列表折叠为「提交图」，默认收起。纯前端改动，已合入主线（merge `78c3046`），**刷新看板即生效、无需重启 DSH**；真实仓库主分支卡与演示仓库 worktree 卡在亮/暗/390 竖屏渲染正确、无横向溢出、console 0 error（截图 `docs/assets/screens/git-workline-*.png`，详见 docs/06 §1.30）。
 - v0.14.0 Fork 风格多分支提交图：详情抽屉「分支 / 工作树」区块升级为多泳道彩色提交图（本地分支 + origin 引用 ≤10 条、最近 48 提交、合并提交多父曲线、主干颜色稳定、8 色调色板、320px 内滚动、图例带 ↑↓/当前/工作树徽标、chips 含远端跟踪）。在**本仓库真实数据**（10 refs / 40 提交 / 3 个合并 / 4 个工作树）与多分支演示仓库（5 分支 / 2 合并 / 3 工作树 / 18 提交）上验收：Chromium 1440×900 DPR2 + 390×844、亮/暗共 **26 项断言全过**、console 0 error / pageerror 0 / 4xx 0、无横向溢出；非 git / 无 cwd / 目录不存在三种卡区块整块隐藏（证据 `docs/assets/screens/git-fork-*.png`，详见 docs/06 §1.29）。含服务端改动，已合入主线（merge `3d9e755`），**重启 DSH 后生效**；真实宿主复验在重启后执行。
