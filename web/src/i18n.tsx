@@ -255,6 +255,9 @@ const zh = {
 
   // 「工作区」视图（v0.16）
   'workspace.summary': '{repos} 个仓库 · {worktrees} 个工作副本 · {running} 张卡片在运行',
+  'workspace.collapseRepo': '收起「{name}」',
+  'workspace.expandRepo': '展开「{name}」',
+  'workspace.repoCollapsed': '已收起 · {count} 个工作副本 · 点左侧箭头展开',
   'workspace.repoMeta': '{worktrees} 个工作副本 · {cards} 张卡片',
   'workspace.cardCount': '{count} 张卡片',
   'workspace.mainWorktree': '主工作树',
@@ -865,6 +868,9 @@ const en: Record<I18nKey, string> = {
 
   // Workspace view (v0.16)
   'workspace.summary': '{repos} repos · {worktrees} work copies · {running} cards running',
+  'workspace.collapseRepo': 'Collapse “{name}”',
+  'workspace.expandRepo': 'Expand “{name}”',
+  'workspace.repoCollapsed': 'Collapsed · {count} work copies · click the arrow to expand',
   'workspace.repoMeta': '{worktrees} work copies · {cards} cards',
   'workspace.cardCount': '{count} cards',
   'workspace.mainWorktree': 'Main worktree',

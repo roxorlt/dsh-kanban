@@ -60,6 +60,55 @@
   background: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent);
 }
 
+.kb-workspace__repo-toggle {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.kb-workspace__repo-toggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kb-workspace__repo-toggle:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.kb-workspace__repo-chevron {
+  display: inline-flex;
+  transform: rotate(-90deg);
+  transition: transform var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-workspace__repo-chevron--open {
+  transform: rotate(0deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kb-workspace__repo-chevron {
+    transition: none;
+  }
+}
+
+.kb-workspace__repo-collapsed-hint {
+  margin: 0;
+  padding: 8px 12px 10px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
 .kb-workspace__repo-name {
   margin: 0;
   min-width: 0;
