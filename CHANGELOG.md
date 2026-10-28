@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.17.0 — 2026-10-28
+
+### 新增：工作区视图 Phase A 清理状态 + Phase B 二次确认软删除（用户拍板后落地）
+
+- 反馈与决策：① 仓库标题栏应整行可点（原仅小三角）；②「未指定」块也要能收起；③ Phase A+B 通过——已合并分支可一起删；软删除（回收站）防误删；未合并工作副本允许用户二次确认后强删（选择权交给用户）；磁盘占用先不做。
+- 服务端（`lib/git.js` / `lib/routes.js`，契约 02 §12/§13、06 §4.8）：
+  - Phase A：`/git/workspaces` 每个 worktree 增 `mergedIntoBase`、`upstream{ref,ahead,behind}`、`modifiedCount`、`untrackedCount`、`locked`、`prunable`、`lastCommitAt`；`dirty`=modifiedCount>0（不再只看已跟踪）。
+  - Phase B：新增 `POST /api/kanban/git/worktrees/cleanup`：目标必须来自看板未归档卡片 cwd 推导出的仓库工作副本；主工作副本/有卡片占用拒绝；脏或未合并需 `confirmLoss`（409 提示）；目录 **rename 到 `~/.dsh-kanban/trash`**（保留 7 天，可补救）+ `git worktree prune`；可选删本地分支（已合并 `-d`，未合并且 confirm（confirmLoss）`-D`）；locked 先解锁再 prune；trash 超 7 天自动清理；写操作 console.info 审计。
+- Web（`WorkspaceView` / `CleanupWorktreeDialog` / `useWorkspaces`）：仓库标题栏与「未指定」块整行可点收起（三角形仅视觉、aria-expanded/controls、键盘可达、状态持久化）；工作副本行新增状态徽标（已并入主线 / 还没并入·多 N；已同步线上 / 有 N 处没推送 / 线上落后 N / 没有远端；有未保存改动 / 有未跟踪文件 / 干净）+「可安全清理」；「清理」按钮对主工作副本/有卡片占用/卡片在跑时 disabled 并写明原因；两段式确认（第一层路径/分支/状态 + 回收站说明 +「同时删除本地分支」默认合并勾选；脏或未合并升级第二层危险确认，必须勾「我已了解风险」）；成功后 toast + 自动刷新工作区。
+- 设计规范：docs/03 §7.23 增补整行收起、Phase A 状态、两段确认与回收站约定。
+- 测试：服务端 **206/206**（新增 14：Phase A 字段 + 软删除/删分支/脏/未合并/主副本/卡片占用/任意路径/locked/trash 过期/缓存失效）；Web **27 文件 / 294 例**（新增 21：状态分类、清理判定、错误码、归一化）；tsc/build/令牌 lint 全过。
+- 验证（dev-server + 演示仓库真实 git）：安全清理（已合并+干净）→ 弹窗确认、删分支、目录进回收站、工作区行消失、toast；未合并工作副本 → 第一层后弹第二层危险确认（列出「还有 1 处改动没并入主线」）→ 勾选后清理成功；主工作副本/有卡片在跑的按钮 disabled 并显示原因；`git worktree list` 与 branch 状态与预期一致。截图 `docs/assets/screens/git-workspaces-cleanup-*.png`，详见 docs/06 §1.34。
+- 生效方式：含服务端改动，需**合入 main 并重启 DSH**；回收站位于 `~/.dsh-kanban/trash`（7 天后自动删）。
+- 已知限制：回收站恢复入口未做（Phase C）；跨磁盘 rename 失败返回 500；不统计磁盘占用（按用户决定暂不做）；未做批量清理。
+- 分支：`feat/worktree-cleanup`（基于 `0d92b04`）。
+
 ## v0.16.1 — 2026-10-28
 
 ### 改进：「工作区」视图仓库块可展开 / 收起

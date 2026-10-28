@@ -21,7 +21,10 @@ import type {
   GitWorkspaceRepo,
   GitWorkspacesResult,
   GitWorkspaceUnavailable,
+  GitWorkspaceUpstream,
   GitWorkspaceWorktree,
+  CleanupWorktreeInput,
+  CleanupWorktreeResult,
   KanbanState,
   Priority,
   SessionActivityEntry,
@@ -467,11 +470,31 @@ function normalizeNullableCount(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function normalizeWorkspaceUpstream(raw: unknown): GitWorkspaceUpstream | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const upstream = raw as Partial<GitWorkspaceUpstream>;
+  if (typeof upstream.ref !== 'string' || !upstream.ref) return null;
+  return {
+    ref: upstream.ref,
+    ahead: typeof upstream.ahead === 'number' && upstream.ahead > 0 ? upstream.ahead : 0,
+    behind: typeof upstream.behind === 'number' && upstream.behind > 0 ? upstream.behind : 0,
+  };
+}
+
 function normalizeWorkspaceWorktree(raw: unknown): GitWorkspaceWorktree | null {
   if (!raw || typeof raw !== 'object') return null;
   const worktree = raw as Partial<GitWorkspaceWorktree>;
   if (typeof worktree.path !== 'string' || !worktree.path) return null;
   const sha = typeof worktree.sha === 'string' ? worktree.sha : '';
+  // v0.17 增量字段：旧服务端没有 → 保持字段缺失（前端按「未知」处理，不谎报）
+  const mergedIntoBase =
+    worktree.mergedIntoBase === true ? true : worktree.mergedIntoBase === false ? false : worktree.mergedIntoBase === null ? null : undefined;
+  const upstream =
+    worktree.upstream === undefined
+      ? undefined
+      : worktree.upstream === null
+        ? null
+        : normalizeWorkspaceUpstream(worktree.upstream);
   return {
     path: worktree.path,
     branch: typeof worktree.branch === 'string' ? worktree.branch : null,
@@ -485,6 +508,19 @@ function normalizeWorkspaceWorktree(raw: unknown): GitWorkspaceWorktree | null {
     dirty: worktree.dirty === true,
     ...(Array.isArray(worktree.dirs)
       ? { dirs: worktree.dirs.filter((dir): dir is string => typeof dir === 'string' && Boolean(dir.trim())) }
+      : {}),
+    ...(mergedIntoBase === undefined ? {} : { mergedIntoBase }),
+    ...(upstream === undefined ? {} : { upstream }),
+    ...(typeof worktree.modifiedCount === 'number' && worktree.modifiedCount >= 0
+      ? { modifiedCount: worktree.modifiedCount }
+      : {}),
+    ...(typeof worktree.untrackedCount === 'number' && worktree.untrackedCount >= 0
+      ? { untrackedCount: worktree.untrackedCount }
+      : {}),
+    ...(typeof worktree.locked === 'boolean' ? { locked: worktree.locked } : {}),
+    ...(typeof worktree.prunable === 'boolean' ? { prunable: worktree.prunable } : {}),
+    ...(typeof worktree.lastCommitAt === 'string' || worktree.lastCommitAt === null
+      ? { lastCommitAt: typeof worktree.lastCommitAt === 'string' ? worktree.lastCommitAt : null }
       : {}),
   };
 }
@@ -515,6 +551,22 @@ function normalizeWorkspaceUnavailable(raw: unknown): GitWorkspaceUnavailable | 
     dir: item.dir,
     reason: normalizeGitSummaryReason(item.reason),
     ...(typeof item.message === 'string' && item.message ? { message: item.message } : {}),
+  };
+}
+
+/** 容错归一化清理结果（contract §13 的 `cleanup` 对象）。 */
+export function normalizeCleanupResult(raw: unknown): CleanupWorktreeResult {
+  const payload = raw && typeof raw === 'object' ? (raw as Partial<CleanupWorktreeResult>) : {};
+  return {
+    repoRoot: typeof payload.repoRoot === 'string' ? payload.repoRoot : '',
+    worktreePath: typeof payload.worktreePath === 'string' ? payload.worktreePath : '',
+    trashedTo: typeof payload.trashedTo === 'string' ? payload.trashedTo : '',
+    branchName: typeof payload.branchName === 'string' ? payload.branchName : null,
+    branchDeleted: payload.branchDeleted === true,
+    trashRetentionDays:
+      typeof payload.trashRetentionDays === 'number' && payload.trashRetentionDays > 0
+        ? payload.trashRetentionDays
+        : 7,
   };
 }
 
@@ -888,6 +940,19 @@ export const api = {
       body: JSON.stringify({ dirs }),
     });
     return normalizeGitWorkspaces(result);
+  },
+
+  /**
+   * v0.17 清理工作副本（软删除，docs/contracts/02-http-api.md §13）：
+   * 把目录移入回收站 + prune + 可选删本地分支；服务端会重新校验（卡片占用/脏/未合并），
+   * 失败抛 KanbanApiError（code / details.reason 兼容两种形态），由调用方映射成人话。
+   */
+  cleanupWorktree: async (input: CleanupWorktreeInput): Promise<CleanupWorktreeResult> => {
+    const result = await request<{ cleanup?: Partial<CleanupWorktreeResult> }>('/git/worktrees/cleanup', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return normalizeCleanupResult(result.cleanup);
   },
 
   ack: (cardId: string): Promise<{ revision: number }> =>

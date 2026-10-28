@@ -219,7 +219,7 @@ sequenceDiagram
 | `lib/domain.js` | 状态/列映射、默认看板、种子数据、节点/审批构造；审批请求/提交/未决事件收集 |
 | `lib/session-archive.js` | 宿主会话归档适配器：包装 DSH `workspaceRegistry` 的可逆归档、能力探测与错误码（v0.11） |
 | `lib/session-sync.js` | 会话运行失败同步：监听宿主 `session/event` 的 `turn/end`，失败/恢复回写卡片（v0.11） |
-| `lib/git.js` | 卡片 Git 上下文（只读派生）：详情用完整上下文（分支 / upstream / 主分支参照 / 工作树 / 多分支提交图）；v0.15 轻量 `collectGitSummary` 供看板批量摘要；v0.16 `collectGitWorkspaces` 按仓库聚合工作副本（含 dirty 与请求目录映射）；失败收敛为 `available:false` / `graph:null` |
+| `lib/git.js` | 卡片 Git 上下文：详情完整上下文、批量摘要、工作区聚合；v0.17 增工作副本清理判定字段与 `cleanupWorktree`（回收站 + prune + 可选删分支） |
 | `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`）、决策日志、会话归档与卡片 Git 上下文接口 |
 | `lib/tools.js` | 11 个 `kanban_*` agent 工具 |
 | `web/` | 看板 UI（React + Vite），构建产物 `web/dist` 由服务端直接服务 |
@@ -233,7 +233,8 @@ sequenceDiagram
 | `web/src/lib/useWorklineStatuses.ts` | 看板批量拉取工作线摘要：cwd 去重、400ms 防抖、≤32/批、15s 缓存、20s 可见刷新、失败静默未知（v0.15） |
 | `web/src/components/WorklineBadge.tsx` | 卡片/列表行「工作线」徽标：彩点 + 分支 + 关系/线上短语，仅非主线 feature 显示（v0.15） |
 | `web/src/lib/useWorkspaces.ts` | 「工作区」视图数据：cwd 去重批量拉取、15s 缓存、20s 可见刷新；`groupCardsByWorktree` 按服务端 `dirs[]` 精确归组（v0.16） |
-| `web/src/components/WorkspaceView.tsx` | 「工作区」视图：按仓库分块、工作副本行（分支/徽标/相对主线/路径/卡片 mini 列表/会话数）、未指定组（v0.16） |
+| `web/src/components/WorkspaceView.tsx` | 「工作区」视图：按仓库分块、工作副本行（分支/Phase A 合并/远端/改动状态/清理按钮/路径/卡片 mini 列表/会话数）、未指定组（v0.16/v0.17） |
+| `web/src/components/CleanupWorktreeDialog.tsx` | 工作副本清理两段式确认（普通确认 + 脏/未合并危险确认），软删除说明与删分支选项（v0.17） |
 | `web/src/components/ForkGraph.tsx` | Fork 风格多泳道提交图渲染；v0.16 增加 hover 高亮同色泳道（行/图例双向联动）（v0.14/v0.16） |
 | `web/src/components/GitBranchSection.tsx` | 详情抽屉「工作线」区块：人话总结 + 关键事实表 +「提交图」折叠区（ForkGraph + 多工作树列表，默认收起）（v0.13→v0.14→v0.14.1） |
 | `skills/manage-kanban/` | 教 agent 使用看板的工作流技能 |

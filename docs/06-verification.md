@@ -523,6 +523,19 @@
 | 生效方式 | 纯前端改动，**已合入 main，刷新看板即生效，无需重启 DSH** |
 | 分支 | `feat/workspace-view`（v0.16.1 追加提交，基于 v0.16.0 主线） |
 
+## 1.34 v0.17.0（工作副本 Phase A 清理状态 + Phase B 二次确认软删除，2026-10-28）
+
+| 项 | 结果 |
+|---|---|
+| 用户决策 | ① 仓库标题栏整行可点；②「未指定」块也可收起；③ Phase A+B 通过，已合并分支可一起删、软删除防误删、未合并允许二次确认后强删、磁盘占用暂不做 |
+| 服务端 | `/git/workspaces` worktree 增 `mergedIntoBase`/`upstream`/`modifiedCount`/`untrackedCount`/`locked`/`prunable`/`lastCommitAt`，`dirty=modifiedCount>0`；新增 `POST /git/worktrees/cleanup`（契约 02 §13）：目标必须来自看板未归档卡片 cwd 推导的仓库工作副本；主副本 / WORKTREE_IN_USE / DIRTY / UNMERGED / BRANCH_IN_USE 全套校验；脏/未合并需 `confirmLoss`；目录 rename 到 `~/.dsh-kanban/trash`（7 天）+ `git worktree prune`；可选删分支（合并 `-d`、未合并 `-D`）；locked 先解锁；trash 过期清理；审计日志；成功失效工作区缓存 |
+| Web | 仓库标题栏整行 `<button>`（`span role="heading"`，三角仅视觉，键盘可用）+「未指定」整行收起（localStorage）；工作副本行 Phase A 状态徽标 +「可安全清理」；清理按钮 disabled 原因（主副本/有卡片在用/卡片在跑）；`CleanupWorktreeDialog` 两段式确认（第一层路径/分支/状态/回收站说明/删分支勾选；脏/未合并第二层危险确认需勾风险）；成功 toast + reload；错误码映射人话；`useWorkspaces` 返回 reload |
+| 单测 | 服务端 `node --test` **206/206**（新增 14：Phase A 字段 + 软删/删分支/脏/未合并/主副本/卡片占用/任意路径/locked/trash 过期/缓存失效）；Web `vitest` **27 文件 / 294 例**（新增 21：状态分类/清理判定/错误码/归一化）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 10 CSS 0/0 |
+| 真实浏览器验收（dev-server + 演示仓库真实 git；1440×900） | 工作区展示 2 仓库 13 工作副本：`feat/cleanup-demo` 可安全清理（已并入主线/没有远端/干净）、`feat/graph`/`feat/long` 按钮 disabled「有卡片在跑」、主工作副本 disabled「主工作副本不能清理」；安全清理 → 第一层确认（删分支默认勾选）→ 成功 toast「已清理并删除本地分支 feat/cleanup-demo（回收站保留 7 天）」、行消失、`git worktree list` 移除、目录进 trash；未合并 `feat/unmerged-demo` → 第二层危险确认列出「还有 1 处改动没并入主线」→ 勾选后清理成功（未勾删分支则分支保留）；全程 console error 0 / 4xx 0（cleanup 预期 200） |
+| 截图 | `docs/assets/screens/git-workspaces-cleanup-light.png`、`-cleanup-dialog.png`、`-cleanup-danger.png` |
+| 生效方式 | 含服务端改动，**需合入 main 并重启 DSH**；回收站 `~/.dsh-kanban/trash`（7 天自动清理） |
+| 分支 | `feat/worktree-cleanup`（基于 v0.16.1 主线 `0d92b04`）；版本 0.17.0 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

@@ -49,45 +49,42 @@
   background: var(--dsw-alias-bg-module-platform);
 }
 
+/* 仓库标题栏：整行 button（hover 整行底色、focus-visible 圆角 outline、键盘 Enter/Space 切换） */
 .kb-workspace__repo-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 10px;
+  width: 100%;
   min-width: 0;
+  margin: 0;
   padding: 9px 12px;
-  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
-  background: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent);
-}
-
-.kb-workspace__repo-toggle {
-  flex: none;
-  align-self: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
   border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  /* 圆角与仓库块一致，focus-visible 的 outline 才会沿圆角走 */
+  border-radius: var(--kb-r-card) var(--kb-r-card) 0 0;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
+  transition: background-color var(--kb-dur-fast) var(--kb-ease-out);
 }
 
-.kb-workspace__repo-toggle:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
+.kb-workspace__repo-head:hover {
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
 }
 
-.kb-workspace__repo-toggle:focus-visible {
+.kb-workspace__repo-head:focus-visible {
   outline: 2px solid var(--dsw-alias-state-business-primary);
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 
 .kb-workspace__repo-chevron {
   display: inline-flex;
+  flex: none;
+  align-self: center;
+  color: var(--dsw-alias-label-tertiary);
   transform: rotate(-90deg);
   transition: transform var(--kb-dur) var(--kb-ease-out);
 }
@@ -325,6 +322,157 @@
   padding: 4px 12px 10px;
 }
 
+/* ------------------------------------------------- 清理按钮 / 对话框 */
+
+/* 工作副本行右侧：清理按钮 + 可安全清理提示 / 不可清理原因 */
+.kb-workspace__cleanup {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kb-workspace__cleanup-btn {
+  flex: none;
+}
+
+.kb-workspace__cleanup-safe {
+  flex: none;
+  color: var(--dsw-alias-state-success-primary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.kb-workspace__cleanup-blocked {
+  max-width: 140px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  text-align: right;
+}
+
+/* Phase A 状态徽标色调 */
+.kb-workspace__tag--success {
+  background: var(--dsw-alias-state-success-tertiary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.kb-workspace__tag--warn {
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+/* 清理确认对话框（Phase B，两段式） */
+.kb-workspace__cleanup-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.kb-workspace__cleanup-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.kb-workspace__cleanup-meta > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kb-workspace__cleanup-meta dt {
+  flex: none;
+  width: 42px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-workspace__cleanup-meta dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  overflow-wrap: anywhere;
+}
+
+.kb-workspace__cleanup-path,
+.kb-workspace__cleanup-branch {
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
+
+.kb-workspace__cleanup-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.kb-workspace__cleanup-warn {
+  margin: 0;
+  color: var(--dsw-alias-state-warn-label);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-workspace__cleanup-error {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: var(--kb-r-ctl);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-workspace__cleanup-danger-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-workspace__cleanup-danger-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.kb-workspace__cleanup-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-workspace__cleanup-warnings li::marker {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* 第二层危险确认的确认按钮（红色填充） */
+.kb-workspace__cleanup-danger {
+  background: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+.kb-workspace__cleanup-danger:hover {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 88%, var(--dsw-alias-label-primary));
+}
+
+.kb-workspace__cleanup-danger:disabled {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 32%, transparent);
+  color: var(--dsw-alias-label-caption);
+  cursor: not-allowed;
+}
+
 /* ---------------------------------------------------------------- 竖屏 */
 
 @media (max-width: 719px) {
@@ -345,6 +493,20 @@
   .kb-workspace__no-cards {
     flex-basis: 100%;
     padding-left: 28px;
+  }
+
+  .kb-workspace__cleanup {
+    flex-basis: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-left: 28px;
+  }
+
+  .kb-workspace__cleanup-blocked {
+    max-width: none;
+    text-align: left;
   }
 
   .kb-workspace__repo-head,

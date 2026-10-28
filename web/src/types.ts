@@ -500,6 +500,13 @@ export type GitSummary = GitSummaryAvailable | GitSummaryUnavailable;
 // ------------------------------------------------ 工作区地图（v0.16，POST /git/workspaces）
 // 按仓库聚合工作副本（worktree）与卡片归属；docs/contracts/02-http-api.md §12。
 
+/** 工作副本分支的 upstream（v0.17，Phase A 远端状态用）。 */
+export interface GitWorkspaceUpstream {
+  ref: string;
+  ahead: number;
+  behind: number;
+}
+
 export interface GitWorkspaceWorktree {
   path: string;
   branch: string | null;
@@ -517,6 +524,21 @@ export interface GitWorkspaceWorktree {
   dirty: boolean;
   /** 本次请求中落在该工作副本的 dir 原文（前端精确归组；旧服务端没有该字段） */
   dirs?: string[];
+  // ↓ v0.17 Phase A 增量（清理判定 / 状态展示；旧服务端没有这些字段）
+  /** 改动是否已全部并入主分支（aheadOfBase===0）；无 mainBranch/sha 时为 null */
+  mergedIntoBase?: boolean | null;
+  /** 该分支的 upstream；没有远端时为 null（字段缺失=旧服务端，前端不谎报） */
+  upstream?: GitWorkspaceUpstream | null;
+  /** 已跟踪文件改动数（git status --porcelain 全量） */
+  modifiedCount?: number;
+  /** 未跟踪文件数 */
+  untrackedCount?: number;
+  /** worktree 被 git 锁定 */
+  locked?: boolean;
+  /** 目录已不存在但 worktree 记录还在 */
+  prunable?: boolean;
+  /** HEAD 提交时间（ISO 字符串，可空） */
+  lastCommitAt?: string | null;
 }
 
 export interface GitWorkspaceRepo {
@@ -542,4 +564,27 @@ export interface GitWorkspacesResult {
   unavailable: GitWorkspaceUnavailable[];
   /** 服务端是否关闭了 git 功能（可选兜底字段） */
   disabled?: boolean;
+}
+
+// ------------------------------------------------ 清理工作副本（v0.17，POST /git/worktrees/cleanup）
+// 软删除：移入回收站（保留 7 天）+ prune + 可选删本地分支；docs/contracts/02-http-api.md §13。
+
+export interface CleanupWorktreeInput {
+  repoRoot: string;
+  worktreePath: string;
+  deleteBranch: boolean;
+  /** 已明确接受「未合并/未保存改动」的丢失风险（第二层危险确认） */
+  confirmLoss: boolean;
+}
+
+export interface CleanupWorktreeResult {
+  repoRoot: string;
+  worktreePath: string;
+  /** 移到回收站后的路径 */
+  trashedTo: string;
+  /** 被删除的本地分支；没有删分支时 null */
+  branchName: string | null;
+  branchDeleted: boolean;
+  /** 回收站保留天数（服务端契约固定 7） */
+  trashRetentionDays: number;
 }

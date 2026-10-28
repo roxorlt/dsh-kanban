@@ -264,11 +264,37 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
           { "path": "/repo", "branch": "main", "detached": false, "sha": "…", "shortSha": "…",
             "isMain": true, "isCurrent": true,
             "aheadOfBase": 0, "behindOfBase": 0,     // 相对 mainBranch；无法计算时 null
-            "dirty": false,                           // git status --porcelain --untracked-files=no 非空
-            "dirs": ["/repo"] }                       // 本次请求中落在该工作副本的 dir 原文（前端精确归组，解决 /tmp ↔ realpath 前缀不一致）
+            "dirty": false,                           // 已跟踪文件有改动（兼容字段，= modifiedCount>0）
+            "dirs": ["/repo"],                        // 本次请求中落在该工作副本的 dir 原文（前端精确归组，解决 /tmp ↔ realpath 前缀不一致）
+            // ↓ v0.17 增量（Phase A 清理判定用）
+            "mergedIntoBase": true,                 // aheadOfBase===0；无 mainBranch/sha 时 null
+            "upstream": { "ref": "origin/main", "ahead": 33, "behind": 0 }, // 该分支的 upstream；无则 null
+            "modifiedCount": 0, "untrackedCount": 0, // git status --porcelain 全量计数（untracked 单独计）
+            "locked": false,                         // git worktree list --porcelain 的 locked
+            "prunable": false,                       // 目录已不存在但 worktree 记录还在
+            "lastCommitAt": "2026-10-28T17:01:26+08:00" } // 该工作副本 HEAD 的提交时间（ISO，可空）
         ] } ],
     "unavailable": [ { "dir": "/tmp/x", "reason": "not_git" } ] }
   ```
 - 规则：按 `git-common-dir` 去重仓库；每仓库最多返回 12 个工作副本（多余丢弃，不报错）；`mainBranch` 探测不到时 null（此时 ahead/behind 均为 null）；只读、不 fetch。
 - 缓存：按仓库 root realpath 缓存 8s / 上限 64 条。
 - 前端把卡片按 `cwd` 归到其工作副本：**优先用 `worktrees[].dirs` 里的原文精确匹配**，匹配不到再退回最长前缀；无 cwd / 不可用的卡片归「未指定」组。
+
+## 13. 清理工作副本（v0.17 增量，Phase B：软删除 + 可选删分支）
+
+清理 = 把工作副本目录**移入回收站**（默认 7 天后自动删除，可补救）+ 清理 git worktree 元数据；可选删除对应本地分支。
+
+- `POST /api/kanban/git/worktrees/cleanup`
+- body：`{ "repoRoot": "/repo", "worktreePath": "/repo/.worktrees/feat-x", "deleteBranch": true, "confirmLoss": false }`
+- 校验：
+  - `repoRoot`/`worktreePath` 必须匹配**由看板未归档卡片 cwd 推导出的仓库与工作副本**（服务端重新采集，不允许任意路径）；
+  - 拒绝主工作副本（400 `WORKTREE_MAIN`）；
+  - 有**未归档卡片**的 cwd 落在该工作副本内 → 409 `WORKTREE_IN_USE`（卡片信息 + 数量）；
+  - 有未保存改动/未跟踪文件且 `confirmLoss !== true` → 409 `WORKTREE_DIRTY`（带 `modifiedCount`/`untrackedCount`）；
+  - 未并入主线且 `confirmLoss !== true` → 409 `WORKTREE_UNMERGED`（带 `ahead`）；
+  - `deleteBranch` 且分支是主分支 → 400 `BRANCH_MAIN`；分支被其它工作副本占用 → 409 `BRANCH_IN_USE`。
+- 行为：把目录 `rename` 到 `~/.dsh-kanban/trash/<时间戳>-<仓库名>-<工作副本名>`（同一磁盘；跨磁盘失败返回 500 `TRASH_MOVE_FAILED`，不做强删）；在仓库内 `git worktree prune` 清理元数据；`deleteBranch` 时：已合并用 `git branch -d`，未合并（已 `confirmLoss`）用 `git branch -D`；顺手清理 trash 中超 7 天的条目（尽力而为）。
+- 200：`{ok, revision, cleanup: { repoRoot, worktreePath, trashedTo, branchName, branchDeleted, trashRetentionDays: 7}}`。
+- 只读边界：本接口是 v0.13 以来第一个写 git 状态的接口，只做「移入回收站 + prune + 可选删本地分支」，不做 push/fetch/reset。
+- 审计：服务端 `console.info` 记录操作者/目标（后续可接决策日志）；前端在成功后 toast 并触发工作区数据刷新。
+
