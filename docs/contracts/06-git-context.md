@@ -1,4 +1,4 @@
-# 卡片 Git 上下文契约 v0.1（新增，2026-10-27）
+# 卡片 Git 上下文契约 v0.2（v0.13 新增；v0.14 增加 Fork 风格多分支提交图，2026-10-27）
 
 > 目标：卡片详情抽屉能直观看到「这张卡片的工作目录落在哪个分支 / 哪个工作树（worktree）上，与主分支、远端是什么关系」，
 > 呈现方式参照 Fork 等 Git 客户端的泳道提交图。
@@ -102,7 +102,29 @@ GET /api/kanban/cards/:cardId/git[?cwd=<绝对路径>]
       }
     ],
     "worktreesTruncated": 0,                               // 超过 8 个时省略的数量
-    "commits": {
+    "graph": {                                             // v0.14：Fork 风格多分支提交图数据（§4.5）
+      "refs": [                                            // 顺序 = 泳道种子优先级（§4.5）
+        { "name": "HEAD", "kind": "head", "sha": "f65b4f1…", "shortSha": "f65b4f1", "branch": "main" },
+        { "name": "main", "kind": "branch", "sha": "f65b4f1…", "shortSha": "f65b4f1",
+          "isCurrent": true, "upstream": "origin/main", "ahead": 10, "behind": 0 },
+        { "name": "origin/main", "kind": "remote", "sha": "7da8fff…", "shortSha": "7da8fff" },
+        { "name": "feat/m2-session-target", "kind": "branch", "sha": "ad30d2a…", "shortSha": "ad30d2a",
+          "isCurrent": false, "upstream": null, "ahead": null, "behind": null }
+      ],
+      "refsTruncated": 0,                                  // 超出 maxRefs 未返回的引用数
+      "commits": [                                         // --date-order（父提交永远在孩子之后），最多 48 条
+        { "sha": "f65b4f1…", "shortSha": "f65b4f1",
+          "subject": "docs(v0.11.0): 会话归档真实宿主 UI 验收…",
+          "authorName": "roxorlt", "committedAt": 1793088341000,
+          "parents": ["f9843a1…"] },                       // 合并提交有多个父 sha
+        { "sha": "7da8fff…", "shortSha": "7da8fff", "subject": "…", "authorName": "…",
+          "committedAt": 1793000000000, "parents": ["e30c6b5…"] }
+      ],
+      "truncated": 120,                                    // 引用范围内总提交数 − 返回条数
+      "maxCommits": 48,
+      "maxRefs": 10
+    },
+    "commits": {                                           // v0.13 legacy 两泳道数据：保留给旧前端；新前端优先用 graph
       "ahead":  [ { "sha": "…", "shortSha": "…", "subject": "…", "authorName": "…", "committedAt": 0 } ],
       "behind": [ /* 同结构 */ ],
       "shared": [ /* 同结构，从 mergeBase 开始向旧，含 mergeBase 本身 */ ]
@@ -201,22 +223,47 @@ GET /api/kanban/cards/:cardId/git[?cwd=<绝对路径>]
 
 同一 sha 的多个 ref 由前端合并到同一行展示。
 
+### 4.5 多分支提交图（`graph`，v0.14）
+
+- **引用选取顺序**（最多 `maxRefs = 10` 条，数组顺序即前端泳道种子顺序）：
+  1. `HEAD` 伪引用（`kind:"head"`，`branch` = 当前分支名，detached 时 `null`）；
+  2. 当前分支（`kind:"branch"`、`isCurrent:true`）；
+  3. 主分支（§4.1 探测出的 `mainBranch`，本地 `refs/heads` 存在时）；
+  4. `origin/<mainBranch>`（若存在）；
+  5. 当前分支的 upstream（若存在且未列出）；
+  6. 工作树分支（`git worktree list` 顺序，未列出过的本地分支）；
+  7. 其余本地分支（`%(committerdate:unix)` 倒序）；
+  8. 已列出本地分支的 `origin/<branch>`（若存在且未列出）。
+- **数据来源**：`git for-each-ref refs/heads refs/remotes/origin --format='%(refname:short) %(objectname) %(upstream:short) %(upstream:track) %(committerdate:unix)'`（只取 `origin` 远端，避免多远端爆炸）。`%(upstream:track)` 解析 `[ahead N, behind M]` → `ahead/behind`（`[gone]` 或无 upstream → `null`）。本地分支才有 `ahead/behind`，`HEAD`/`remote` 恒为 `null`。
+- **提交集合**：`git log --date-order --max-count=48 --pretty=format:'%H%x1f%h%x1f%P%x1f%ct%x1f%an%x1f%s' <上面选出的 raw ref 名…>`（用 `HEAD`/`refs/heads/x` 这样的真实引用名，不用 `graph.refs[].name` 展示名）。**必须保持 `--date-order` 语义**：父提交永远出现在孩子之后，前端泳道布局依赖这一拓扑保证。`%P` 空格分隔父 sha。
+- **`truncated`**：`git rev-list --count <refs…>` 减去返回条数；`graph.commits` 最多 48 条，超出只计数不返回。
+- `refs[].sha` **不保证**出现在 `commits` 里（老分支 tip 可能被 48 条上限截掉）：前端对这类 ref 只在图例/工作树列表展示，不分配泳道。
+- 示例场景：当前分支与 main、origin/main、其他工作树分支同时出现在一张图里；合并提交有 2 个父 sha；`refsTruncated > 0` 表示还有引用没画进来。
+
 ## 5. 前端渲染约定（供实现参照，非接口契约）
 
-- 区块标题：`分支 / 工作树`；数据不可用时**整块隐藏**。
-- 顶部 chips：当前分支（等宽字体）、工作树（`isWorktree` 时显示 `工作树 · <目录名>`）、
-  远端跟踪（`origin/feat/x ↑3 ↓0`，无 upstream 时显示「未关联远端」）、主分支关系（`main ↑3 ↓1`）。
-- 泳道图两列：泳道 0 = `base.label`，泳道 1 = 当前分支（detached 为 `HEAD`）。
-  行顺序：`ahead`/`behind` 合并后按 `committedAt` 倒序；随后 `commits.shared`（含分叉点）；
-  同一时间戳保持「先 ahead 后 behind」的稳定顺序。分叉点行绘制两条泳道汇合线。
-  行内展示：`refs` 徽标（HEAD / 分支 / 主分支 / origin 引用）+ subject（单行省略）+ 短 sha。
-- 显示行数上限 12；**截断时保证分叉点可见**——优先保留分叉点行与其后的 2 条 shared 提交，
-  剩余行从 ahead/behind 行里取；被省略的提交在末尾追加「还有 N 个提交」；图形本身是只读展示，不可交互。
-- 多工作树（>1）时在图下方列出工作树：分支名、`主工作树`/`当前` 徽标、相对主分支 ↑↓、路径（末尾两段，title 全文）。
-  当 `base.kind === 'main'` 时主工作树行相对主分支恒为 0/0，隐藏该行 ↑↓（避免自比噪声）。
-- 亮暗主题都只用 `--dsw-alias-*` 令牌；泳道颜色：泳道 1 = `--dsw-alias-state-business-primary`，
-  泳道 0 = `--dsw-alias-label-caption`，分叉/汇合线同泳道色。
+目标形态：**Fork app 那样的图形化提交图**（多分支彩色泳道、合并/分叉曲线、ref 徽标、可滚动历史），而不是抽象的「两条示意线」。
 
+- **区块结构**（自上而下）：
+  1. 标题「分支 / 工作树」；
+  2. chips：当前分支（等宽）/ 工作树（`isWorktree` 时 `工作树 · <目录名>`，否则「主工作树」）/ 远端跟踪（`origin/xxx ↑N ↓M`，无 upstream 时「未关联远端」）/ 游离 HEAD 提示；
+  3. **引用图例**：每个 ref 一枚「彩色圆点 + 名称」；本地分支带 `↑N ↓M`（有 upstream 时）；当前分支带「当前」、工作树分支带「工作树」、远端引用用空心点；
+  4. **Fork 风格多泳道提交图**（数据 `graph`；容器固定最大高度约 320px、内部滚动，`overscroll-behavior: contain`）；
+  5. 多工作树（>1）时的工作树列表（分支 / 主工作树·当前徽标 / 相对主分支 ↑↓ / 路径末两段 + title 全文）。
+- **泳道布局算法**（纯函数，可单测；输入 `graph.refs` + `graph.commits`）：
+  - 列宽 14px（lane 数 > 8 时 12px），行高 22px；
+  - 先按 `refs` 顺序分配**种子泳道**：sha 相同共用泳道；颜色 = 调色板 `lane % 8`；
+  - 自上而下遍历 `commits`（date-order）：提交所在泳道 = 当前「期望该 sha」的泳道中最左一条；其余同 sha 的泳道画**汇入曲线**（从行顶到圆点）后释放；
+  - 第一父提交沿用当前泳道；其余父提交占用空闲泳道（没有空闲则追加新列），从圆点画**出弯曲线**到该泳道；泳道序号稳定、不左移，空槽可复用；
+  - 竖直贯穿线颜色 = 该泳道当前分支颜色；合并提交圆点画双环、HEAD 圆点加深外环；当前分支 tip 行显示 HEAD 徽标；
+  - 行右侧：ref 徽标（本地分支 = 实心彩点 + 名称；远端 = 描边；HEAD = 深色底）→ subject（单行省略）→ 短 sha；`title` 显示完整 sha / 作者 / 提交时间；
+  - 数据不足（无 `graph` 字段，例如旧服务端）→ 整块隐藏，不报错（不再回退两泳道）。
+- **颜色**：只用 alias 令牌，调色板 8 色在 `drawer.css` 里定义为 `--kb-git-lane-0..7`：
+  `business-primary` / `success-primary` / `warn-primary` / `error-primary` / `success-secondary` /
+  `error-secondary` / `warn-label` / `label-tertiary`，按泳道序号取色（列宽/颜色互不影响，仅视觉区分）。
+- **溢出**：抽屉 400–520px / 390 竖屏都不横向溢出——左侧图列固定宽、右侧文本区 `min-width:0` + 省略；长分支名在 legend/ref 徽标里 `title` 看全。
+- **主题**：亮暗只靠 alias 令牌（`tokens.css` 兜底只在独立模式生效）；不写 `data-ds-dark-theme` 选择器。
+- **交互**：只读，不提供点击/展开；hover 仅用原生 `title`。
 ## 6. 缓存与性能
 
 - 服务端不做持久缓存；前端模块内 LRU 缓存（key = `cardId + dir`，TTL 4s，最多 20 条），避免抽屉开关/重渲染抖动。
@@ -225,6 +272,6 @@ GET /api/kanban/cards/:cardId/git[?cwd=<绝对路径>]
 
 ## 7. 测试要求
 
-- 服务端：临时仓库覆盖「普通仓库 / 分叉分支 + linked worktree / upstream 领先落后 / 非 git / 空仓库 / 候选目录跨仓库被忽略 / 工作树上限」。
+- 服务端：临时仓库覆盖「普通仓库 / 分叉分支 + linked worktree / upstream 领先落后 / 非 git / 空仓库 / 候选目录跨仓库被忽略 / 工作树上限」；`graph` 覆盖「引用选取与去重、HEAD/当前/主分支/origin 主分支优先、工作树分支纳入、本地分支 ahead/behind 解析、提交父 sha（含合并提交多父）、date-order 拓扑、48 条截断与 truncated 计数、refs 上限与 refsTruncated、ref tip 被截断场景」。
 - 路由：`GET /cards/:id/git` 的 404、405、200（available true/false）与 `?cwd=` 候选。
-- 前端：泳道行构建（排序、分叉点、refs 合并、单泳道、截断计数）纯函数单测；i18n 中英齐全；tsc 通过。
+- 前端：`forkGraph` 泳道布局纯函数单测覆盖「种子泳道与同 sha 合并、颜色稳定、合并提交双父出弯、child 多 lane 汇入、lane 释放与复用、lane 不左移、ref tip 不在 commits、合并提交双环标记、HEAD 标记、1920/390 宽度下 lane 数自适应、旧响应无 graph 时隐藏」；i18n 中英齐全；tsc 通过。

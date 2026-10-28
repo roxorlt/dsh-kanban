@@ -8,6 +8,10 @@ import type {
   Card,
   ColumnId,
   GitContext,
+  GitGraphCommit,
+  GitGraphData,
+  GitGraphRef,
+  GitGraphRefKind,
   GitUnavailableReason,
   KanbanState,
   Priority,
@@ -392,6 +396,76 @@ function normalizeGitReason(value: unknown): GitUnavailableReason {
  * 容错归一化 git 上下文：服务端字段缺失时不让抽屉渲染崩溃。
  * 数组缺失 → 空数组（图退化为空、组件整块隐藏）；available 缺失 → 按不可用处理。
  */
+/** graph 引用类型枚举（契约 §4.5）；未知值按名称推断。 */
+const GIT_GRAPH_REF_KINDS: readonly GitGraphRefKind[] = ['head', 'branch', 'remote'];
+
+function inferGraphRefKind(name: string): GitGraphRefKind {
+  if (name === 'HEAD') return 'head';
+  if (name.includes('/')) return 'remote';
+  return 'branch';
+}
+
+function normalizeGraphRef(raw: unknown): GitGraphRef | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const ref = raw as Partial<GitGraphRef>;
+  if (typeof ref.name !== 'string' || !ref.name || typeof ref.sha !== 'string' || !ref.sha) return null;
+  const kind = GIT_GRAPH_REF_KINDS.find((item) => item === ref.kind) ?? inferGraphRefKind(ref.name);
+  return {
+    name: ref.name,
+    kind,
+    sha: ref.sha,
+    shortSha: typeof ref.shortSha === 'string' && ref.shortSha ? ref.shortSha : ref.sha.slice(0, 7),
+    branch: typeof ref.branch === 'string' ? ref.branch : null,
+    ...(typeof ref.isCurrent === 'boolean' ? { isCurrent: ref.isCurrent } : {}),
+    upstream: typeof ref.upstream === 'string' ? ref.upstream : null,
+    ahead: typeof ref.ahead === 'number' ? ref.ahead : null,
+    behind: typeof ref.behind === 'number' ? ref.behind : null,
+  };
+}
+
+function normalizeGraphCommit(raw: unknown): GitGraphCommit | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const commit = raw as Partial<GitGraphCommit>;
+  if (typeof commit.sha !== 'string' || !commit.sha) return null;
+  return {
+    sha: commit.sha,
+    shortSha: typeof commit.shortSha === 'string' && commit.shortSha ? commit.shortSha : commit.sha.slice(0, 7),
+    subject: typeof commit.subject === 'string' ? commit.subject : '',
+    authorName: typeof commit.authorName === 'string' ? commit.authorName : '',
+    committedAt: typeof commit.committedAt === 'number' ? commit.committedAt : 0,
+    parents: Array.isArray(commit.parents)
+      ? commit.parents.filter((sha): sha is string => typeof sha === 'string' && sha.length > 0)
+      : [],
+  };
+}
+
+/**
+ * 容错归一化多分支图：缺字段/格式不对时返回 undefined（按旧服务端处理，整块隐藏）。
+ * 数组里非法条目直接丢弃；parents 保证为字符串数组（合并提交拓扑依赖它）。
+ */
+function normalizeGitGraph(raw: unknown): GitGraphData | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const graph = raw as Partial<GitGraphData>;
+  if (!Array.isArray(graph.commits)) return undefined;
+  const commits = graph.commits
+    .map(normalizeGraphCommit)
+    .filter((commit): commit is GitGraphCommit => commit !== null);
+  const refs = Array.isArray(graph.refs)
+    ? graph.refs.map(normalizeGraphRef).filter((ref): ref is GitGraphRef => ref !== null)
+    : [];
+  if (!commits.length && !refs.length) return undefined;
+  return {
+    refs,
+    ...(typeof graph.refsTruncated === 'number' && graph.refsTruncated > 0
+      ? { refsTruncated: graph.refsTruncated }
+      : {}),
+    commits,
+    truncated: typeof graph.truncated === 'number' && graph.truncated > 0 ? graph.truncated : 0,
+    ...(typeof graph.maxCommits === 'number' ? { maxCommits: graph.maxCommits } : {}),
+    ...(typeof graph.maxRefs === 'number' ? { maxRefs: graph.maxRefs } : {}),
+  };
+}
+
 function normalizeGitContext(raw: GitContext | null | undefined): GitContext {
   if (!raw || typeof raw !== 'object' || raw.available !== true) {
     return {
@@ -404,8 +478,11 @@ function normalizeGitContext(raw: GitContext | null | undefined): GitContext {
   if (!raw.dir || !raw.current || !raw.repo) {
     throw new KanbanApiError('INTERNAL', 'git 响应缺少必要字段');
   }
+  const graph = normalizeGitGraph(raw.graph);
   return {
     ...raw,
+    // 旧服务端没有 graph：保持字段缺失（前端整块隐藏，不回退两泳道）
+    ...(graph ? { graph } : {}),
     upstream: raw.upstream ?? null,
     base: raw.base
       ? {

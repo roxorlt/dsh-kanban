@@ -219,16 +219,17 @@ sequenceDiagram
 | `lib/domain.js` | 状态/列映射、默认看板、种子数据、节点/审批构造；审批请求/提交/未决事件收集 |
 | `lib/session-archive.js` | 宿主会话归档适配器：包装 DSH `workspaceRegistry` 的可逆归档、能力探测与错误码（v0.11） |
 | `lib/session-sync.js` | 会话运行失败同步：监听宿主 `session/event` 的 `turn/end`，失败/恢复回写卡片（v0.11） |
-| `lib/git.js` | 卡片 Git 上下文（只读派生）：对 `card.cwd` 跑只读 git 命令，产出分支 / upstream / 主分支参照 / 工作树 / 泳道图提交列表；失败收敛为 `available:false`（v0.13） |
+| `lib/git.js` | 卡片 Git 上下文（只读派生）：对 `card.cwd` 跑只读 git 命令，产出分支 / upstream / 主分支参照 / 工作树 / 多分支提交图数据（refs + 48 条提交 + truncated）；失败收敛为 `available:false` / `graph:null`（v0.13/v0.14） |
 | `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`）、决策日志、会话归档与卡片 Git 上下文接口 |
 | `lib/tools.js` | 11 个 `kanban_*` agent 工具 |
 | `web/` | 看板 UI（React + Vite），构建产物 `web/dist` 由服务端直接服务 |
 | `web/src/lib/nativeInbox.ts` | 原生待确认的纯函数：风险分档、文案解析、计划审批派生、会话/卡片关联、排序 |
 | `web/src/components/NativeInbox.tsx` | 「待你确认」列顶部的收件区（来源徽标/风险/作答入口） |
 | `web/src/components/NativeAnswerModal.tsx` | 多题作答表单与计划审批弹窗 |
-| `web/src/lib/gitGraph.ts` | 详情抽屉泳道图纯函数：ahead/behind 按时间合并、分叉点、refs 合并、12 行截断（优先保留分叉点）、路径省略（v0.13） |
+| `web/src/lib/forkGraph.ts` | Fork 风格多泳道布局纯函数：refs 种子泳道、lane 状态机、合并提交多父出弯 / 多泳道汇入、主干颜色稳定、8 色调色板、路径省略（v0.14；替代 v0.13 gitGraph.ts） |
 | `web/src/lib/useCardGit.ts` | 打开卡片时按需拉取 Git 上下文；`?cwd=` 候选会话执行目录 + 4s LRU 缓存；失败静默隐藏（v0.13） |
-| `web/src/components/GitBranchSection.tsx` | 详情抽屉「分支 / 工作树」区块：chips + 两泳道 SVG 提交图 + 多工作树列表（v0.13） |
+| `web/src/components/ForkGraph.tsx` | 多泳道提交图渲染：图例（颜色 + ↑↓ + 当前/工作树）、SVG 曲线 / 合并双环 / HEAD 外环、ref 徽标、320px 内滚动（v0.14） |
+| `web/src/components/GitBranchSection.tsx` | 详情抽屉「分支 / 工作树」区块：chips + ForkGraph + 多工作树列表（v0.13→v0.14） |
 | `skills/manage-kanban/` | 教 agent 使用看板的工作流技能 |
 | `scripts/dev-server.mjs` | 不依赖 DSH 的联调服务器 |
 | `scripts/demo-git-repo.mjs` | 造「有分叉 / 远端 / linked worktree」的演示仓库，用于手工复跑「分支 / 工作树」可视化（v0.13） |
@@ -248,7 +249,7 @@ sequenceDiagram
 | 原生待确认 | 父页面只读宿主 `uiSession` 投影；作答只经 pending 对象的 `answer()/dismiss()`，不新增审计路径、不伪造结果；`key` 不落盘；计划正文只传宿主本来就展示给用户的内容 |
 | 数据 | 存 `~/.dsh-kanban`；损坏文件先备份再重建；不写插件目录 |
 | 会话 | 只发文本；不读取会话内容回写卡片（agent 自己选择写什么进展） |
-| Git 探测（v0.13） | 只对卡片 `card.cwd`（及同仓库 linked worktree 的会话执行目录候选）跑**只读** git 命令：`execFile` 不拼 shell、`GIT_OPTIONAL_LOCKS=0`、单条 2s / 整次 4s 超时、`maxBuffer=4MiB`；不 fetch、不写索引、不碰工作区；跨仓库候选一律拒绝；失败只回 `available:false` |
+| Git 探测（v0.13/v0.14） | 只对卡片 `card.cwd`（及同仓库 linked worktree 的会话执行目录候选）跑**只读** git 命令：`execFile` 不拼 shell、`GIT_OPTIONAL_LOCKS=0`、单条 2s / 整次 4s 超时、`maxBuffer=4MiB`；不 fetch、不写索引、不碰工作区；跨仓库候选一律拒绝；失败只回 `available:false` / `graph:null`；`graph` 只读取前 10 条引用与 48 条提交 |
 
 ## 8. 失败与恢复
 

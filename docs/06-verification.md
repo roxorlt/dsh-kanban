@@ -402,6 +402,8 @@
 
 ## 1.26 v0.13.0（卡片详情 Git 分支 / 工作树可视化，2026-10-27）
 
+> 注：本版「两泳道示意」已被 **v0.14.0 的 Fork 风格多分支提交图**取代（见 §1.29）；本节与 `git-branch-*.png` 保留为 v0.13 历史证据。
+
 | 项 | 结果 |
 |---|---|
 | 背景 | 卡片 `card-6f4b3d72`「卡片详情可视化展示 git 分支或 worktree 情况」：DSH 宿主用分支 / worktree 执行 coding 任务时，看板里看不出「这张卡片现在在哪个分支、哪个工作树、与主分支和远端差多少」。本版在**卡片详情抽屉**新增只读「分支 / 工作树」区块：当前分支与工作树、远端跟踪 ↑↓、主分支关系 ↑↓、Fork 风格的**两泳道提交图**（HEAD / 分叉点 / 共享主干）与多工作树列表；数据来自对卡片 `cwd` 的**只读 git 探测**，不落库、不改卡片字段（契约 `docs/contracts/06-git-context.md`） |
@@ -447,6 +449,23 @@
 | 脚本 | `/tmp/dsh-cdp/{cdp.mjs,accept-realhost.mjs}`（一次性验收脚本，未入库） |
 | 已知事项 | CHANGELOG 的 v0.10.0 段现同时记录「决策日志」与「原生待确认收件箱」两个特性（两者代码都随 v0.10 上线，收件箱段为 2026-10-28 补记）；分支上旧测试计数（85/85、vitest 17/137）保留为分支时点记录，合并后以 §2 的 162/162、25/249 为准 |
 | 生效方式 | 本次无服务端 / 前端代码变更，刷新看板即与主线一致；宿主版本仍是 0.13.0 |
+
+## 1.29 v0.14.0（卡片详情「分支 / 工作树」升级为 Fork 风格多分支提交图，2026-10-27）
+
+| 项 | 结果 |
+|---|---|
+| 背景 | 卡片 `card-6f4b3d72` 用户反馈：v0.13 的「两泳道示意」不是要的「像 Fork app 那样的图形化」——真实仓库里多张卡片分属不同分支 / 工作树，要一眼看到多分支拓扑。v0.14 把该区块重做为**多分支彩色泳道图**（本地分支 + `origin/*` 同图、合并/分叉曲线、ref 徽标、可滚动历史） |
+| 服务端 | `lib/git.js` +232 行：响应新增可选 `git.graph`（契约 v0.2 §4.5）。引用选取 ≤10 条：HEAD → 当前分支 → 主分支 → `origin/<主分支>` → 当前 upstream → 工作树分支 → 其余本地分支（committerdate 倒序）→ 已列分支的 `origin/<branch>`；`for-each-ref` 单命令解析本地分支 `upstream:track`（ahead/behind/gone）；`git log --date-order --max-count=48`（含多父 `%P`）；`rev-list --count` 算 `truncated`；`refsTruncated` 统计被上限挤掉的引用。新命令失败只让 `graph:null`，v0.13 字段与 `available` 不受影响；3 条新命令仍在 4s 预算内（真实仓库实测 121–141ms） |
+| 契约 | `docs/contracts/06-git-context.md` 升 **v0.2**：§3 响应 graph、§4.5 引用优先级 / for-each-ref / date-order / 截断语义、§5 Fork 风格渲染约定（种子泳道、lane 状态机、汇入/出弯、主干颜色稳定、8 色 token 调色板、320px 滚动、≤480px 窄屏规则）；`docs/contracts/02-http-api.md` §10 登记 |
+| Web | 新增 `web/src/lib/forkGraph.ts`（16 例单测）与 `web/src/components/ForkGraph.tsx`，替换 v0.13 `gitGraph.ts` 两泳道实现并删除；`GitBranchSection` 重构为「chips（当前分支 / 工作树 / 远端跟踪 ↑↓ / 游离 HEAD）+ 引用图例 + ForkGraph + 多工作树列表」；`types.ts` / `api.ts` 增加 `graph` 类型与容错归一化（缺 graph = 旧服务端，整块隐藏）；`i18n.tsx` zh/en 各 20 条 `git.*`；`drawer.css` 换成 `kb-git__fork-*` + 8 色域（全部 alias 令牌）+ 行 hover + ≤480px 只保留 HEAD 行内徽标 |
+| 布局算法 | 纯函数：refs 顺序做种子泳道（同 sha 共用）、lane 状态机 `{sha,color,active}`、提交取最左期望泳道、**第一父一律沿用当前泳道**（主干颜色稳定）、多泳道期望同一父提交时在父行画 `top→dot` 汇入曲线并释放多余泳道、其余父提交占空闲槽位 / 追加列、泳道序号不左移、空槽复用；8 色循环 |
+| 单测 | 服务端 `node --test test/*.test.mjs` **170/170**（v0.14 新增 8 例：合并多父 + date-order 拓扑、引用优先级/去重/工作树分支/origin-HEAD 过滤、track 五种形态、48 条截断、refs 上限、老分支 tip 被截、detached HEAD）；Web `vitest` **25 文件 / 241 测试**（forkGraph 16 例：线性、两分支汇合、合并双父、主干颜色稳定、多泳道期望同一父可达、槽位复用/不左移、refs 同 sha、ref tip 不在 commits、HEAD、8 色循环、截断透传、空 commits、路径省略、工作树计数）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 9 CSS 0 error / 0 warning |
+| 真实数据验收（Chromium 1440×900 DPR2 / 390×844，亮/暗，**26 项断言全 PASS**） | 数据 = ① 本仓库真实数据（10 refs / 40 提交 / 3 个合并提交 / 4 个工作树，`refsTruncated=1` → 图例「还有 1 个引用」）；② 多分支演示仓库（`node scripts/demo-git-repo.mjs --root /tmp/git-viz-verify/env`：5 分支 / 2 合并 / 3 工作树 / 18 提交，`origin/main` 与本地分叉、`feat/long` 长分支）。断言：区块出现；图例 ≥10 refs 且含 HEAD / main / origin/main / 工作树分支；提交行 40（真实）/ 18（演示）；合并双环 3 / 2；HEAD 外环 1；8 色 / 7 色全部出现；内部滚动 `scrollHeight 880 > clientHeight 320`；多工作树 4 / 3 行且当前高亮；抽屉与底部弹层无横向溢出；非 git / 无 cwd / 目录不存在三种卡区块整块隐藏；**console error 0、pageerror 0、4xx 0** |
+| 主干颜色修复（联调发现） | 初版在真实数据上当前分支（main/HEAD，lane0 蓝）的主干历史在中段被 `origin/main`（lane1 绿）接管、颜色由蓝变绿，与图例不符。改为「第一父一律沿用当前泳道，父提交行再汇入并释放多余泳道」后，33 行 first-parent 主干全部保持 lane0/color0，捞入段出现在第 4 / 11 / 17 行；laneCount 仍 8（无多余列）。新增 2 例单测覆盖（主干颜色稳定、多泳道期望同一父可达） |
+| 截图 | `docs/assets/screens/git-fork-graph-light.png`（真实仓库多泳道图）、`git-fork-graph-dark.png`、`git-fork-graph-detail-light.png`（合并/分叉曲线细节）、`git-fork-graph-worktree-light.png`（多工作树卡片）、`git-fork-board-light.png` / `git-fork-board-dark.png`（1440 看板 + 抽屉）、`git-fork-graph-portrait.png`（390 竖屏）、`git-fork-graph-hidden-nogit.png`（非 git 卡片：区块隐藏、无报错） |
+| 生效方式 | 含服务端改动（`lib/git.js`），需**合入主线并重启 DSH**；`web/dist` 已重建（v0.14.0），刷新看板即生效前端。旧服务端无 `graph` 字段时前端整块隐藏，其余功能不受影响 |
+| 分支 | `feat/fork-graph-viz`（基于 `e27dd98`，与主工作区并行会话隔离，未合入主线）；v0.13.0 已由并行会话合入主线（`97ad6da` / `e27dd98`） |
+| 已知限制 | 最多 10 条引用 / 48 个提交（更早历史与多余引用给「还有 N 个」提示）、远端只识别 `origin`、打开详情时的快照（4s 缓存）不自动刷新、只读无搜索/过滤/展开交互；`origin/main` 这类指向主干祖先的引用在图上只作为 ref 徽标出现、不单独画线 |
 
 ## 2. 自动化测试
 
@@ -627,6 +646,24 @@ curl -s "http://127.0.0.1:4609/api/kanban/cards/<cardId>/git" | python3 -m json.
 #    本次 16 项 Playwright 断言脚本与截图脚本为一次性资产，保留在 /tmp/git-viz-verify/tools/（未入库），
 #    结果与证据见 §1.26。
 
+# v0.14 Fork 风格多分支提交图 —— 服务端/前端单测 + 真实数据验收
+npm test                                   # 170/170（含 test/git.test.mjs 的 8 个 graph 用例）
+npm --prefix web run test                  # 25 文件 / 241 例（含 forkGraph 16 例）
+npm --prefix web run build                 # tsc --noEmit + vite build → web/dist
+npm --prefix web run lint:tokens           # 9 个 CSS 0 error / 0 warning
+
+# ① 多分支演示仓库（5 分支 / 2 合并 / 3 工作树 / 18 提交）
+node scripts/demo-git-repo.mjs --root /tmp/git-viz-verify/env
+
+# ② 独立 dev-server（不碰真实 ~/.dsh-kanban）
+node scripts/dev-server.mjs --port 4611 --data /tmp/git-viz-verify/data/data.json --seed empty --reset
+
+# ③ 建卡：cwd 分别指向主仓库 / linked worktree / 非 git 目录 / 不存在的目录（POST /api/kanban/cards），
+#    再 GET /api/kanban/cards/<id>/git 直接看 graph 响应（refs / commits / truncated / refsTruncated）
+#    打开 http://127.0.0.1:4611/dsh-kanban/ 双击卡片：详情抽屉出现「分支 / 工作树」多泳道图，
+#    滚到中段可见合并/分叉曲线；非 git / 无 cwd / 目录不存在三种卡区块不出现；390 竖屏与暗色复查。
+#    本次 26 项 Playwright 断言脚本与截图脚本为一次性资产，保留在 /tmp/git-viz-verify/tools/（未入库），
+#    结果与证据见 §1.29。
 # ⑤ v0.13.0 重启桌面 DSH 后的真实宿主复验（一次性脚本，未入库；端口取重启后启 runtime context）
 #    UI：44 项断言（含 --expect-version / --real-card；--cleanup 自动归档临时卡）
 node /tmp/realhost-verify/verify.mjs --base http://127.0.0.1:<新端口> \
