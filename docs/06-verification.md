@@ -563,6 +563,17 @@
 | 生效方式 | 纯前端改动（含 `web/dist` 重新构建），**合入 main 后刷新看板即生效，无需重启 DSH** |
 | 分支 | `feat/session-picker`（基于 `8e6a808`）；版本 0.19.0 |
 
+## 1.36 v0.20.0（复制路径 / locked·prunable / 上限提示，2026-10-28）
+
+| 项 | 结果 |
+|---|---|
+| 范围 | 用户确认 P2 批：11a 复制路径、12 locked/prunable、20 上限提示（14/15/16 与 agent 自动绑定下一版） |
+| 服务端 | /git/workspaces 每仓库增 worktreeCount/truncatedWorktrees（缓存保存总数）；POST /git/worktrees/prune（repoRoot 必须来自卡片 cwd 推导仓库；只清失效记录；removed；失败 500 PRUNE_FAILED；成功失效缓存） |
+| Web | 路径/分支复制按钮 + toast/失败提示/390 图标态；locked「已锁定」、prunable「文件夹已不存在」+「清理失效记录」确认与 reload；主副本锁定禁用清理；repo 头 truncatedWorktrees>0 显示「还有 N 个未展示」 |
+| 测试 | 服务端 224/224（+8）；Web 28 文件/355 例（+42）；tsc/build/令牌 lint 全过 |
+| 生效方式 | 含服务端改动，需合入 main 并重启 DSH |
+| 分支 | feat/workspace-batch1；版本 0.20.0 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

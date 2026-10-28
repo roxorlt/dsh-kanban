@@ -25,6 +25,7 @@ import type {
   GitWorkspaceWorktree,
   CleanupWorktreeInput,
   CleanupWorktreeResult,
+  GitWorktreePruneResult,
   GitTrashEntry,
   GitTrashListResult,
   GitTrashRestoreResult,
@@ -542,6 +543,14 @@ function normalizeWorkspaceRepo(raw: unknown): GitWorkspaceRepo | null {
     name: typeof repo.name === 'string' && repo.name ? repo.name : root.split('/').filter(Boolean).pop() ?? root,
     commonDir: typeof repo.commonDir === 'string' ? repo.commonDir : '',
     mainBranch: typeof repo.mainBranch === 'string' ? repo.mainBranch : null,
+    worktreeCount:
+      typeof repo.worktreeCount === 'number' && repo.worktreeCount >= 0
+        ? repo.worktreeCount
+        : worktrees.length,
+    truncatedWorktrees:
+      typeof repo.truncatedWorktrees === 'number' && repo.truncatedWorktrees >= 0
+        ? repo.truncatedWorktrees
+        : 0,
     worktrees,
   };
 }
@@ -640,6 +649,20 @@ export function normalizeTrashRestore(raw: unknown): GitTrashRestoreResult {
     worktreePath,
     restoredTo: pick('restoredTo') || worktreePath,
     branch: typeof payload.branch === 'string' && payload.branch ? payload.branch : null,
+  };
+}
+
+/** 容错归一化 prune 结果（`POST /git/worktrees/prune`；兼容 pruned 包裹/平铺）。 */
+export function normalizePruneResult(raw: unknown): GitWorktreePruneResult {
+  const payload =
+    raw && typeof raw === 'object' && (raw as { pruned?: unknown }).pruned && typeof (raw as { pruned: unknown }).pruned === 'object'
+      ? ((raw as { pruned: Record<string, unknown> }).pruned)
+      : raw && typeof raw === 'object'
+        ? (raw as Record<string, unknown>)
+        : {};
+  return {
+    repoRoot: typeof payload.repoRoot === 'string' ? payload.repoRoot : '',
+    removed: payload.removed === true,
   };
 }
 
@@ -1026,6 +1049,18 @@ export const api = {
       body: JSON.stringify(input),
     });
     return normalizeCleanupResult(result.cleanup);
+  },
+
+  /**
+   * v0.20 清理失效工作副本记录（docs/contracts/02-http-api.md §15）：
+   * `git worktree prune`，只删失效记录，不动任何现存目录/分支。
+   */
+  pruneGitWorktrees: async (repoRoot: string): Promise<GitWorktreePruneResult> => {
+    const result = await request<{ pruned?: unknown }>('/git/worktrees/prune', {
+      method: 'POST',
+      body: JSON.stringify({ repoRoot }),
+    });
+    return normalizePruneResult(result.pruned);
   },
 
   /** v0.18 回收站列表（docs/contracts/02-http-api.md §14）：按清理时间倒序。 */

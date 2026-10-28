@@ -549,6 +549,10 @@ export interface GitWorkspaceRepo {
   commonDir: string;
   /** 探测不到主分支时 null（此时 aheadOfBase/behindOfBase 均为 null） */
   mainBranch: string | null;
+  /** v0.20：实际工作副本总数（可能大于 worktrees.length，被每仓库 12 个的上限截断） */
+  worktreeCount?: number;
+  /** v0.20：被 12 个上限截断、未返回的工作副本数 */
+  truncatedWorktrees?: number;
   worktrees: GitWorkspaceWorktree[];
 }
 
@@ -575,6 +579,15 @@ export interface CleanupWorktreeInput {
   deleteBranch: boolean;
   /** 已明确接受「未合并/未保存改动」的丢失风险（第二层危险确认） */
   confirmLoss: boolean;
+}
+
+// ------------------------------------------------ 清理失效工作副本记录（v0.20，POST /git/worktrees/prune）
+// 只做 `git worktree prune`：删除 git 里失效的记录（目录已被手动删除），不动任何现存目录/分支。
+
+export interface GitWorktreePruneResult {
+  repoRoot: string;
+  /** 是否有失效记录被清掉 */
+  removed: boolean;
 }
 
 export interface CleanupWorktreeResult {

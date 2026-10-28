@@ -353,6 +353,30 @@ const zh = {
   'workspace.trashErrorRestoreFailed': '恢复失败，稍后重试',
   'workspace.trashErrorDeleteFailed': '彻底删除失败，稍后重试',
   'workspace.trashErrorUnknown': '回收站操作失败：{message}',
+  // v0.20 复制 / locked / prunable / 截断
+  'workspace.copyPath': '复制路径',
+  'workspace.copyBranch': '复制分支名',
+  'workspace.copiedPath': '已复制路径',
+  'workspace.copiedBranch': '已复制分支名',
+  'workspace.copyFailed': '复制失败：{message}',
+  'workspace.copyUnavailable': '浏览器不允许访问剪贴板，请手动复制',
+  'workspace.locked': '已锁定',
+  'workspace.prunable': '文件夹已不存在',
+  'workspace.cleanupBlockedLocked': '已锁定的工作副本',
+  'workspace.prune': '清理失效记录',
+  'workspace.pruneTitle': '清理失效工作副本记录',
+  'workspace.pruneMessage': '只删除 git 里失效的工作副本记录（这些文件夹已经被手动删除），不会删除任何现存目录，也不会删除分支。',
+  'workspace.pruneConfirm': '清理记录',
+  'workspace.pruneDone': '已清理失效记录',
+  'workspace.pruneNoop': '没有失效记录需要清理',
+  'workspace.pruneErrorNotFound': '仓库不在可清理列表里，刷新后重试',
+  'workspace.pruneErrorFailed': '清理失效记录失败，稍后重试',
+  'workspace.pruneErrorBadRequest': '请求不合法，刷新后重试',
+  'workspace.pruneErrorUnknown': '清理失效记录失败：{message}',
+  'workspace.truncated': '还有 {count} 个未展示',
+  'workspace.truncatedTitle': '仓库工作副本超过 {limit} 个，只展示前 {limit} 个',
+  'workspace.truncatedFooter': '另有 {count} 个工作副本未展示（每仓库最多展示 {limit} 个）',
+
 
 
   // 卡片「工作线」徽标（v0.15）
@@ -1061,6 +1085,30 @@ const en: Record<I18nKey, string> = {
   'workspace.trashErrorRestoreFailed': 'Restore failed; please retry later',
   'workspace.trashErrorDeleteFailed': 'Permanent delete failed; please retry later',
   'workspace.trashErrorUnknown': 'Trash action failed: {message}',
+  // v0.20 copy / locked / prunable / truncation
+  'workspace.copyPath': 'Copy path',
+  'workspace.copyBranch': 'Copy branch name',
+  'workspace.copiedPath': 'Path copied',
+  'workspace.copiedBranch': 'Branch name copied',
+  'workspace.copyFailed': 'Copy failed: {message}',
+  'workspace.copyUnavailable': 'The browser does not allow clipboard access here; please copy manually',
+  'workspace.locked': 'Locked',
+  'workspace.prunable': 'Folder no longer exists',
+  'workspace.cleanupBlockedLocked': 'This worktree is locked',
+  'workspace.prune': 'Clean up stale record',
+  'workspace.pruneTitle': 'Clean up stale worktree records',
+  'workspace.pruneMessage': 'Only stale git worktree records are removed (their folders were deleted manually). No existing folder or branch will be deleted.',
+  'workspace.pruneConfirm': 'Clean records',
+  'workspace.pruneDone': 'Stale records cleaned up',
+  'workspace.pruneNoop': 'No stale records to clean up',
+  'workspace.pruneErrorNotFound': 'This repo is not in the cleanup list; refresh and retry',
+  'workspace.pruneErrorFailed': 'Cleaning stale records failed; please retry later',
+  'workspace.pruneErrorBadRequest': 'Invalid request; refresh and retry',
+  'workspace.pruneErrorUnknown': 'Cleaning stale records failed: {message}',
+  'workspace.truncated': '{count} more not shown',
+  'workspace.truncatedTitle': 'This repo has more than {limit} worktrees; only the first {limit} are shown',
+  'workspace.truncatedFooter': '{count} more worktrees are hidden (at most {limit} per repo)',
+
 
 
   // Card “work line” badge (v0.15)

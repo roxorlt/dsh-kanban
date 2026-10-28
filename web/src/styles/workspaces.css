@@ -678,6 +678,85 @@
   font: var(--dsw-font-xxxs-11);
 }
 
+/* ------------------------------------- 复制按钮 / locked·prunable / 截断（v0.20） */
+
+.kb-workspace__path-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.kb-workspace__path-line .kb-workspace__path {
+  flex: 0 1 auto;
+}
+
+.kb-workspace__copy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  line-height: 16px;
+  cursor: pointer;
+  transition:
+    background-color var(--kb-dur-fast) var(--kb-ease-out),
+    color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-workspace__copy:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kb-workspace__copy:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.kb-workspace__copy .kb-icon {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+}
+
+.kb-workspace__copy--branch {
+  padding: 1px 2px;
+}
+
+.kb-workspace__copy-text {
+  white-space: nowrap;
+}
+
+.kb-workspace__tag--danger {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.kb-workspace__truncated {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-workspace__truncated-foot {
+  margin: 0;
+  padding: 4px 12px 8px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-workspace__prune-btn {
+  color: var(--dsw-alias-state-warn-label);
+}
+
 /* ---------------------------------------------------------------- 竖屏 */
 
 @media (max-width: 719px) {
@@ -698,6 +777,20 @@
   .kb-workspace__no-cards {
     flex-basis: 100%;
     padding-left: 28px;
+  }
+
+  /* 390：复制按钮只保留图标（文字隐藏，title/aria-label 仍有完整含义） */
+  .kb-workspace__copy-text {
+    display: none;
+  }
+
+  .kb-workspace__copy {
+    padding: 1px 4px;
+  }
+
+  .kb-workspace__truncated-foot {
+    padding-left: 10px;
+    padding-right: 10px;
   }
 
   .kb-workspace__cleanup {
