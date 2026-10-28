@@ -493,8 +493,8 @@
 | 真实浏览器验收（dev-server + 真实/演示仓库数据；1440×900 DPR2 / 390×844，亮/暗） | 看板与列表均正确：`feat/graph` 卡 `工作线 feat/graph · 多 1 · 线上落后 1`、`feat/long` 卡 `工作线 feat/long · 多 6 · 未同步`、目录不存在卡灰色「工作线未知」；主线卡（cwd=主仓库）、无 cwd 卡、非 git 卡均不显示徽标；暗色与 390 竖屏正常（`documentElement.scrollWidth==390`），console error 0 / pageerror 0 / 4xx 0；列表视图同样 3 条徽标。服务端实测：主仓库摘要首次 ~200ms、同目录缓存命中 2ms、feature worktree 49ms |
 | 设计交付 | ① `design/branch-awareness/hover-lane-demo.html`：**可交互**的 hover 高亮泳道 demo（真实仓库 48 提交 / 7 条工作线数据、亮暗切换；悬停任意提交行 → 同色泳道保持高亮、其它淡出、图例同步高亮；无点击/跳转；已用 Playwright 验证 48 行、悬停后 18 条同色段保持、127 条淡出、图例 is-active 正确、console 0 error）。② 方案 2/3 原型更新为**按「项目 / 仓库」两级分组**（`v2-branch-overview.png` / `v3-worktree-map.png`），无 cwd 的卡片进「未指定仓库」 |
 | 截图 | `docs/assets/screens/git-workline-badges-board-light.png`、`-board-dark.png`、`-list-light.png`、`-portrait.png`（4 张） |
-| 生效方式 | 含服务端改动（`lib/git.js` / `lib/routes.js`），需**合入主线并重启 DSH**；`web/dist` 已重建；hover demo 为静态 HTML 可直接打开 |
-| 分支 | `feat/workline-badges`（基于 v0.14.1 主线 `226aa01`）；版本号 0.15.0 |
+| 生效方式 | 含服务端改动（`lib/git.js` / `lib/routes.js`），**已合入主线（merge `e1fbe81`），重启 DSH 后生效**；`web/dist` 已重建；hover demo 为静态 HTML 可直接打开 |
+| 分支 | `feat/workline-badges`（基于 v0.14.1 主线 `226aa01`），**已合入 main（merge `e1fbe81`）**；版本号 0.15.0；合入后自测 181/181、260 例通过 |
 
 ## 2. 自动化测试
 
