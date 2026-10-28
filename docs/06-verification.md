@@ -432,6 +432,21 @@
 | 一次性脚本 | 真实宿主 UI 脚本 `/tmp/realhost-verify/verify.mjs`（44 断言 + `--expect-version` / `--real-card`）、API 脚本 `/tmp/lead-v013/realhost-check.py`（42 断言）、完整 results JSON 与原始截图均在 `/tmp/lead-v013/`，属一次性验证资产，未纳入仓库 |
 | 生效方式 | v0.13.0 含服务端改动（`lib/git.js` / `lib/routes.js`），需**重启 DSH**；`web/dist` 已重建，刷新看板即生效前端。旧服务端（< v0.13）无该接口时前端按 404 静默隐藏。**已于 2026-10-28 13:57 重启桌面 DSH 完成，health=0.13.0** |
 
+## 1.28 v0.10.0 原生待确认收件箱合入主线（2026-10-28）
+
+| 项 | 结果 |
+| --- | --- |
+| 合并 | `feat/native-approval-inbox`（`71e602d`，标注 v0.10.0）→ `main`，合并提交 **`8035ba3`**（2026-10-28）。主工作区干净、其他会话的 v0.13.0 提交已全部落盘后执行 |
+| 关键发现 | 该特性源码早已随 v0.9.4 收口提交（`ffe9ed4`）进入主线：`web/src/lib/nativeInbox.ts`、`NativeInbox.tsx`、`NativeAnswerModal.tsx`、`styles/inbox.css`、`test/client-pending.test.mjs`、`docs/contracts/04-native-inbox.md` 与分支**字节一致**，`App.tsx` / `bridge.ts` / `BoardView.tsx` / `lib/client.js` 也已含原生收件接线（取主线版本）。因此本次合并的实际增量 = CHANGELOG 的 v0.10.0 收件箱段 + `package.json` 的 `@deepseek-ai/dsh-client-ui-session` 注入声明 + 13 张 `docs/assets/screens/native-inbox-*.png`；**无代码 / 行为变更，无版本号变更（仍是 0.13.0）** |
+| 冲突解决（11 个） | `package.json` / `web/package.json` 版本保持 **0.13.0**（仅补 `dsh-client-ui-session` 注入，与 `lib/client.js` 的 `ctx.inject(["uiSession"])` 对齐）；`lib/client.js`（保留 v0.11 的 `archivedSessionIds` 推送）、`web/src/App.tsx`、`bridge.ts`、`components/BoardView.tsx` 取主线；`README.md`、`docs/04-architecture.md` 取主线（主线是超集，§5.4 原生收件与代码地图齐备）；`docs/06` 分支的 v0.10 验证记录改写为本 §（原编号 1.15 与主线 v0.9.0 段冲突，按版本序另起 1.28）；`web/dist/index.html` 取主线并在合并后重建 |
+| 卫生 | 丢弃分支误提交的 `web/node_modules` 绝对路径软链（120000 blob；合并检出时曾覆盖本地依赖目录，已 `npm ci` 重装 98 包）；丢弃分支携带的 `web/dist` 旧构建产物（`index-Bh9ckJyG.js` / `index-HKKRtcqK.css`） |
+| 自动化复跑（合并后） | 根 `node --test` **162/162**；Web `vitest` **25 文件 / 249 测试**；`tsc --noEmit` **0 error**；`vite build` 通过且 `web/dist` 重建后文件名与字节同合并前（`index-uM6BVSce.js` / `index-D4ScdgBg.css`）；令牌 lint 9 CSS **0 error / 0 warning** |
+| 真实宿主刷新验收（桌面宿主端口 49463，`health=0.13.0`） | 无头 Chromium 带宿主 auth cookie 打开 GUI → 侧栏「看板」→ iframe 实际加载 `./assets/index-uM6BVSce.js` + `./assets/index-D4ScdgBg.css`（= 合并后 dist），桥 `ready:true` / `pendingCount:0` / console error 0 / pageerror 0；随后在本会话发起一次真实 `ask_user_question`（自动验收探针）→ 看板「待你确认」列顶部「来自 DSH 会话」收件区出现该项（来源「Agent 提问」/「低风险」/ 会话名 / 关联卡片 /「1 个问题」）→ 看板内点「回答」→ 作答弹窗呈现 2 个选项 → 选「收件区作答链路 OK」→「提交全部回答」→ 收件项与弹窗消失、桥 `pendingCount` 归 0、toast「回答已提交」，同一份答案经宿主 pending 对象回送到发起提问的会话（工具返回 `{"answers":[{"id":"native-inbox-probe","selected":["收件区作答链路 OK"]}]}`） |
+| 截图 | `design/screens/native-inbox-merged-realhost-01-board.png`（刷新后看板）、`-02-pending.png`（收件项出现）、`-03-modal.png`（作答弹窗）、`-04-answered.png`（作答后收件区归零）；同步 `docs/assets/screens/` |
+| 脚本 | `/tmp/dsh-cdp/{cdp.mjs,accept-realhost.mjs}`（一次性验收脚本，未入库） |
+| 已知事项 | CHANGELOG 的 v0.10.0 段现同时记录「决策日志」与「原生待确认收件箱」两个特性（两者代码都随 v0.10 上线，收件箱段为 2026-10-28 补记）；分支上旧测试计数（85/85、vitest 17/137）保留为分支时点记录，合并后以 §2 的 162/162、25/249 为准 |
+| 生效方式 | 本次无服务端 / 前端代码变更，刷新看板即与主线一致；宿主版本仍是 0.13.0 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

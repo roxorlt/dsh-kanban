@@ -125,6 +125,7 @@
   - 原生 composer 作答：在同一真实宿主里从原生审批框点「允许一次」→ 会话日志 `approval/decided: allowed-once` 且工具成功；看板项随同一 `uiSession` 投影消失（该项所在会话在本轮后被清理，收件区归零的对照见 `native-inbox-real-allowed.png`）。
   - 期间修复：跳过按钮在弹窗里被拉伸成整行（`align-self:flex-start`）；`kb-column__body` 内卡片列表补 `role=list` 语义容器。
 - 复跑：`docs/contracts/04-native-inbox.md` §8 给出验收对照；证据截图同步到 `docs/assets/screens/`。
+- 合入主线（2026-10-28，合并提交 `8035ba3`）：11 个文件冲突按版本序解决；本条所述代码在此前已随 v0.9.4 收口提交 `ffe9ed4` 进入主线，本次补齐 `@deepseek-ai/dsh-client-ui-session` 注入声明、本段变更日志与 `docs/assets/screens/native-inbox-*.png` 证据，**无代码 / 行为变更、版本号仍为 0.13.0**。合并后根 `node --test` 162/162、Web vitest 25 文件 / 249 测试、`tsc` 0 error、`vite build` 通过（`web/dist` 重建后文件名与字节不变）、令牌 lint 9 CSS 0/0；真实宿主（`health=0.13.0`）刷新后「待你确认」列顶部出现原生收件项，看板内作答一次成功（来源「Agent 提问」/「低风险」→ 选「收件区作答链路 OK」→ 提交后收件区归零、答案回送到发起会话），证据 `design/screens/native-inbox-merged-realhost-01…04-*.png`，记录 `docs/06-verification.md` §1.28。
 
 ## v0.9.5 — 2026-10-23
 
