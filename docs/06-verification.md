@@ -547,8 +547,8 @@
 | 测试 | 服务端 **216/216**（+10 回收站）；Web 27 文件 / **313 例**（+19）；tsc/build/令牌 lint 全过 |
 | 真实浏览器验收（dev-server + 演示仓库真实 git） | 清理生成 manifest → 回收站 3 条（1 可恢复/2 旧条目不可恢复，旧条目恢复按钮 disabled）→ 点恢复轻确认 → toast「已恢复「repo / feat-trash-demo」」→ 回收站条目减少、`git worktree list` 恢复工作副本、回收站文件回来；P1 排序/预览/scope/相对时间/空闲分组渲染正确；390/暗色无横向溢出；console error 0 / 4xx 0 |
 | 截图 | `docs/assets/screens/git-workspaces-v018-light.png`、`git-workspaces-trash-restore.png`、`git-workspaces-trash-after.png` |
-| 生效方式 | 含服务端改动，**需合入 main 并重启 DSH**；回收站 `~/.dsh-kanban/trash`（7 天自动清理） |
-| 分支 | `feat/workspace-polish`（基于 `90a55b3`）；版本 0.18.0 |
+| 生效方式 | 含服务端改动，**已合入 main（merge `3274a01`），需重启 DSH 后生效**；回收站 `~/.dsh-kanban/trash`（7 天自动清理） |
+| 分支 | `feat/workspace-polish`（基于 `90a55b3`），**已合入 main（merge `3274a01`）**；版本 0.18.0；合入后自测 216/216、313 例通过 |
 
 ## 2. 自动化测试
 
