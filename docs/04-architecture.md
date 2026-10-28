@@ -229,7 +229,8 @@ sequenceDiagram
 | `web/src/lib/forkGraph.ts` | Fork 风格多泳道布局纯函数：refs 种子泳道、lane 状态机、合并提交多父出弯 / 多泳道汇入、主干颜色稳定、8 色调色板、路径省略（v0.14；替代 v0.13 gitGraph.ts） |
 | `web/src/lib/useCardGit.ts` | 打开卡片时按需拉取 Git 上下文；`?cwd=` 候选会话执行目录 + 4s LRU 缓存；失败静默隐藏（v0.13） |
 | `web/src/components/ForkGraph.tsx` | 多泳道提交图渲染：图例（颜色 + ↑↓ + 当前/工作树）、SVG 曲线 / 合并双环 / HEAD 外环、ref 徽标、320px 内滚动（v0.14） |
-| `web/src/components/GitBranchSection.tsx` | 详情抽屉「分支 / 工作树」区块：chips + ForkGraph + 多工作树列表（v0.13→v0.14） |
+| `web/src/lib/worklineSummary.ts` | 「工作线」人话结论纯函数：位置 / 与主线关系 / 与线上关系 / 计数，供详情抽屉总结与事实表使用（v0.14.1） |
+| `web/src/components/GitBranchSection.tsx` | 详情抽屉「工作线」区块：人话总结 + 关键事实表 +「提交图」折叠区（ForkGraph + 多工作树列表，默认收起）（v0.13→v0.14→v0.14.1） |
 | `skills/manage-kanban/` | 教 agent 使用看板的工作流技能 |
 | `scripts/dev-server.mjs` | 不依赖 DSH 的联调服务器 |
 | `scripts/demo-git-repo.mjs` | 造「有分叉 / 远端 / linked worktree」的演示仓库，用于手工复跑「分支 / 工作树」可视化（v0.13） |

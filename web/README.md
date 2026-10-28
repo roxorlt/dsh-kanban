@@ -46,6 +46,7 @@ web/
       useMediaQuery.ts        # 响应式断点
       clipboard.ts            # 复制（clipboard + execCommand 兜底）
       forkGraph.ts            # 详情「分支 / 工作树」Fork 风格多泳道布局（种子泳道、状态机、汇入/出弯、8 色、路径省略）
+      worklineSummary.ts      # 「工作线」人话结论（位置 / 与主线 / 与线上 / 计数），供总结与事实表使用（v0.14.1）
       useCardGit.ts           # 打开卡片按需拉 Git 上下文（?cwd= 候选会话目录 + 4s LRU 缓存 + 失败静默）
     components/               # Toolbar/FilterMenu/BoardView/ListView/KanbanCard/DetailDrawer/
                               # ApprovalPanel/Timeline/Composer/SessionSection/Modal/Toast/Icons…
@@ -87,7 +88,8 @@ web/
   「回复/审批目标」下拉（默认主会话，设为主会话后默认目标跟随），回复与审批决定都发到该会话。
 - **详情抽屉头部（v0.7.2）**：首行是 kicker + 标题（左）与编辑/归档/关闭（右）；摘要独占第二行，
   宽度与正文内容一致（右边缘与 chips / 元数据对齐），长摘要不再被 138px 操作簇挤成窄列。
-- **分支 / 工作树（v0.14，Fork 风格）**：详情抽屉「结果」之后、「审批」之前新增只读区块：chips（当前分支 / 工作树 / 远端跟踪 `origin/xxx ↑N ↓M`）+
+- **工作线（v0.14.1，人话版）**：详情抽屉默认展示一句话总结（在哪条工作线、比主线多/少多少、线上是否同步）+ 关键事实表；原 Fork 风格多泳道图与多工作树列表折叠进「提交图」按钮（默认收起，点击展开）。纯函数 `worklineSummary.ts` 负责把 git 数据翻译成结论；v0.14 的 Fork 图渲染保持不变。
+- **分支 / 工作树（v0.14，Fork 风格，折叠在「提交图」里）**：详情抽屉「结果」之后、「审批」之前新增只读区块：chips（当前分支 / 工作树 / 远端跟踪 `origin/xxx ↑N ↓M`）+
   引用图例（彩点 + ↑↓ + 当前 / 工作树徽标）+ 多泳道 SVG 提交图（本地分支与 `origin/*` 同图、合并/分叉贝塞尔曲线、合并双环、HEAD 外环、
   彩色 ref 徽标、320px 内滚动、`truncated` 行提示）+ 多工作树列表（当前工作树高亮）。纯函数 `forkGraph.ts` 负责泳道布局（主干颜色稳定、
   第一父沿用当前泳道、多泳道期望同一父提交时汇入后释放）。数据来自 `GET /cards/:id/git?cwd=`（可带卡片主会话执行目录候选，
