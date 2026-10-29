@@ -14,7 +14,7 @@
 - 测试：服务端 **288/288**（基线 259 + 29：relations 14 / maintenance 11 / routes 4，另更新工具数断言）；Web **33 文件 / 438 例**（基线 31/412 + 26：cardRelations / api.relations）；tsc/build/令牌 lint 全过。
 - 历史数据治理：只读体检 + dry-run 方案（`/tmp/kanban-cleanup-plan.md`，未执行）：未归档 78（done 52 / backlog 20 / running 4 / canceled 2）→ 预计 26（归档 44、合并 8→4、保留 16）；执行前备份 data.json，先 archive dryRun、再 merge 逐组执行、最后 review_board 复核；归档可恢复，合并只能整体回滚快照。
 - 生效：含服务端改动，**需合入 main 并重启 DSH**；纯前端部分刷新看板即生效。
-- 分支：`feat/card-convergence`（基于 `8562dd9`）。
+- 分支：`feat/card-convergence`（基于 `8562dd9`），**已合入 main（merge `1b48ae7`）**。
 
 ## v0.21.0 — 2026-10-29
 

@@ -617,7 +617,7 @@
 | 真实浏览器冒烟（dev-server + 临时数据） | 建父/子卡 → 移到 done 得 409 且 `openChildren` 结构正确 → `forceComplete` 重试成功；归档 → `GET /archive` 含 archivedAt → unarchive 成功 → 二次 unarchive 409 CONFLICT；`dependsOn` 建卡正常（Web teammate 执行，真实宿主 E2E 待重启后补） |
 | 历史数据治理 | 只读体检 + dry-run 方案已出（`/tmp/kanban-cleanup-plan.md`）：未归档 78 → 预计 26（done 保留最近 10、归档 44、合并 8→4、保留 16）；**未执行**，等用户拍板；执行前备份 data.json，优先用 v0.22 工具（dryRun 预览） |
 | 生效方式 | 含服务端改动，**合入 main 后需重启 DSH**；纯前端部分刷新看板即生效 |
-| 分支 | `feat/card-convergence`（基于 `8562dd9`）；版本 0.22.0 |
+| 分支 | `feat/card-convergence`（基于 `8562dd9`），**已合入 main（merge `1b48ae7`）**；版本 0.22.0 |
 
 ## 2. 自动化测试
 
