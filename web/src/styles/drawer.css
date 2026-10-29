@@ -435,6 +435,53 @@
   font: var(--dsw-font-xxs-12);
 }
 
+/* 补绑推荐（v0.20.1）：卡片没绑会话时给一条「推荐 + 一键补绑」入口。
+   只推荐不自动绑定；推荐不出来时整块不渲染，所以用虚线边框和弱底色表明「这是建议」。 */
+.kb-session__suggest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0.5px dashed var(--dsw-alias-border-l3);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kb-session__suggest-icon {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-session__suggest-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kb-session__suggest-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-session__suggest-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-session__suggest-bind {
+  flex: none;
+}
+
 /* ------------------------------------------------- 绑定会话选择器（v0.19.0） */
 
 /* 触发器：外观对齐 .kb-select，点击打开分组浮层（原生 select 无法分组/折叠/搜索）。 */

@@ -3,16 +3,68 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createTools, TOOL_NAMES } from '../lib/tools.js'
 import { resolveApproval } from '../lib/domain.js'
+import { createSessionBinding } from '../lib/session-binding.js'
 import { testStore } from './helpers.mjs'
 
 const EXEC = { agent: { id: 'agent-test-1' } }
 const parse = text => JSON.parse(text)
+
+/** 带宿主 session 的 exec：生产环境里 agent.session 提供当前会话 id 与 cwd。 */
+const SESSION_EXEC = {
+  agent: { id: 'agent-session-test', session: { id: 'session-current', header: { cwd: '/repo/kanban' } } },
+}
+
+/** 假 workspaceRegistry：get 按 id 查、resolveByPath 按路径前缀解析（未注册路径抛错）。 */
+function createFakeRegistry(workspaces = [{ id: 'ws-1', path: '/repo/kanban' }]) {
+  return {
+    get: id => workspaces.find(workspace => workspace.id === id),
+    resolveByPath(path) {
+      const found = workspaces
+        .filter(workspace => path === workspace.path || path.startsWith(workspace.path + '/'))
+        .sort((a, b) => b.path.length - a.path.length)[0]
+      if (!found) throw new Error('路径未注册')
+      return found
+    },
+  }
+}
+
+/** 假 sessionController：记录 create/rename 调用，可配置失败。 */
+function createFakeSessionController({ sessionId = 'session-created-1', failCreate = false, failRename = false } = {}) {
+  const calls = []
+  return {
+    calls,
+    async create(request) {
+      calls.push({ action: 'create', request })
+      if (failCreate) throw new Error('create failed')
+      return { sessionId }
+    },
+    async rename(request) {
+      calls.push({ action: 'rename', request })
+      if (failRename) throw new Error('rename failed')
+    },
+  }
+}
 
 async function setup(t) {
   const { store } = await testStore(t)
   const tools = createTools({ store })
   const byName = new Map(tools.map(tool => [tool.name, tool]))
   return { store, tools, byName }
+}
+
+/** 注入 sessionBinding 的工具集合（模拟 lib/index.js 在宿主里的接线）。 */
+async function setupBound(t, options = {}) {
+  const { store } = await testStore(t)
+  const registry = options.registry === undefined ? createFakeRegistry() : options.registry
+  const controller = options.controller === undefined ? createFakeSessionController() : options.controller
+  const sessionBinding = createSessionBinding({
+    getWorkspaceRegistry: () => registry,
+    getSessionController: () => controller,
+    logger: options.logger,
+  })
+  const tools = createTools({ store, sessionBinding })
+  const byName = new Map(tools.map(tool => [tool.name, tool]))
+  return { store, tools, byName, registry, controller }
 }
 
 test('11 个工具名字固定且 schema 形态完整', async t => {
@@ -398,4 +450,141 @@ test('kanban_decisions：只读查询决策日志、state 过滤与等待计数'
   const badState = parse(await tool.execute({ cardId, state: 'pending' }, EXEC))
   assert.equal(badState.ok, false)
   assert.equal(badState.error.code, 'BAD_REQUEST')
+})
+
+// ---------------- 建卡自动绑定会话 / 工作区（v0.20.1） ----------------
+
+test('kanban_create_card 默认 reuse：自动绑定当前会话、补全工作区/目录并写 session_linked', async t => {
+  const { store, byName } = await setupBound(t)
+  const tool = byName.get('kanban_create_card')
+  assert.deepEqual(tool.parameters.properties.sessionMode.enum, ['reuse', 'new', 'none'])
+  assert.equal(tool.parameters.properties.sessionMode.default, 'reuse')
+  assert.match(tool.description, /sessionMode/)
+
+  const created = parse(await tool.execute({ title: '自动绑定卡', summary: '验证 reuse 默认' }, SESSION_EXEC))
+  assert.equal(created.ok, true)
+  assert.equal(created.card.metadata.toolCalls, 1)
+  assert.equal(created.card.sessionIds[0], 'session-current')
+  assert.equal(created.card.cwd, '/repo/kanban')
+  assert.equal(created.card.workspaceId, 'ws-1')
+  assert.deepEqual(created.binding, {
+    mode: 'reuse', sessionId: 'session-current', created: false, source: 'agent', workspaceId: 'ws-1', cwd: '/repo/kanban',
+  })
+  assert.equal(created.warnings, undefined)
+  assert.match(created.hint, /自动绑定当前会话/)
+
+  const data = await store.read()
+  const linked = data.activities.find(item => item.cardId === created.card.id && item.type === 'session_linked')
+  assert.ok(linked, '建卡时应写入 session_linked 时间线')
+  assert.equal(linked.actor.kind, 'agent')
+  assert.equal(linked.text, '建卡时自动绑定了当前会话')
+  assert.equal(linked.data.sessionId, 'session-current')
+  assert.equal(linked.data.action, 'auto')
+  assert.equal(linked.data.source, 'agent')
+  assert.equal(linked.data.created, false)
+  assert.equal(linked.data.workspaceId, 'ws-1')
+  assert.equal(linked.data.cwd, '/repo/kanban')
+})
+
+test('kanban_create_card sessionMode:new：真实新建会话、绑定新 id 并改名', async t => {
+  const { store, byName, controller } = await setupBound(t)
+  const created = parse(await byName.get('kanban_create_card').execute({
+    title: '新会话卡', sessionMode: 'new', cwd: '/repo/kanban/sub',
+  }, SESSION_EXEC))
+  assert.equal(created.ok, true)
+  assert.equal(created.binding.mode, 'new')
+  assert.equal(created.binding.sessionId, 'session-created-1')
+  assert.equal(created.binding.created, true)
+  assert.equal(created.binding.source, 'agent')
+  assert.equal(created.card.sessionIds[0], 'session-created-1')
+  assert.equal(created.card.cwd, '/repo/kanban/sub')
+  assert.equal(created.card.workspaceId, 'ws-1')
+  assert.match(created.hint, /已新建会话/)
+  assert.deepEqual(controller.calls[0], { action: 'create', request: { workspaceId: 'ws-1' } })
+  assert.deepEqual(controller.calls[1], { action: 'rename', request: { sessionId: 'session-created-1', title: '新会话卡' } })
+
+  const data = await store.read()
+  const linked = data.activities.find(item => item.cardId === created.card.id && item.type === 'session_linked')
+  assert.equal(linked.text, '建卡时新建并绑定了会话')
+  assert.equal(linked.data.created, true)
+  assert.equal(linked.data.action, 'auto')
+})
+
+test('kanban_create_card sessionMode:new：宿主不支持新建会话时卡片照常创建 + warnings', async t => {
+  const logs = []
+  const { store, byName } = await setupBound(t, { controller: null, logger: { warn: message => logs.push(message) } })
+  const created = parse(await byName.get('kanban_create_card').execute({ title: '降级卡', sessionMode: 'new' }, SESSION_EXEC))
+  assert.equal(created.ok, true)
+  assert.equal(created.binding.sessionId, null)
+  assert.equal(created.binding.created, false)
+  assert.deepEqual(created.card.sessionIds, [])
+  assert.equal(created.card.cwd, '/repo/kanban')
+  assert.equal(created.card.workspaceId, 'ws-1')
+  assert.ok(Array.isArray(created.warnings) && created.warnings.some(item => /不支持自动新建会话/.test(item)))
+  assert.match(created.hint, /新建会话未完成/)
+  assert.ok((await store.read()).cards.find(card => card.id === created.card.id), '卡片应照常创建')
+  const detail = parse(await byName.get('kanban_card').execute({ cardId: created.card.id }, SESSION_EXEC))
+  assert.equal(detail.activities.some(item => item.type === 'session_linked'), false)
+})
+
+test('kanban_create_card sessionMode:new：宿主新建失败时卡片照常创建 + warnings', async t => {
+  const controller = createFakeSessionController({ failCreate: true })
+  const { store, byName } = await setupBound(t, { controller })
+  const created = parse(await byName.get('kanban_create_card').execute({ title: '失败降级卡', sessionMode: 'new' }, SESSION_EXEC))
+  assert.equal(created.ok, true)
+  assert.equal(created.binding.sessionId, null)
+  assert.equal(created.binding.workspaceId, 'ws-1')
+  assert.ok(created.warnings.some(item => /新建会话失败/.test(item)))
+  assert.ok((await store.read()).cards.find(card => card.id === created.card.id))
+})
+
+test('kanban_create_card sessionMode:none：不绑定会话但补全目录/工作区；无会话上下文时同旧行为', async t => {
+  const { store, byName } = await setupBound(t)
+  const created = parse(await byName.get('kanban_create_card').execute({ title: '不绑定卡', sessionMode: 'none' }, SESSION_EXEC))
+  assert.equal(created.ok, true)
+  assert.equal(created.binding.sessionId, null)
+  assert.equal(created.binding.source, null)
+  assert.deepEqual(created.card.sessionIds, [])
+  assert.equal(created.card.cwd, '/repo/kanban')
+  assert.equal(created.card.workspaceId, 'ws-1')
+  const data = await store.read()
+  assert.equal(data.activities.some(item => item.cardId === created.card.id && item.type === 'session_linked'), false)
+
+  // 单测/旧宿主没有 agent.session：保持旧行为，不自动补全
+  const legacy = parse(await byName.get('kanban_create_card').execute({ title: '无会话上下文卡' }, EXEC))
+  assert.equal(legacy.ok, true)
+  assert.equal(legacy.binding.sessionId, null)
+  assert.deepEqual(legacy.card.sessionIds, [])
+  assert.equal(legacy.warnings, undefined)
+})
+
+test('kanban_create_card 显式 sessionId：source=explicit，不新建会话', async t => {
+  const { store, byName, controller } = await setupBound(t)
+  const created = parse(await byName.get('kanban_create_card').execute({
+    title: '显式会话卡', sessionMode: 'new', sessionId: 'session-explicit',
+  }, SESSION_EXEC))
+  assert.equal(created.ok, true)
+  assert.equal(created.binding.sessionId, 'session-explicit')
+  assert.equal(created.binding.source, 'explicit')
+  assert.equal(created.binding.created, false)
+  assert.equal(created.card.sessionIds[0], 'session-explicit')
+  assert.equal(controller.calls.length, 0)
+  const data = await store.read()
+  const linked = data.activities.find(item => item.cardId === created.card.id && item.type === 'session_linked')
+  assert.equal(linked.text, '建卡时绑定了指定会话')
+  assert.equal(linked.data.action, 'link')
+})
+
+test('kanban_create_card sessionMode:new：建卡前置校验失败时不建会话（防孤儿）', async t => {
+  const { store, byName, controller } = await setupBound(t)
+  const badBoard = parse(await byName.get('kanban_create_card').execute({
+    title: '坏看板卡', sessionMode: 'new', boardId: 'board-ffffffff',
+  }, SESSION_EXEC))
+  assert.equal(badBoard.ok, false)
+  assert.equal(badBoard.error.code, 'BOARD_NOT_FOUND')
+  const emptyTitle = parse(await byName.get('kanban_create_card').execute({ title: '  ', sessionMode: 'new' }, SESSION_EXEC))
+  assert.equal(emptyTitle.ok, false)
+  assert.equal(emptyTitle.error.code, 'BAD_REQUEST')
+  assert.equal(controller.calls.length, 0)
+  assert.equal((await store.read()).cards.filter(card => card.title === '坏看板卡').length, 0)
 })

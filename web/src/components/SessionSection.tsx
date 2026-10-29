@@ -2,6 +2,8 @@ import { useId, useMemo, useState } from 'react';
 import type { Card, SessionRow, WorkspaceRow } from '../types';
 import { useI18n } from '../i18n';
 import { suggestCwds } from '../lib/suggestions';
+import { shortSessionId } from '../lib/sessionPicker';
+import { suggestSessionToBind, type SessionBindSuggestion } from '../lib/sessionSuggest';
 import {
   deriveRunningSessionIds,
   formatTitleList,
@@ -103,6 +105,16 @@ export function SessionSection({
     [cards, sessions, workspaceId, workspaces],
   );
 
+  // 补绑推荐：只在「嵌入 DSH + 卡片还没绑任何会话」时计算。
+  // 只是推荐，不自动绑定；没有足够相关的候选时返回 null，整块不渲染。
+  const bindSuggestion = useMemo(
+    () =>
+      embedded && card.sessionIds.length === 0
+        ? suggestSessionToBind({ card, sessions, workspaces, archivedSessionIds })
+        : null,
+    [archivedSessionIds, card, embedded, sessions, workspaces],
+  );
+
   if (!bound.length && !embedded) {
     return (
       <div className="kb-session">
@@ -132,6 +144,24 @@ export function SessionSection({
       cwd: cwd.trim(),
       start: card.status === 'running',
     });
+  };
+
+  /** 推荐行的会话标题：宿主没给标题时退回短会话 ID，保证认得出。 */
+  const suggestionSessionTitle = (suggestion: SessionBindSuggestion): string =>
+    (suggestion.session.title ?? '').trim() || shortSessionId(suggestion.session.id);
+
+  /** 推荐原因：工作区名 > 项目名 > 通用文案（都没有时只说「同一工作区」）。 */
+  const suggestionReason = (suggestion: SessionBindSuggestion): string => {
+    const workspaceTitle = suggestion.workspaceTitle?.trim();
+    if (suggestion.reason === 'workspace') {
+      return workspaceTitle
+        ? t('sessionSuggest.reasonWorkspace', { name: workspaceTitle })
+        : t('sessionSuggest.reasonSameWorkspace');
+    }
+    if (suggestion.reason === 'project') {
+      return t('sessionSuggest.reasonProject', { name: workspaceTitle ?? card.project ?? '' });
+    }
+    return t('sessionSuggest.reasonCwd');
   };
 
   return (
@@ -274,7 +304,33 @@ export function SessionSection({
           </ul>
         </>
       ) : (
-        <p className="kb-session__hint">{t('drawer.noSessionHint')}</p>
+        <>
+          <p className="kb-session__hint">{t('drawer.noSessionHint')}</p>
+          {embedded && bindSuggestion ? (
+            <div className="kb-session__suggest" role="group" aria-label={t('sessionSuggest.groupLabel')}>
+              <span className="kb-icon kb-session__suggest-icon" aria-hidden="true">
+                <IconSession />
+              </span>
+              <span className="kb-session__suggest-main">
+                <span
+                  className="kb-session__suggest-title"
+                  title={`${suggestionSessionTitle(bindSuggestion)}\n${bindSuggestion.session.id}`}
+                >
+                  {suggestionSessionTitle(bindSuggestion)}
+                </span>
+                <span className="kb-session__suggest-meta">{suggestionReason(bindSuggestion)}</span>
+              </span>
+              <button
+                type="button"
+                className="kb-btn kb-btn--sm kb-btn--outline kb-session__suggest-bind"
+                disabled={busy}
+                onClick={() => onBind(bindSuggestion.session.id)}
+              >
+                {t('sessionSuggest.bind')}
+              </button>
+            </div>
+          ) : null}
+        </>
       )}
 
 

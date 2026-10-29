@@ -218,6 +218,7 @@ sequenceDiagram
 | `lib/decisions.js` | 决策日志：`decisions.jsonl` 的只追加读写、派生状态、分页/筛选、回填与导出（v0.10） |
 | `lib/domain.js` | 状态/列映射、默认看板、种子数据、节点/审批构造；审批请求/提交/未决事件收集 |
 | `lib/session-archive.js` | 宿主会话归档适配器：包装 DSH `workspaceRegistry` 的可逆归档、能力探测与错误码（v0.11） |
+| `lib/session-binding.js` | 建卡时会话/目录补全：从 `exec.agent.session` 读当前会话与 cwd，解析工作区；`sessionMode:"new"` 时经宿主 `sessionController` 真实新建会话（含 best-effort 改名）并绑定，宿主不支持/失败时降级为 warning（v0.20.1） |
 | `lib/session-sync.js` | 会话运行失败同步：监听宿主 `session/event` 的 `turn/end`，失败/恢复回写卡片（v0.11） |
 | `lib/git.js` | 卡片 Git 上下文：详情完整上下文、批量摘要、工作区聚合；v0.17 增工作副本清理判定字段与 `cleanupWorktree`（回收站 + prune + 可选删分支） |
 | `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`）、决策日志、会话归档与卡片 Git 上下文接口 |
