@@ -53,6 +53,15 @@ import type { CardFilters } from './lib/filter';
 import { countByColumn, groupCardsByColumn } from './lib/grouping';
 import type { ColumnGroups } from './lib/grouping';
 import { COLUMN_OF_STATUS, COLUMNS, STATUS_OF_COLUMN } from './lib/status';
+import {
+  buildCardRelationIndex,
+  describeChildren,
+  extractOpenChildren,
+  isClosedStatus,
+  isCompleteBlockedError,
+} from './lib/cardRelations';
+import type { OpenChildRef } from './lib/cardRelations';
+import type { ArchiveBoxProps } from './components/ArchiveBox';
 import { doneCardsOf } from './lib/listGroups';
 import type { ListGroupBy } from './lib/listGroups';
 import { applyPage, EMPTY_FEED } from './lib/activities';
@@ -88,6 +97,27 @@ import { StopAndArchiveDialog } from './components/StopAndArchiveDialog';
 const VIEW_STORAGE_KEY = 'dsh-kanban.view';
 const EMPTY_GROUPS: ColumnGroups = { backlog: [], running: [], needs_you: [], done: [] };
 
+/**
+ * 本地预判「这批卡移到 done 会被哪些未收口子卡拦截」（批量路径用；单卡以服务端 409 为准）。
+ * 已经处于 done/canceled 的卡不再算完成动作，跳过。
+ */
+function collectOpenChildrenFor(cards: readonly Card[], ids: readonly string[]): OpenChildRef[] {
+  const index = buildCardRelationIndex(cards);
+  const byId = new Map(cards.map((card) => [card.id, card]));
+  const seen = new Set<string>();
+  const openChildren: OpenChildRef[] = [];
+  for (const id of ids) {
+    const card = byId.get(id);
+    if (!card || isTerminalCardStatus(card.status)) continue;
+    for (const child of describeChildren(card, index).items) {
+      if (isClosedStatus(child.status) || seen.has(child.id)) continue;
+      seen.add(child.id);
+      openChildren.push({ id: child.id, title: child.title, status: child.status });
+    }
+  }
+  return openChildren;
+}
+
 interface Snapshot {
   boards: BoardSummary[];
   board: Board | null;
@@ -103,6 +133,21 @@ interface LoadError {
 type FormState =
   | { mode: 'create'; column: ColumnId }
   | { mode: 'edit'; card: Card };
+
+/**
+ * v0.22 完成拦截确认：把卡移到 done 时服务端 409（CARD_HAS_OPEN_CHILDREN），
+ * 或者本地预判选中卡有未收口子卡（批量路径），都落到这个弹窗。
+ */
+interface CompleteBlockState {
+  mode: 'move' | 'batch';
+  column: ColumnId;
+  /** 单卡路径的卡片标题；批量路径为空 */
+  cardTitle: string;
+  openChildren: OpenChildRef[];
+  placement?: Placement;
+  cardId?: string;
+  cardIds?: string[];
+}
 
 interface UnsentDecision {
   cardId: string;
@@ -395,6 +440,15 @@ export function App() {
   const [listGroupBy, setListGroupBy] = useState<ListGroupBy>('status');
   const [doneOpen, setDoneOpen] = useState(false);
   const [now, setNow] = useState<number>(() => Date.now());
+  // v0.22 完成拦截确认（拖拽 / 移动到菜单 / 批量移动共用）
+  const [completeBlock, setCompleteBlock] = useState<CompleteBlockState | null>(null);
+  const [completeBusy, setCompleteBusy] = useState(false);
+  // v0.22 归档箱（列表视图底部）：null=还没拉取；[]=没有归档卡/接口不可用（整块隐藏）
+  const [archiveCards, setArchiveCards] = useState<Card[] | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [restoringArchiveId, setRestoringArchiveId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 15_000);
@@ -431,6 +485,9 @@ export function App() {
   }, [highlightCardId]);
 
   const filteredCards = useMemo(() => filterCards(snapshot.cards, filters), [snapshot.cards, filters]);
+
+  // v0.22 父子卡 / 依赖索引：用全量卡片算，筛选不改变子卡计数（旧数据无关系字段时为空索引）
+  const cardRelations = useMemo(() => buildCardRelationIndex(snapshot.cards), [snapshot.cards]);
   // 未归档的全部卡片：工作区「显示全部」范围 + 清理占用判定用
   const unarchivedCards = useMemo(() => snapshot.cards.filter((card) => !card.archived), [snapshot.cards]);
   // 运行中会话的 cwd：客户端清理安全层（服务端不知道会话 cwd）
@@ -980,6 +1037,73 @@ export function App() {
     ],
   );
 
+  // -------------------------------------------------- 归档箱（v0.22.0）
+  /** 拉取归档卡片列表；旧服务端没有该接口（404）或网络失败时安静隐藏归档箱。 */
+  const loadArchivedCards = useCallback(async () => {
+    setArchiveLoading(true);
+    try {
+      const cards = await api.getArchivedCards();
+      setArchiveCards(cards);
+      setArchiveError(null);
+    } catch {
+      // 兼容旧服务端：没有归档列表接口时整块不渲染，不阻塞主界面
+      setArchiveCards([]);
+      setArchiveError(null);
+    } finally {
+      setArchiveLoading(false);
+    }
+  }, []);
+
+  /** 列表视图首次出现时拉一次归档列表（懒加载，失败静默）。 */
+  useEffect(() => {
+    if (view !== 'list' || archiveCards !== null) return;
+    void loadArchivedCards();
+  }, [view, archiveCards, loadArchivedCards]);
+
+  /** 从归档箱恢复一张卡片：成功后从列表移除 + 刷新主看板。 */
+  const handleRestoreArchived = useCallback(
+    async (card: Card) => {
+      setRestoringArchiveId(card.id);
+      try {
+        const result = await api.unarchiveCard(card.id);
+        setArchiveCards((current) => (current ? current.filter((item) => item.id !== card.id) : current));
+        const title = result.card?.title || card.title;
+        notifyToast(t('archive.restored', { title }), 'success');
+        await refresh({ silent: true });
+      } catch (error) {
+        notifyToast(
+          t('archive.restoreFailed', {
+            message: error instanceof Error ? error.message : String(error),
+          }),
+          'error',
+        );
+      } finally {
+        setRestoringArchiveId(null);
+      }
+    },
+    [notifyToast, refresh, t],
+  );
+
+  const archiveBoxProps = useMemo<ArchiveBoxProps>(
+    () => ({
+      cards: archiveCards,
+      loading: archiveLoading,
+      error: archiveError,
+      open: archiveOpen,
+      busyCardId: restoringArchiveId,
+      onToggle: () => {
+        setArchiveOpen((current) => {
+          const next = !current;
+          if (next) void loadArchivedCards();
+          return next;
+        });
+      },
+      onRetry: () => void loadArchivedCards(),
+      onRestore: (card) => void handleRestoreArchived(card),
+    }),
+    [archiveCards, archiveLoading, archiveError, archiveOpen, restoringArchiveId, loadArchivedCards, handleRestoreArchived],
+  );
+
   const handleEdit = useCallback((card: Card) => {
     setFormError(null);
     setFormState({ mode: 'edit', card });
@@ -990,10 +1114,10 @@ export function App() {
   }, []);
 
   const handleMove = useCallback(
-    async (cardId: string, column: ColumnId, placement?: Placement) => {
+    async (cardId: string, column: ColumnId, placement?: Placement, forceComplete = false) => {
       const current = snapshotRef.current;
       const card = current.cards.find((item) => item.id === cardId);
-      if (!card) return;
+      if (!card) return false;
       const previous = current;
       const fromColumn = COLUMN_OF_STATUS[card.status];
       setSnapshot(applyOptimisticMove(current, cardId, column, placement));
@@ -1002,6 +1126,7 @@ export function App() {
           version: card.version,
           ...(placement?.beforeId ? { beforeId: placement.beforeId } : {}),
           ...(placement?.afterId ? { afterId: placement.afterId } : {}),
+          ...(forceComplete ? { forceComplete: true } : {}),
         });
         const movedText = t('toast.moved', { column: t(`column.${column}` as I18nKey) });
         notifyToast(movedText, 'success');
@@ -1021,14 +1146,30 @@ export function App() {
         if (column === 'needs_you' && !movedCard.approvals.some((approval) => approval.status === 'pending')) {
           setApprovalDraft({ card: movedCard, previous, fromColumn, busy: false, error: null });
         }
+        return true;
       } catch (error) {
         setSnapshot(previous);
+        // v0.22 完成拦截：还有未收口子卡 → 弹确认，确认后带 forceComplete 重试（其它路径共用同一弹窗）
+        const openChildren = extractOpenChildren((error as KanbanApiError).details);
+        if (!forceComplete && column === 'done' && openChildren.length && isCompleteBlockedError(error)) {
+          setCompleteBlock({
+            mode: 'move',
+            column,
+            cardTitle: card.title,
+            openChildren,
+            cardId,
+            ...(placement ? { placement } : {}),
+          });
+          await refresh({ silent: true });
+          return false;
+        }
         const message =
           error instanceof KanbanApiError && error.code === 'VERSION_CONFLICT'
             ? t('toast.versionConflict')
             : t('toast.moveFailed');
         notifyToast(message, 'error');
         await refresh({ silent: true });
+        return false;
       }
     },
     [announce, nudgeArchivableSessions, nudgeWorktreeCleanup, notifyToast, refresh, restoreArchivedSessionsFor, t],
@@ -1506,6 +1647,7 @@ export function App() {
       setArchiveTarget(null);
       if (activeCardId === archiveTarget.id) setActiveCardId(null);
       await refresh({ silent: true });
+      if (archiveCards !== null) void loadArchivedCards();
     } catch (error) {
       const message = error instanceof Error ? error.message : t('toast.archiveFailed');
       notifyToast(message, 'error');
@@ -1513,7 +1655,7 @@ export function App() {
     } finally {
       setArchiveBusy(false);
     }
-  }, [activeCardId, announce, archiveTarget, notifyToast, refresh, t]);
+  }, [activeCardId, announce, archiveCards, archiveTarget, loadArchivedCards, notifyToast, refresh, t]);
 
   const actions = useMemo<CardActionHandlers>(
     () => ({
@@ -1556,8 +1698,9 @@ export function App() {
       activeCardId,
       feeds,
       loadEarlier,
+      relations: cardRelations,
     }),
-    [now, sessions, expandedIds, resolvingApprovalId, activeCardId, feeds, loadEarlier],
+    [now, sessions, expandedIds, resolvingApprovalId, activeCardId, feeds, loadEarlier, cardRelations],
   );
 
   const totalCards = snapshot.cards.filter((card) => !card.archived).length;
@@ -1626,18 +1769,69 @@ export function App() {
 
   const handleClearSelection = useCallback(() => setSelectedIds(clearSelection()), []);
 
+  /**
+   * 批量移动（v0.22）：force=false 走批量接口；force=true 时把「有未收口子卡」的卡逐张带
+   * forceComplete 重试，其余仍走批量接口（服务端批量接口不接受 forceComplete，避免整批失败）。
+   */
+  const runBatchMove = useCallback(
+    async (ids: string[], column: ColumnId, force: boolean) => {
+      if (!force) {
+        await batchCards('move', ids, column);
+        return;
+      }
+      const current = snapshotRef.current;
+      const byId = new Map(current.cards.map((card) => [card.id, card]));
+      const index = buildCardRelationIndex(current.cards);
+      const forceIds: string[] = [];
+      const plainIds: string[] = [];
+      for (const id of ids) {
+        const card = byId.get(id);
+        if (card && describeChildren(card, index).open > 0) forceIds.push(id);
+        else plainIds.push(id);
+      }
+      if (plainIds.length) await batchCards('move', plainIds, column);
+      const results = await Promise.allSettled(
+        forceIds.map((id) => {
+          const card = byId.get(id);
+          return api.moveCard(id, column, {
+            ...(card ? { version: card.version } : {}),
+            forceComplete: true,
+          });
+        }),
+      );
+      if (results.some((result) => result.status === 'rejected')) {
+        throw new Error(t('toast.moveFailed'));
+      }
+    },
+    [t],
+  );
+
   const handleBatchAction = useCallback(
-    async (action: 'archive' | 'move', column?: ColumnId) => {
-      const ids = selectedIdList(selectedIds);
+    async (action: 'archive' | 'move', column?: ColumnId, idsOverride?: string[], force = false) => {
+      const ids = idsOverride ?? selectedIdList(selectedIds);
       if (!ids.length) {
         notifyToast(t('selection.none'), 'info');
         return;
       }
       setBatchBusy(true);
       try {
-        await batchCards(action, ids, column);
+        if (action === 'move' && column) {
+          // 批量移动到 done：先用本地关系索引预判，有未收口子卡就先弹确认（与服务端 409 同一弹窗）
+          if (column === 'done' && !force) {
+            const openChildren = collectOpenChildrenFor(snapshotRef.current.cards, ids);
+            if (openChildren.length) {
+              setBatchBusy(false);
+              setCompleteBlock({ mode: 'batch', column, cardTitle: '', openChildren, cardIds: ids });
+              return;
+            }
+          }
+          await runBatchMove(ids, column, force);
+        } else {
+          await batchCards(action, ids);
+        }
         if (action === 'archive') {
           notifyToast(t('selection.archivedToast', { count: ids.length }), 'success');
+          if (archiveCards !== null) void loadArchivedCards();
         } else if (column) {
           notifyToast(
             t('selection.movedToast', { count: ids.length, column: t(`column.${column}` as I18nKey) }),
@@ -1647,13 +1841,44 @@ export function App() {
         exitSelectionMode();
         await refresh({ silent: true });
       } catch (error) {
-        notifyToast(error instanceof Error ? error.message : t('toast.approvalFailed'), 'error');
+        // 服务端 409（本地数据滞后时才可能走到这里）：同样弹完成拦截确认
+        const openChildren = extractOpenChildren((error as KanbanApiError).details);
+        if (!force && action === 'move' && column === 'done' && openChildren.length && isCompleteBlockedError(error)) {
+          setCompleteBlock({
+            mode: 'batch',
+            column,
+            cardTitle: '',
+            openChildren,
+            cardIds: ids,
+          });
+        } else {
+          notifyToast(error instanceof Error ? error.message : t('toast.approvalFailed'), 'error');
+        }
+        // 部分成功 / 服务端数据可能已变：刷新到服务端真值
+        await refresh({ silent: true });
       } finally {
         setBatchBusy(false);
       }
     },
-    [exitSelectionMode, notifyToast, refresh, selectedIds, t],
+    [archiveCards, exitSelectionMode, loadArchivedCards, notifyToast, refresh, runBatchMove, selectedIds, t],
   );
+
+  /** 完成拦截确认：确认后带 forceComplete 重试（单卡 / 批量共用）。 */
+  const handleCompleteConfirm = useCallback(async () => {
+    const block = completeBlock;
+    if (!block) return;
+    setCompleteBusy(true);
+    try {
+      if (block.mode === 'move' && block.cardId) {
+        await handleMove(block.cardId, block.column, block.placement, true);
+      } else if (block.cardIds?.length) {
+        await handleBatchAction('move', block.column, block.cardIds, true);
+      }
+      setCompleteBlock(null);
+    } finally {
+      setCompleteBusy(false);
+    }
+  }, [completeBlock, handleBatchAction, handleMove]);
 
   // 刷新/归档后过滤已不存在的 id；切视图时保留选择
   useEffect(() => {
@@ -1793,6 +2018,7 @@ export function App() {
           onToggleSelection={handleToggleSelect}
           highlightedCardId={highlightCardId}
           nativeInbox={nativeInbox}
+          archiveBox={archiveBoxProps}
         />
       );
     }
@@ -1982,6 +2208,37 @@ export function App() {
             error={approvalDraft.error}
             onSubmit={(values) => void handleApprovalDraftSubmit(values)}
             onCancel={() => void handleApprovalDraftCancel()}
+          />
+        ) : null}
+
+        {completeBlock ? (
+          <ConfirmDialog
+            title={t('complete.blockedTitle')}
+            message={
+              completeBlock.mode === 'batch'
+                ? t('complete.blockedBatchBody', {
+                    count: completeBlock.openChildren.length,
+                    names: formatTitleList(
+                      completeBlock.openChildren.map((child) => child.title),
+                      lang,
+                    ),
+                  })
+                : t('complete.blockedSingleBody', {
+                    title: completeBlock.cardTitle,
+                    count: completeBlock.openChildren.length,
+                    names: formatTitleList(
+                      completeBlock.openChildren.map((child) => child.title),
+                      lang,
+                    ),
+                  })
+            }
+            confirmLabel={t('complete.confirm')}
+            busyLabel={t('complete.confirming')}
+            busy={completeBusy}
+            onConfirm={() => void handleCompleteConfirm()}
+            onClose={() => {
+              if (!completeBusy) setCompleteBlock(null);
+            }}
           />
         ) : null}
 

@@ -1210,3 +1210,150 @@ test('GET /cards/:id/git?cwd=：同仓库 linked worktree 被采用，跨仓库�
   assert.equal(candidateOnly.json.git.reason, 'no_cwd')
   assert.equal(candidateOnly.json.git.requestedDir, linked)
 })
+
+// ---------------- v0.22.0：父子卡/依赖/完成拦截/归档箱/恢复 ----------------
+
+test('PATCH 卡片支持 parentCardId/dependsOn；完成拦截 409 带 openChildren；forceComplete 强完成', async t => {
+  const { server } = await setup(t)
+  const parent = await createCard(server, { title: 'HTTP 父卡' })
+  const child = await createCard(server, { title: 'HTTP 子卡' })
+  const dependency = await createCard(server, { title: 'HTTP 前置依赖' })
+
+  const linked = await api(server, `/api/kanban/cards/${child.id}`, {
+    method: 'PATCH',
+    body: { version: 1, changes: { parentCardId: parent.id, dependsOn: [dependency.id] } },
+  })
+  assert.equal(linked.status, 200, linked.text)
+  assert.equal(linked.json.card.parentCardId, parent.id)
+  assert.deepEqual(linked.json.card.dependsOn, [dependency.id])
+  const state = await api(server, '/api/kanban/state')
+  assert.equal(state.json.cards.find(card => card.id === child.id).parentCardId, parent.id)
+
+  // 完成拦截：409 + 根级 openChildren（沿用 handleError 透传 extra 的约定）
+  const blocked = await api(server, `/api/kanban/cards/${parent.id}`, {
+    method: 'PATCH', body: { version: 1, changes: { status: 'done' } },
+  })
+  assert.equal(blocked.status, 409)
+  assert.equal(blocked.json.error.code, 'CARD_HAS_OPEN_CHILDREN')
+  assert.deepEqual(blocked.json.openChildren.map(item => item.id), [child.id])
+  assert.equal(blocked.json.openChildren[0].title, 'HTTP 子卡')
+  assert.equal(blocked.json.openChildren[0].status, 'backlog')
+  // 失败不落状态
+  const untouched = await api(server, '/api/kanban/state')
+  assert.equal(untouched.json.cards.find(card => card.id === parent.id).status, 'backlog')
+
+  // forceComplete 强完成 + 审计节点
+  const forced = await api(server, `/api/kanban/cards/${parent.id}`, {
+    method: 'PATCH', body: { version: 1, changes: { status: 'done' }, forceComplete: true },
+  })
+  assert.equal(forced.status, 200, forced.text)
+  assert.equal(forced.json.card.status, 'done')
+  const timeline = await api(server, `/api/kanban/cards/${parent.id}/activities`)
+  assert.ok(timeline.json.activities.some(activity => /强制完成，留下 1 张未收口子卡/.test(activity.text)))
+
+  // 清除关系（parentCardId:null / dependsOn:[]）
+  const cleared = await api(server, `/api/kanban/cards/${child.id}`, {
+    method: 'PATCH', body: { version: 2, changes: { parentCardId: null, dependsOn: [] } },
+  })
+  assert.equal(cleared.status, 200, cleared.text)
+  assert.equal(cleared.json.card.parentCardId, undefined)
+  assert.deepEqual(cleared.json.card.dependsOn, [])
+
+  // 非法关系值 → 400
+  const invalid = await api(server, `/api/kanban/cards/${child.id}`, {
+    method: 'PATCH', body: { version: 3, changes: { parentCardId: 'bad-id' } },
+  })
+  assert.equal(invalid.status, 400)
+  assert.equal(invalid.json.error.code, 'BAD_REQUEST')
+})
+
+test('POST /cards/:id/move 支持 forceComplete：拦截未收口子卡、强制完成写审计', async t => {
+  const { server } = await setup(t)
+  const parent = await createCard(server, { title: 'move 父卡' })
+  const child = await createCard(server, { title: 'move 子卡' })
+  const linked = await api(server, `/api/kanban/cards/${child.id}`, {
+    method: 'PATCH', body: { version: 1, changes: { parentCardId: parent.id } },
+  })
+  assert.equal(linked.status, 200, linked.text)
+
+  const blocked = await api(server, `/api/kanban/cards/${parent.id}/move`, { method: 'POST', body: { column: 'done' } })
+  assert.equal(blocked.status, 409)
+  assert.equal(blocked.json.error.code, 'CARD_HAS_OPEN_CHILDREN')
+  assert.deepEqual(blocked.json.openChildren.map(item => item.id), [child.id])
+
+  const forced = await api(server, `/api/kanban/cards/${parent.id}/move`, {
+    method: 'POST', body: { column: 'done', forceComplete: true },
+  })
+  assert.equal(forced.status, 200, forced.text)
+  assert.equal(forced.json.card.status, 'done')
+  const timeline = await api(server, `/api/kanban/cards/${parent.id}/activities`)
+  assert.ok(timeline.json.activities.some(activity => /强制完成，留下 1 张未收口子卡/.test(activity.text)))
+})
+
+test('POST /cards/:id/unarchive：归档→恢复回原状态列、未归档 409、不存在 404', async t => {
+  const { server } = await setup(t)
+  const card = await createCard(server, { title: '待恢复 HTTP 卡' })
+  const archived = await api(server, `/api/kanban/cards/${card.id}?version=1`, { method: 'DELETE' })
+  assert.equal(archived.status, 200)
+  assert.equal(archived.json.card.archived, true)
+
+  const restored = await api(server, `/api/kanban/cards/${card.id}/unarchive`, { method: 'POST' })
+  assert.equal(restored.status, 200, restored.text)
+  assert.equal(restored.json.ok, true)
+  assert.equal(restored.json.card.archived, false)
+  assert.equal(restored.json.card.archivedAt, undefined)
+  assert.equal(restored.json.card.status, 'backlog')
+  const state = await api(server, '/api/kanban/state')
+  assert.ok(state.json.cards.some(item => item.id === card.id))
+  const timeline = await api(server, `/api/kanban/cards/${card.id}/activities`)
+  assert.equal(timeline.json.activities[0].type, 'unarchived')
+  assert.equal(timeline.json.activities[0].text, '恢复了归档卡片')
+
+  // 未归档再恢复 → 409；不存在 → 404
+  const conflict = await api(server, `/api/kanban/cards/${card.id}/unarchive`, { method: 'POST' })
+  assert.equal(conflict.status, 409)
+  assert.equal(conflict.json.error.code, 'CONFLICT')
+  const missing = await api(server, '/api/kanban/cards/card-ffffffff/unarchive', { method: 'POST' })
+  assert.equal(missing.status, 404)
+  assert.equal(missing.json.error.code, 'CARD_NOT_FOUND')
+  const wrongMethod = await api(server, `/api/kanban/cards/${card.id}/unarchive`)
+  assert.equal(wrongMethod.status, 405)
+  assert.equal(wrongMethod.headers.get('allow'), 'POST')
+})
+
+test('GET /archive：归档箱列表（archivedAt 倒序、boardId/limit、字段与恢复后移除）', async t => {
+  const { server } = await setup(t)
+  const first = await createCard(server, { title: '归档箱第一张' })
+  const second = await createCard(server, { title: '归档箱第二张' })
+  assert.equal((await api(server, `/api/kanban/cards/${first.id}?version=1`, { method: 'DELETE' })).status, 200)
+  await new Promise(resolve => setTimeout(resolve, 5)) // 保证 archivedAt 不同，排序可断言
+  assert.equal((await api(server, `/api/kanban/cards/${second.id}?version=1`, { method: 'DELETE' })).status, 200)
+
+  const list = await api(server, '/api/kanban/archive')
+  assert.equal(list.status, 200)
+  assert.equal(list.json.ok, true)
+  assert.equal(list.json.total, 2)
+  assert.deepEqual(list.json.cards.map(card => card.id), [second.id, first.id]) // 新归档在前
+  assert.equal(list.json.cards[0].archived, true)
+  assert.equal(typeof list.json.cards[0].archivedAt, 'number')
+  assert.equal(list.json.cards[0].title, '归档箱第二张')
+  assert.ok(list.json.revision > 0)
+
+  const filtered = await api(server, '/api/kanban/archive?boardId=board-default')
+  assert.equal(filtered.status, 200)
+  assert.equal(filtered.json.total, 2)
+  const invalidBoard = await api(server, '/api/kanban/archive?boardId=not-a-board')
+  assert.equal(invalidBoard.status, 400)
+  const limited = await api(server, '/api/kanban/archive?limit=1')
+  assert.equal(limited.json.cards.length, 1)
+  assert.equal(limited.json.total, 2)
+  const wrongMethod = await api(server, '/api/kanban/archive', { method: 'POST', body: {} })
+  assert.equal(wrongMethod.status, 405)
+  assert.equal(wrongMethod.headers.get('allow'), 'GET, HEAD')
+
+  // 恢复后移出归档箱
+  assert.equal((await api(server, `/api/kanban/cards/${first.id}/unarchive`, { method: 'POST' })).status, 200)
+  const after = await api(server, '/api/kanban/archive')
+  assert.equal(after.json.total, 1)
+  assert.deepEqual(after.json.cards.map(card => card.id), [second.id])
+})

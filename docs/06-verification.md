@@ -603,6 +603,22 @@
 | 截图 | 隔离验收：`workspace-cleanup-nudge.png`（完成卡片可清理 toast）、`workspace-rebind-dialog.png`（重新绑定目录对话框）、`drawer-cwd-rebind.png`（已完成卡片失效 cwd + 重绑入口）、`workspace-rebind-390.png`（390 底部弹层）；真实宿主：`workspace-v021-real-session-attribution.png`（按会话归属标签）、`workspace-v021-real-done-nudge.png`（完成卡片可清理 toast）、`workspace-v021-real-rebind-dialog.png`（清理后重绑候选） |
 | 生效方式 | 含服务端改动，**已合入 main（merge `0a27ddf`），需重启 DSH 生效**（纯前端部分刷新看板即可） |
 
+## 1.39 v0.22.0（卡片收敛机制：拆卡纪律 + 父子卡/依赖 hook + 收敛巡检 + 归档箱，2026-10-29）
+
+| 项 | 结果 |
+|---|---|
+| 用户决策（卡片 `card-56769284`） | 卡片数量膨胀不收敛；Layer 0/1/2 全做 + 治理历史数据（「把历史数据处理一下，或者至少讨论怎么弄」） |
+| L0 拆卡纪律 | `skills/manage-kanban` 新增「拆卡纪律（三问：单独验收 / 独立排期 / 独立负责人）」+ 建卡工具描述；`kanban_create_card` 自动挂父卡（当前会话恰好 1 张 running 卡）+ 软提醒（同会话 running≥3 / backlog+running≥8），不阻止 |
+| L1 关系与 hook（服务端） | 卡片持久字段 `parentCardId` / `dependsOn`（≤8）/ `mergedInto`；环/自引用/深度 64 校验（409 `CARD_RELATION_CYCLE`）；完成拦截三入口（complete / PATCH status=done / move done）→ 409 `CARD_HAS_OPEN_CHILDREN` + `openChildren`，`forceComplete` 强完成写审计；子卡进入 done/canceled/failed/needs_you 回写父卡时间线（不改父卡状态）；依赖全部收口 → 写「依赖已就绪」并把 blocked 卡唤醒回 backlog（单向前置，防递归） |
+| L2 收敛工具（服务端） | 新增 3 个工具（共 14）：`kanban_review_board`（只读巡检：陈旧 backlog / 未归档 done / 重复候选 / 会话 WIP / 无 cwd 卡 + 人话建议）、`kanban_merge_cards`（子卡改挂、依赖重指、会话归并、摘要追加、源卡归档 mergedInto、title 覆盖、dryRun）、`kanban_archive_cards`（批量归档 + dryRun + restore 恢复；有未收口子卡跳过） |
+| 归档可恢复 | domain `unarchiveCard` + `POST /cards/:id/unarchive` + `GET /archive` 归档箱列表；恢复后回原状态列列尾，时间线写 `unarchived` |
+| Web | 看板卡/列表行「子卡 done/total」徽标 +「属于：父卡」小字；详情抽屉「关系」区块（父卡/子卡/依赖 + 已就绪/未就绪，无关系不渲染）；完成拦截统一 ConfirmDialog（拖拽 / 移动到 / 快捷键 / 批量移动；批量路径本地预判，确认后无子卡走 batch、有子卡逐张 forceComplete）；列表底部「归档箱 N 张」懒加载 + 单张恢复 |
+| 测试 | 服务端 **288/288**（基线 259 + 29：relations 14 / maintenance 11 / routes 4，另更新工具数断言）；Web **33 文件 / 438 例**（基线 31/412 + 26）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning |
+| 真实浏览器冒烟（dev-server + 临时数据） | 建父/子卡 → 移到 done 得 409 且 `openChildren` 结构正确 → `forceComplete` 重试成功；归档 → `GET /archive` 含 archivedAt → unarchive 成功 → 二次 unarchive 409 CONFLICT；`dependsOn` 建卡正常（Web teammate 执行，真实宿主 E2E 待重启后补） |
+| 历史数据治理 | 只读体检 + dry-run 方案已出（`/tmp/kanban-cleanup-plan.md`）：未归档 78 → 预计 26（done 保留最近 10、归档 44、合并 8→4、保留 16）；**未执行**，等用户拍板；执行前备份 data.json，优先用 v0.22 工具（dryRun 预览） |
+| 生效方式 | 含服务端改动，**合入 main 后需重启 DSH**；纯前端部分刷新看板即生效 |
+| 分支 | `feat/card-convergence`（基于 `8562dd9`）；版本 0.22.0 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

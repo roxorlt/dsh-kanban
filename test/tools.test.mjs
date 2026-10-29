@@ -67,14 +67,20 @@ async function setupBound(t, options = {}) {
   return { store, tools, byName, registry, controller }
 }
 
-test('11 个工具名字固定且 schema 形态完整', async t => {
+test('14 个工具名字固定且 schema 形态完整', async t => {
   const { tools } = await setup(t)
   assert.deepEqual(tools.map(tool => tool.name), TOOL_NAMES)
   const approvalTool = tools.find(tool => tool.name === 'kanban_request_approval')
   assert.ok(approvalTool.parameters.properties.questions)
   assert.equal(approvalTool.parameters.properties.questions.maxItems, 6)
   assert.ok(approvalTool.parameters.properties.questions.items.properties.options)
-  assert.equal(new Set(TOOL_NAMES).size, 11)
+  assert.equal(new Set(TOOL_NAMES).size, 14)
+  // v0.22.0 新增：收敛巡检 / 合并 / 批量归档恢复
+  for (const name of ['kanban_review_board', 'kanban_merge_cards', 'kanban_archive_cards']) {
+    assert.ok(tools.some(tool => tool.name === name), `缺少工具 ${name}`)
+  }
+  assert.ok(tools.find(tool => tool.name === 'kanban_merge_cards').parameters.properties.dryRun)
+  assert.ok(tools.find(tool => tool.name === 'kanban_archive_cards').parameters.properties.restore)
   for (const tool of tools) {
     assert.equal(tool.parameters.type, 'object', tool.name)
     assert.equal(typeof tool.parameters.properties, 'object')
@@ -469,7 +475,9 @@ test('kanban_create_card 默认 reuse：自动绑定当前会话、补全工作�
   assert.equal(created.card.workspaceId, 'ws-1')
   assert.deepEqual(created.binding, {
     mode: 'reuse', sessionId: 'session-current', created: false, source: 'agent', workspaceId: 'ws-1', cwd: '/repo/kanban',
+    parentCardId: null,
   })
+  assert.equal(created.parentCardId, null)
   assert.equal(created.warnings, undefined)
   assert.match(created.hint, /自动绑定当前会话/)
 

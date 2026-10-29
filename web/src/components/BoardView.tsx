@@ -284,6 +284,7 @@ export function BoardView({
                     onLoadEarlier={() => shared.loadEarlier(card.id)}
                     sessions={shared.sessions}
                     worklineStatus={card.cwd?.trim() ? worklineStatuses[card.cwd.trim()] : undefined}
+                    relations={shared.relations}
                     resolvingApprovalId={shared.resolvingApprovalId}
                     selectionMode={selectionMode}
                     selectionSelected={selectedIds.has(card.id)}

@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.22.0 — 2026-10-29
+
+### 新增：卡片收敛机制（拆卡纪律 + 父子卡/依赖 hook + 收敛巡检 + 归档箱）
+
+- 用户决策（卡片 `card-56769284`）：看板卡片数量膨胀、不收敛；Layer 0/1/2 全做，并治理历史数据（「现在卡片太多了」）。
+- **L0 拆卡纪律**：`skills/manage-kanban` 增「拆卡纪律（三问：用户要单独验收吗 / 能独立排期或被阻塞吗 / 有独立负责人·会话且生命周期不同吗）」，步骤用 checklist、执行线程用一卡多会话、研究讨论用时间线；`kanban_create_card` 描述同步写清。建卡时自动挂父卡（当前会话恰好 1 张未归档 running 卡才自动挂，0 张不挂、多张不挂并 warning），并给软提醒（同会话 running ≥3「建议先收口」/ backlog+running ≥8「建议收敛」），不阻止创建；hint 增「如果这是步骤，优先用 checklist/多会话」。
+- **L1 关系与 hook（服务端）**：卡片新增可选持久字段 `parentCardId`（唯一父卡）、`dependsOn`（≤8 前置卡）、`mergedInto`（合并源卡只读去向）；normalize 防御校验 + create/patch 校验（存在未归档 404 / 格式 400 / 自引用·成环 409 `CARD_RELATION_CYCLE` / 父链深度 64）。完成拦截：`completeCard`、PATCH `status=done`、move 到 done 三入口在存在未收口直接子卡时返回 409 `CARD_HAS_OPEN_CHILDREN`（`extra.openChildren:[{id,title,status}]`），显式 `forceComplete`（工具 `force`）放行并写「强制完成，留下 N 张未收口子卡」审计节点。子卡进入 `done/canceled/failed/needs_you` 时父卡时间线写 progress 节点（不改父卡状态）。依赖唤醒：某卡 done/canceled 后，依赖它的卡若全部前置已收口 → 写「依赖卡「X」已完成，依赖已就绪」，`blocked` 卡自动回 `backlog`（单向前置、防递归）。
+- **L2 收敛工具（服务端，工具 11 → 14）**：新增 `kanban_review_board`（只读巡检：陈旧 backlog / 已完成未归档 / 疑似重复 / 同会话多张 running / 无 cwd 卡 + 人话建议）、`kanban_merge_cards`（子卡改挂父卡、全盘 dependsOn 重指、源会话归并、摘要/结果并入、源卡归档并记 `mergedInto`、可选 `title` 覆盖、`dryRun` 预览；源卡有未收口子卡则拒绝）、`kanban_archive_cards`（批量归档，有未收口子卡 skipped，`dryRun` 预览、`restore:true` 批量恢复；另新增 domain `unarchiveCard`）。`kanban_update_card` 支持 `parentCardId`/`dependsOn`（null/[] 清除）与 `forceComplete`；`kanban_move_card` 支持 `forceComplete`；`kanban_card` 详情增 `children`/`dependsOnCards`；`cardBrief` 增关系字段。
+- **HTTP**：PATCH `/cards/:id` 与 `POST /cards/:id/move` 透传 `forceComplete`（409 的 `openChildren` 平铺根级）；新增 `POST /cards/:id/unarchive` 与 `GET /archive?boardId=&limit=` 归档箱列表（按 archivedAt 倒序）。
+- **Web**：看板卡/列表行显示「子卡 done/total」徽标（未收口 warn 色）+「属于：父卡」小字（390 截断）；详情抽屉新增「关系」区块（父卡 / 子卡 / 依赖 + 已就绪/未就绪，无关系整块不渲染）；完成拦截统一 ConfirmDialog——拖拽、移动菜单、快捷键、批量移动都覆盖（批量先本地预判，确认后无子卡走 batch、有子卡逐张 `forceComplete`）；列表视图底部新增可收起的「归档箱（N 张）」，懒加载 `GET /archive`、单张恢复 `POST unarchive`，旧服务端无该接口时静默隐藏。
+- 文档/契约：数据模型 §2.aa（关系字段与收敛规则）、HTTP 契约 §4.aa（forceComplete / unarchive / archive 列表 / 批量 skipped）、`docs/04` 代码地图与扩展路线（M2「卡片依赖与阻塞」完成）、`skills/manage-kanban` 工具表与纪律、`docs/06` §1.39。
+- 测试：服务端 **288/288**（基线 259 + 29：relations 14 / maintenance 11 / routes 4，另更新工具数断言）；Web **33 文件 / 438 例**（基线 31/412 + 26：cardRelations / api.relations）；tsc/build/令牌 lint 全过。
+- 历史数据治理：只读体检 + dry-run 方案（`/tmp/kanban-cleanup-plan.md`，未执行）：未归档 78（done 52 / backlog 20 / running 4 / canceled 2）→ 预计 26（归档 44、合并 8→4、保留 16）；执行前备份 data.json，先 archive dryRun、再 merge 逐组执行、最后 review_board 复核；归档可恢复，合并只能整体回滚快照。
+- 生效：含服务端改动，**需合入 main 并重启 DSH**；纯前端部分刷新看板即生效。
+- 分支：`feat/card-convergence`（基于 `8562dd9`）。
+
 ## v0.21.0 — 2026-10-29
 
 ### 新增：P2 批 2（14 按会话归属 / 15 完成卡片可清理提示 / 16 重新绑定工作目录）

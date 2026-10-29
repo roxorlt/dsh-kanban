@@ -86,6 +86,15 @@
 - `actor` 只用于时间线展示，默认 `{kind:'user', name:'你'}`；工具调用时由工具传 agent actor。
 - `VERSION_CONFLICT` 返回 `{ok:false, error:{code:'VERSION_CONFLICT'}, card}`（最新卡片）便于 UI 合并。
 
+### 4.aa 关系与收敛接口（v0.22.0）
+
+- PATCH /cards/:id 与 POST /cards/:id/move 的 body 支持 `forceComplete: true`：有未收口子卡时默认 409（响应 `{ok:false,error:{code:CARD_HAS_OPEN_CHILDREN,message},openChildren:[{id,title,status}]}`，`openChildren` 平铺在根级；工具错误在 `error.extra`），传 `forceComplete` 后强完成并在时间线写审计节点。
+- PATCH `changes` 新增 `parentCardId`（string | null）与 `dependsOn`（string[]，`[]` 清除）；校验规则见数据模型契约 §2.aa（404 CARD_NOT_FOUND / 409 CARD_RELATION_CYCLE）。
+- `POST /cards/:id/unarchive`：恢复已归档卡片，body 可选 `actor`；返回 `{ok,card,revision}`；卡片未归档时 409 CONFLICT、不存在 404。
+- `GET /archive?boardId=&limit=`（默认 100 / 上限 200）：归档箱列表，按 `archivedAt` 倒序，返回 `{ok,cards,total,revision}`，卡片为完整 Card（含 `archived/archivedAt`）。
+- 批量归档（`POST /cards/batch` action=archive）遇到有未收口子卡的卡会跳过，`skipped` 里带 `{id,reason:has_open_children}`。
+
+
 ## 4. 决策日志接口（v0.10）
 
 只读；文件位置、事件模型与字段定义见 `05-decision-log.md`。三条路由均为 `GET`（`HEAD` 同样可用），写方法返回 405。

@@ -58,7 +58,12 @@ export type ApiErrorCode =
   | 'SESSION_BUSY_CARDS'
   | 'SESSION_ACTIVE'
   | 'SESSION_ARCHIVE_UNAVAILABLE'
-  | 'SESSION_ARCHIVE_FAILED';
+  | 'SESSION_ARCHIVE_FAILED'
+  // ---- 父子卡 / 依赖（v0.22.0）----
+  /** 完成被「未收口子卡」拦截（409），extra.openChildren 为子卡清单 */
+  | 'CARD_HAS_OPEN_CHILDREN'
+  /** 父子卡链 / 依赖图成环（409） */
+  | 'CARD_RELATION_CYCLE';
 
 /** 错误响应里附带的业务字段（服务端 `...extra` 原样带回）。 */
 export interface ApiErrorDetails {
@@ -68,6 +73,8 @@ export interface ApiErrorDetails {
   blockingCards?: Array<{ id: string; title: string; status: string }>;
   /** SESSION_ACTIVE：宿主返回的活动清单（turn/job/subagent/schedule） */
   activity?: SessionActivityEntry[];
+  /** CARD_HAS_OPEN_CHILDREN：未收口子卡（服务端字段，顶层或 extra 下都能取到） */
+  openChildren?: Array<{ id: string; title: string; status: string }>;
   [key: string]: unknown;
 }
 
@@ -113,6 +120,9 @@ export function normalizeCard(raw: Partial<Card> & { id: string }): Card {
     createdAt: raw.createdAt ?? 0,
     updatedAt: raw.updatedAt ?? raw.createdAt ?? 0,
     boardId: raw.boardId ?? 'board-default',
+    // v0.22 关系字段：旧服务端没有（保持 undefined，UI 不渲染）；
+    // 新服务端给了也别假设形态正确——非字符串/非数组一律丢弃。
+    ...normalizeRelationFields(raw),
     ...(raw.handoff
       ? {
           handoff: {
@@ -125,6 +135,29 @@ export function normalizeCard(raw: Partial<Card> & { id: string }): Card {
         }
       : {}),
   } as Card;
+}
+
+/** 关系字段归一化：parentCardId / mergedInto 去空白，dependsOn 只留非空字符串并去重。 */
+function normalizeRelationFields(raw: Partial<Card>): Partial<Card> {
+  const rawParent = (raw as { parentCardId?: unknown }).parentCardId;
+  const parentCardId = typeof rawParent === 'string' && rawParent.trim() ? rawParent.trim() : undefined;
+  const rawMerged = (raw as { mergedInto?: unknown }).mergedInto;
+  const mergedInto = typeof rawMerged === 'string' && rawMerged.trim() ? rawMerged.trim() : undefined;
+  const rawDepends = (raw as { dependsOn?: unknown }).dependsOn;
+  let dependsOn: string[] | undefined;
+  if (Array.isArray(rawDepends)) {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const entry of rawDepends) {
+      if (typeof entry !== 'string') continue;
+      const id = entry.trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      list.push(id);
+    }
+    dependsOn = list;
+  }
+  return { parentCardId, mergedInto, dependsOn };
 }
 
 /** 兼容旧 resolution（{optionId,label}）与新 resolution（{optionIds,labels}）。 */
@@ -253,12 +286,26 @@ export type CardChanges = Partial<
     | 'order'
     | 'handoff'
   >
->;
+> & {
+  /** v0.22 父子卡：传 null 清除父卡 */
+  parentCardId?: string | null;
+  /** v0.22 依赖：传 [] 清除全部依赖 */
+  dependsOn?: string[] | null;
+};
+
+/** PATCH /cards/:id 的可选请求参数（4th 参数；旧调用不传也不受影响）。 */
+export interface UpdateCardOptions {
+  actor?: { kind: 'user' | 'agent' | 'system'; name: string };
+  /** v0.22 完成拦截：卡片还有未收口子卡时强制完成（服务端会写审计节点） */
+  forceComplete?: boolean;
+}
 
 export interface MoveOptions {
   version?: number;
   beforeId?: string;
   afterId?: string;
+  /** v0.22 完成拦截：目标列为 done 且卡片有未收口子卡时强制完成 */
+  forceComplete?: boolean;
 }
 
 export type ApprovalCreateInput =
@@ -829,11 +876,16 @@ export const api = {
     cardId: string,
     version: number,
     changes: CardChanges,
-    actor?: { kind: 'user' | 'agent' | 'system'; name: string },
+    options: UpdateCardOptions = {},
   ): Promise<{ card: Card; revision: number }> =>
     request<{ card: Card; revision: number }>(`/cards/${encodeURIComponent(cardId)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ version, changes, actor }),
+      body: JSON.stringify({
+        version,
+        changes,
+        ...(options.actor ? { actor: options.actor } : {}),
+        ...(options.forceComplete ? { forceComplete: true } : {}),
+      }),
     }).then((result) => ({ ...result, card: normalizeCard(result.card) })),
 
   archiveCard: (cardId: string, version?: number): Promise<{ revision: number }> =>
@@ -841,6 +893,29 @@ export const api = {
       method: 'DELETE',
       body: JSON.stringify(typeof version === 'number' ? { version } : {}),
     }),
+
+  /**
+   * v0.22 归档箱：GET /archive 只读列出已归档卡片（正常 cards 数组不含归档卡）。
+   * 服务端未提供该接口时抛错（404），由调用方把归档箱隐藏/降级，不阻塞主界面。
+   */
+  getArchivedCards: async (): Promise<Card[]> => {
+    // limit=200 是服务端上限：归档箱一次拉全（当前看板卡片量级在 200 内）
+    const result = await request<{ cards?: unknown; archived?: unknown }>('/archive?limit=200');
+    const raw = Array.isArray(result.cards) ? result.cards : Array.isArray(result.archived) ? result.archived : [];
+    return raw
+      .filter(
+        (card): card is Partial<Card> & { id: string } =>
+          Boolean(card) && typeof card === 'object' && typeof (card as { id?: unknown }).id === 'string' && !!(card as { id: string }).id,
+      )
+      .map((card) => normalizeCard(card));
+  },
+
+  /** v0.22 从归档箱恢复一张卡片；恢复后的状态列由服务端决定，前端刷新即可。 */
+  unarchiveCard: (cardId: string): Promise<{ card: Card; revision: number }> =>
+    request<{ card?: Card; revision: number }>(`/cards/${encodeURIComponent(cardId)}/unarchive`, {
+      method: 'POST',
+      body: '{}',
+    }).then((result) => ({ ...result, card: normalizeCard(result.card ?? { id: cardId }) })),
 
   moveCard: (cardId: string, column: ColumnId, options: MoveOptions = {}): Promise<{ card: Card; revision: number }> =>
     request<{ card: Card; revision: number }>(`/cards/${encodeURIComponent(cardId)}/move`, {
