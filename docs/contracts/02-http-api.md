@@ -281,7 +281,7 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
 - 缓存：按仓库 root realpath 缓存 8s / 上限 64 条。
 - 前端把卡片按 `cwd` 归到其工作副本：**优先用 `worktrees[].dirs` 里的原文精确匹配**，匹配不到再退回最长前缀；无 cwd / 不可用的卡片归「未指定」组。
 
-## 13. 清理工作副本（v0.17 增量，Phase B：软删除 + 可选删分支）
+## 13. 清理工作副本（v0.17 增量，Phase B：软删除 + 可选删分支；v0.21.0 #15：终态卡片不占用）
 
 清理 = 把工作副本目录**移入回收站**（默认 7 天后自动删除，可补救）+ 清理 git worktree 元数据；可选删除对应本地分支。
 
@@ -290,7 +290,9 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
 - 校验：
   - `repoRoot`/`worktreePath` 必须匹配**由看板未归档卡片 cwd 推导出的仓库与工作副本**（服务端重新采集，不允许任意路径）；
   - 拒绝主工作副本（400 `WORKTREE_MAIN`）；
-  - 有**未归档卡片**的 cwd 落在该工作副本内 → 409 `WORKTREE_IN_USE`（卡片信息 + 数量）；
+  - 有**未完成**的未归档卡片（`status` 不属于 {`done`,`canceled`}）的 cwd 落在该工作副本内 → 409 `WORKTREE_IN_USE`（`count` 只数未完成卡片，`cards` 最多 5 条 `{id,title,cwd}`，`message` 形如「该工作副本仍被 N 张未完成卡片使用」）；
+    **v0.21.0 #15**：`done`/`canceled` 是终态，**不再占用**清理判定（卡片完成后其工作副本可能变为可清理，客户端据此提示）；卡片被归档（`archived:true`）同样不占用；
+  - **允许集合不变**（v0.21.0 #15）：`/git/summaries`、`/git/workspaces` 的允许集合以及本接口的 `repoRoot` 推导仍使用**所有未归档卡片 cwd**（含 `done`/`canceled`）——终态卡片不再阻塞清理，但它们的 cwd 仍要能被探测到（工作区视图里能看到已完成卡片所在工作副本）；
   - 有未保存改动/未跟踪文件且 `confirmLoss !== true` → 409 `WORKTREE_DIRTY`（带 `modifiedCount`/`untrackedCount`）；
   - 未并入主线且 `confirmLoss !== true` → 409 `WORKTREE_UNMERGED`（带 `ahead`）；
   - `deleteBranch` 且分支是主分支 → 400 `BRANCH_MAIN`；分支被其它工作副本占用 → 409 `BRANCH_IN_USE`。

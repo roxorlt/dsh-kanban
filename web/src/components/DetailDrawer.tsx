@@ -71,6 +71,10 @@ interface DetailDrawerProps {
   pendingSessionIds: ReadonlySet<string>;
   onArchiveSession: (card: Card, sessionId: string) => void;
   onUnarchiveSession: (card: Card, sessionId: string) => void;
+  /** v0.21.0 #16：卡片 cwd 状态（App 计算） */
+  cwdState?: 'ok' | 'missing' | 'invalid';
+  /** v0.21.0 #16：打开「重新绑定目录」弹窗 */
+  onRebindDir?: (card: Card) => void;
 }
 
 const FOCUSABLE =
@@ -118,6 +122,8 @@ export function DetailDrawer({
   pendingSessionIds,
   onArchiveSession,
   onUnarchiveSession,
+  cwdState = 'ok',
+  onRebindDir,
 }: DetailDrawerProps) {
   const { t, lang } = useI18n();
   const titleId = useId();
@@ -594,16 +600,31 @@ export function DetailDrawer({
                   <dd>{formatDateTime(card.completedAt, lang)}</dd>
                 </div>
               ) : null}
-              {card.cwd ? (
-                <div className="kb-meta-grid__wide">
-                  <dt>{t('drawer.workspace')}</dt>
-                  <dd>
+              {/* v0.21.0 #16：工作目录一行总是显示；失效时给警示标签，可重新绑定 */}
+              <div className="kb-meta-grid__wide kb-drawer__cwd-row">
+                <dt>{t('drawer.workspace')}</dt>
+                <dd>
+                  {card.cwd ? (
                     <code className="kb-meta-grid__code" title={card.cwd}>
                       {card.cwd}
                     </code>
-                  </dd>
-                </div>
-              ) : null}
+                  ) : (
+                    <span className="kb-drawer__cwd-missing">{t('drawer.cwdMissing')}</span>
+                  )}
+                  {cwdState === 'invalid' ? (
+                    <span className="kb-pill kb-pill--warn kb-drawer__cwd-invalid">{t('drawer.cwdInvalid')}</span>
+                  ) : null}
+                  {onRebindDir ? (
+                    <button
+                      type="button"
+                      className="kb-btn kb-btn--sm kb-btn--ghost kb-drawer__cwd-rebind"
+                      onClick={() => onRebindDir(card)}
+                    >
+                      {t('drawer.rebindCwd')}
+                    </button>
+                  ) : null}
+                </dd>
+              </div>
             </dl>
             <p className="kb-drawer__updated">{formatRelative(card.updatedAt, now, lang)}</p>
           </section>

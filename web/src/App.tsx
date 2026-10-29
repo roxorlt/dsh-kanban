@@ -58,6 +58,8 @@ import type { ListGroupBy } from './lib/listGroups';
 import { applyPage, EMPTY_FEED } from './lib/activities';
 import { useWorklineStatuses } from './lib/useWorklineStatuses';
 import { collectRunningSessionCwds, useWorkspaces } from './lib/useWorkspaces';
+import { buildCleanupNudge } from './lib/worktreeCleanupNudge';
+import { buildRebindCandidates, cardCwdState, formatRebindComment } from './lib/rebindDir';
 import type { ActivityFeed } from './lib/activities';
 import { useMediaQuery } from './lib/useMediaQuery';
 import { useRealtime } from './lib/useRealtime';
@@ -74,6 +76,8 @@ import { HelpDialog } from './components/HelpDialog';
 import { ListView } from './components/ListView';
 import { WorkspaceView } from './components/WorkspaceView';
 import { ToastRegion, useToasts } from './components/Toast';
+import type { ToastAction } from './components/Toast';
+import { RebindDirDialog } from './components/RebindDirDialog';
 import { Toolbar } from './components/Toolbar';
 import type { SyncState, ViewMode } from './components/Toolbar';
 import type { ApprovalDecision, ApprovalSubmission } from './components/ApprovalPanel';
@@ -220,7 +224,9 @@ export function App() {
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
   const boardIdRef = useRef<string | null>(null);
-  const notifyRef = useRef<(text: string, tone?: 'info' | 'success' | 'error') => void>(() => undefined);
+  const notifyRef = useRef<
+    (text: string, tone?: 'info' | 'success' | 'error', action?: ToastAction) => void
+  >(() => undefined);
   const { toasts, notify, dismiss } = useToasts();
   notifyRef.current = notify;
   const [helpOpen, setHelpOpen] = useState(false);
@@ -377,6 +383,10 @@ export function App() {
   const [formState, setFormState] = useState<FormState | null>(null);
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // v0.21.0 #16：重新绑定工作目录弹窗（详情抽屉 / 未指定块共用）
+  const [rebindTarget, setRebindTarget] = useState<Card | null>(null);
+  const [rebindBusy, setRebindBusy] = useState(false);
+  const [rebindError, setRebindError] = useState<string | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<Card | null>(null);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [resolvingApprovalId, setResolvingApprovalId] = useState<string | null>(null);
@@ -502,7 +512,7 @@ export function App() {
 
   // ------------------------------------------------------------------ 动作
   const notifyToast = useCallback(
-    (text: string, tone: 'info' | 'success' | 'error' = 'info') => notify(text, tone),
+    (text: string, tone: 'info' | 'success' | 'error' = 'info', action?: ToastAction) => notify(text, tone, action),
     [notify],
   );
 
@@ -678,6 +688,28 @@ export function App() {
     [archiveAvailable, archivedSessionIds, embedded, notifyToast, pendingSessionIds, runningSessionIds, t],
   );
 
+  /**
+   * v0.21.0 #15：卡片进入完成 → 若它的工作副本已并入主线且干净、没有未完成卡片/运行中会话占用，
+   * 给一条可操作 toast（「打开工作区」），不弹窗打断。
+   * 判定与工作区视图的「可安全清理」同源；工作副本数据来自最近一次探测（≤20s，保守）。
+   */
+  const nudgeWorktreeCleanup = useCallback(
+    (card: Card) => {
+      const nudge = buildCleanupNudge({
+        card,
+        cards: snapshotRef.current.cards.filter((item) => !item.archived),
+        repos: workspaceState.repos,
+        sessionCwds: runningSessionCwds,
+      });
+      if (!nudge) return;
+      notifyToast(t('workspace.cleanupNudge', { name: nudge.label }), 'info', {
+        label: t('workspace.cleanupNudgeAction'),
+        onClick: () => handleViewChange('workspaces'),
+      });
+    },
+    [handleViewChange, notifyToast, runningSessionCwds, t, workspaceState.repos],
+  );
+
   /** 卡片从完成态重开（done → 其它列）后，尝试恢复其已归档的绑定会话。 */
   const restoreArchivedSessionsFor = useCallback(
     async (card: Card) => {
@@ -772,6 +804,62 @@ export function App() {
   const handleOpenDetail = useCallback((cardId: string) => {
     setActiveCardId(cardId);
   }, []);
+
+  // -------------------------------------------------- 重新绑定工作目录（v0.21.0 #16）
+  /** 打开「重新绑定目录」弹窗（详情抽屉 / 工作区「未指定」块共用入口）。 */
+  const handleOpenRebind = useCallback((card: Card) => {
+    setRebindError(null);
+    setRebindTarget(card);
+  }, []);
+
+  /** 候选目录：卡片绑定会话的执行目录 + 已探测仓库的主/子工作副本（含当前 cwd）。 */
+  const rebindCandidates = useMemo(() => {
+    if (!rebindTarget) return [];
+    return buildRebindCandidates({ repos: workspaceState.repos, sessions, card: rebindTarget, t });
+  }, [rebindTarget, sessions, t, workspaceState.repos]);
+
+  /** 提交重绑：PATCH cwd（已完成卡片也允许）→ 评论节点写时间线 → 刷新卡片与工作区。 */
+  const handleRebindSubmit = useCallback(
+    async (path: string) => {
+      if (!rebindTarget || rebindBusy) return;
+      const nextCwd = path.trim();
+      if (!nextCwd) return;
+      const card = rebindTarget;
+      setRebindBusy(true);
+      setRebindError(null);
+      try {
+        await api.updateCard(card.id, card.version, { cwd: nextCwd });
+        // 时间线留痕：PATCH 本身不写活动节点，用评论节点记录「旧 → 新」。
+        try {
+          await api.addComment(card.id, formatRebindComment(t, card.cwd, nextCwd));
+        } catch {
+          /* 时间线写入失败不影响改绑结果 */
+        }
+        setRebindTarget(null);
+        notifyToast(t('rebind.done'), 'success');
+        await refresh({ silent: true });
+        workspaceState.reload();
+      } catch (error) {
+        if (error instanceof KanbanApiError && error.code === 'VERSION_CONFLICT') {
+          setRebindError(t('rebind.failed', { message: t('toast.versionConflict') }));
+          await refresh({ silent: true });
+        } else {
+          setRebindError(
+            t('rebind.failed', { message: error instanceof Error ? error.message : String(error) }),
+          );
+        }
+      } finally {
+        setRebindBusy(false);
+      }
+    },
+    [notifyToast, rebindBusy, rebindTarget, refresh, t, workspaceState],
+  );
+
+  /** 详情抽屉里当前卡片的 cwd 状态（无 / 已失效 / 正常）。 */
+  const activeCardCwdState = useMemo(
+    () => (activeCard ? cardCwdState(activeCard, workspaceState.unavailable) : 'ok'),
+    [activeCard, workspaceState.unavailable],
+  );
 
   // ------------------------------------------------------------ 原生待确认作答
   const setNativeBusy = useCallback((id: string, busy: boolean) => {
@@ -925,6 +1013,7 @@ export function App() {
         await refresh({ silent: true });
         if (column === 'done' && !isTerminalCardStatus(card.status)) {
           nudgeArchivableSessions(result.card, updatedCards);
+          nudgeWorktreeCleanup(result.card);
         } else if (isTerminalCardStatus(card.status) && column !== 'done') {
           void restoreArchivedSessionsFor(result.card);
         }
@@ -942,7 +1031,7 @@ export function App() {
         await refresh({ silent: true });
       }
     },
-    [announce, nudgeArchivableSessions, notifyToast, refresh, restoreArchivedSessionsFor, t],
+    [announce, nudgeArchivableSessions, nudgeWorktreeCleanup, notifyToast, refresh, restoreArchivedSessionsFor, t],
   );
 
   /** v1.1 待办卡「开始推进」：乐观移列 → 启动提示发送 / 独立预览仅移动；失败回滚。 */
@@ -1676,9 +1765,11 @@ export function App() {
           cards={filteredCards}
           allCards={unarchivedCards}
           workspaces={workspaceState}
+          sessions={sessions}
           runningSessionCwds={runningSessionCwds}
           now={now}
           onOpenCard={actions.onOpenDetail}
+          onRebindCard={handleOpenRebind}
           onNotify={actions.onNotify}
         />
       );
@@ -1860,6 +1951,8 @@ export function App() {
             pendingSessionIds={pendingSessionIds}
             onArchiveSession={(card, sessionId) => handleArchiveSession(card, sessionId)}
             onUnarchiveSession={(card, sessionId) => void handleUnarchiveSession(card, sessionId)}
+            cwdState={activeCardCwdState}
+            onRebindDir={handleOpenRebind}
           />
         ) : null}
 
@@ -1939,6 +2032,19 @@ export function App() {
             onClose={() => setBatchArchiveOpen(false)}
             onCompleted={handleBatchArchiveCompleted}
             onUnavailable={handleArchiveUnavailable}
+          />
+        ) : null}
+
+        {rebindTarget ? (
+          <RebindDirDialog
+            card={rebindTarget}
+            candidates={rebindCandidates}
+            busy={rebindBusy}
+            error={rebindError}
+            onSubmit={(path) => void handleRebindSubmit(path)}
+            onClose={() => {
+              if (!rebindBusy) setRebindTarget(null);
+            }}
           />
         ) : null}
 

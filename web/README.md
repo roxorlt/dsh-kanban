@@ -10,7 +10,7 @@ npm --prefix web install          # 首次安装依赖（国内网络可加 --re
 npm --prefix web run dev          # Vite 开发服务器 http://127.0.0.1:5183，/api 代理到 4599
 npm --prefix web run build        # tsc --noEmit + vite build → web/dist
 npm --prefix web run typecheck    # 仅类型检查
-npm --prefix web run test         # vitest 单测（分组 / 筛选 / 时间格式化）
+npm --prefix web run test         # vitest 单测（分组 / 筛选 / 时间格式化 / 工作区清理判定 / 重新绑定候选 / 完成清理提示）
 npm --prefix web run lint:tokens  # dsh-ui-spec 的令牌合规检查
 
 # 依赖后端：优先用 builder 的 dev-server
@@ -48,13 +48,15 @@ web/
       forkGraph.ts            # 详情「分支 / 工作树」Fork 风格多泳道布局（种子泳道、状态机、汇入/出弯、8 色、路径省略）
       worklineSummary.ts      # 「工作线」结论（位置 / 与主线 / 与线上 / 计数），详情与卡片徽标共用（v0.14.1/v0.15）
       useWorklineStatuses.ts  # 看板批量工作线摘要（cwd 去重、防抖、15s 缓存、20s 可见刷新）（v0.15）
-      useWorkspaces.ts        # 「工作区」视图数据：按仓库聚合、dirs 精确归组、15s 缓存（v0.16）
+      useWorkspaces.ts        # 「工作区」视图数据：按仓库聚合、dirs 精确归组、15s 缓存、按会话兜底归组、清理判定（v0.16/v0.21）
+      rebindDir.ts            # 「重新绑定工作目录」纯函数：候选目录、卡片 cwd 状态、时间线留痕文案（v0.21）
+      worktreeCleanupNudge.ts # 完成卡片时的可清理提示判定：终态不占用 + 已并入干净才提示（v0.21）
       useCardGit.ts           # 打开卡片按需拉 Git 上下文（?cwd= 候选会话目录 + 4s LRU 缓存 + 失败静默）
     components/               # Toolbar/FilterMenu/BoardView/ListView/KanbanCard/DetailDrawer/
-                              # ApprovalPanel/Timeline/Composer/SessionSection/Modal/Toast/Icons…
+                              # ApprovalPanel/Timeline/Composer/SessionSection/Modal/Toast/RebindDirDialog/Icons…
     styles/
       tokens.css              # 独立模式的 DSH 令牌兜底（亮/暗；嵌入后由宿主行内令牌覆盖）
-      base.css app.css board.css list.css drawer.css modal.css responsive.css
+      base.css app.css board.css list.css drawer.css modal.css responsive.css inbox.css workspaces.css
 ```
 
 ## 行为说明
@@ -90,6 +92,9 @@ web/
   「回复/审批目标」下拉（默认主会话，设为主会话后默认目标跟随），回复与审批决定都发到该会话。
 - **详情抽屉头部（v0.7.2）**：首行是 kicker + 标题（左）与编辑/归档/关闭（右）；摘要独占第二行，
   宽度与正文内容一致（右边缘与 chips / 元数据对齐），长摘要不再被 138px 操作簇挤成窄列。
+- **工作区「按会话归属」（v0.21）**：卡片 `cwd` 在主工作副本、绑定会话在同仓库 linked worktree 时，`groupCardsByWorktree(..., { sessions })` 把卡片归到会话所在工作副本并记入 `WorkspaceGroups.sessionAttributed`，mini 卡片标题后显示「按会话归属」`kb-tag`（title 带会话目录）；按 `sessionIds` 取第一个有执行目录的会话，卡片 cwd 已在 linked 时以 cwd 为准，无 cwd / 跨仓库不兜底。
+- **完成卡片可清理提示（v0.21）**：卡片从非终态移入已完成后，`worktreeCleanupNudge.buildCleanupNudge` 按工作区探测数据判定「已并入主线 + 干净 + 无未完成卡片 / 运行中会话占用」，满足时弹带「打开工作区」按钮的可操作 toast（10s 自动消失，不弹窗）；`evaluateWorktreeCleanup` 与 `useWorkspaces` 同步把 `done`/`canceled` 终态卡片排除出占用（`cardCount` 只数未完成卡片），服务端清理接口同口径。
+- **重新绑定工作目录（v0.21）**：`rebindDir.buildRebindCandidates` 生成候选（绑定会话执行目录 → 主工作副本 → linked worktree，排除 prunable、按 path 去重），`RebindDirDialog` 提供搜索 / 当前项禁用 / 逐行应用；入口在详情抽屉「工作目录」行与工作区「未指定」块卡片行尾；提交走 `PATCH /cards/:id` 改 `cwd`（已完成卡片也可改），成功后写时间线「旧 → 新」并刷新卡片与工作区。`DetailDrawer` 新增 `cwdState` / `onRebindDir`，`WorkspaceView` 新增 `sessions` / `onRebindCard`。
 - **回收站与工作区 P1（v0.18）**：回收站可恢复/彻底删除（旧条目不可恢复）；没有远端（从未推送）+ 未合并风险提示；运行中会话阻塞清理；卡片预览前 5、排序、筛选范围开关、最近提交时间、空闲工作副本收起。
 - **工作副本清理（v0.17）**：工作副本行显示合并/远端/改动状态与「可安全清理」；清理按钮两段式确认，目录移入回收站 7 天，已合并分支可一并删；脏/未合并走危险确认。
 - **「工作区」视图（v0.16）**：工具栏第三个视图，按仓库分块列工作副本 / 卡片 / 会话 / 未保存改动；只读；点击 mini 卡片打开详情。数据走 `POST /git/workspaces`（服务端按仓库 8s 缓存；前端 15s 缓存 + 20s 可见刷新），卡片按服务端 `dirs[]` 精确归组。查看板/列表/工作区三视图持久化在 `dsh-kanban.view`（旧值兼容）。
@@ -137,9 +142,8 @@ web/
 
 - 样式只消费 `--dsw-alias-*` / `--dsw-font-*` / elevation / legacy motion 令牌，组件局部变量用 `--kb-*`；
   中性实线 0.5px、浮层 `border:0` + elevation、全圆配 `corner-shape: round`。
-- `npm --prefix web run lint:tokens`：8 个 CSS 文件，0 error / 0 warning
-  （`tokens.css` 是主题兜底值镜像，逐行标注了 `lint-tokens-ignore` 例外）。
-- `npm --prefix web run test`：24 个单测（分组 / 筛选 / 时间格式化）。
+- `npm --prefix web run lint:tokens`：10 个 CSS 文件（`tokens.css` 是主题兜底值镜像，逐行标注了 `lint-tokens-ignore` 例外）；v0.21 新增样式（`base.css` 的 toast 动作按钮、`modal.css` 的 `.kb-rebind*`、`drawer.css` 的工作目录行、`workspaces.css` 的会话归属标签与重绑按钮）的 lint 结果以 Lead 最终全量验收为准。
+- `npm --prefix web run test`：vitest 单测（分组 / 筛选 / 时间格式化 / 工作区清理判定 / 重新绑定候选 / 完成清理提示等）；v0.21.0 为 **30 文件 / 392 例**（docs/06 §1.38）。
 - 截图：`design/screens/web-*.png`（宽屏看板、暗色、嵌入宿主安全区、列表分组、详情抽屉、多选审批、
   多问题审批的卡片/抽屉/列表/已解决态、通用审批弹窗、未发送决定提示、筛选浮层、快捷键帮助、
   390 竖屏看板/底部弹层/列表、与 mockup 的密度对照）。

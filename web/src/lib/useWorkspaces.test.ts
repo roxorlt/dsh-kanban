@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Card, GitWorkspaceRepo, GitWorkspaceWorktree } from '../types';
+import type { Card, GitWorkspaceRepo, GitWorkspaceWorktree, SessionRow } from '../types';
 import {
   normalizeCleanupResult,
   normalizeGitTrash,
@@ -15,6 +15,7 @@ import {
   collectWorkspaceCwds,
   countBoundSessions,
   evaluateWorktreeCleanup,
+  findWorktreeForCwd,
   formatLastCommitRelative,
   groupCardsByWorktree,
   mergeWorkspaceResults,
@@ -71,6 +72,11 @@ function makeWorktree(path: string, overrides: Partial<GitWorkspaceWorktree> = {
 
 function makeRepo(root: string, worktrees: GitWorkspaceWorktree[]): GitWorkspaceRepo {
   return { root, name: root.split('/').filter(Boolean).pop() ?? root, commonDir: `${root}/.git`, mainBranch: 'main', worktrees };
+}
+
+/** v0.21.0 #14：会话 cwd 兜底归属用的 SessionRow。 */
+function makeSession(id: string, cwd?: string): SessionRow {
+  return { id, title: id, running: false, updatedAt: 0, ...(cwd === undefined ? {} : { cwd }) };
 }
 
 const repoOne = makeRepo('/repo', [
@@ -364,7 +370,7 @@ describe('evaluateWorktreeCleanup', () => {
     });
   });
 
-  it('有未归档卡片占用 → 不可清理（原因：有 N 张卡片在用）', () => {
+  it('有未完成卡片占用 → 不可清理（原因：有 N 张卡片在用）', () => {
     const check = evaluateWorktreeCleanup(
       cleanupInput({ ...mergedClean, cards: [makeCard('a'), makeCard('b')] }),
     );
@@ -921,5 +927,225 @@ describe('normalizePruneResult', () => {
   it('空/非法输入安全兜底', () => {
     expect(normalizePruneResult(null)).toEqual({ repoRoot: '', removed: false });
     expect(normalizePruneResult({ removed: 'yes' })).toEqual({ repoRoot: '', removed: false });
+  });
+});
+
+// ------------------------------------------- v0.21.0 #14 会话 cwd 兜底归属 / #15 终态清理
+
+const sessionRepo = makeRepo('/repo', [
+  makeWorktree('/repo', { isMain: true, isCurrent: true }),
+  makeWorktree('/repo/.worktrees/feat-x', { branch: 'feat/x' }),
+  makeWorktree('/repo/.worktrees/feat-y', { branch: 'feat/y' }),
+]);
+
+/** #14 用会话集合：主副本 / 两个 linked 工作副本 / 子目录 / 无 cwd。 */
+const sessions = [
+  makeSession('main', '/repo'),
+  makeSession('feat-x', ' /repo/.worktrees/feat-x '),
+  makeSession('feat-y', '/repo/.worktrees/feat-y'),
+  makeSession('nested', '/repo/.worktrees/feat-x/web'),
+  makeSession('no-cwd'),
+];
+
+describe('findWorktreeForCwd（v0.21.0 #14 导出）', () => {
+  it('dirs 原文精确匹配优先，其次按工作副本路径最长前缀', () => {
+    const repo = makeRepo('/repo', [
+      makeWorktree('/repo', { isMain: true }),
+      makeWorktree('/repo/.worktrees/feat-x', { branch: 'feat/x', dirs: ['/tmp/linked-x'] }),
+    ]);
+    expect(findWorktreeForCwd('/tmp/linked-x', [repo])?.worktree.path).toBe('/repo/.worktrees/feat-x');
+    expect(findWorktreeForCwd('/repo/.worktrees/feat-x/src/deep', [repo])?.worktree.path).toBe(
+      '/repo/.worktrees/feat-x',
+    );
+    expect(findWorktreeForCwd('/repo', [repo])?.worktree.isMain).toBe(true);
+  });
+
+  it('cwd 两侧空白被 trim；无 cwd / 空白 / 不匹配返回 null', () => {
+    expect(findWorktreeForCwd(' /repo/.worktrees/feat-y/web ', [sessionRepo])).toMatchObject({
+      repo: { root: '/repo' },
+      worktree: { path: '/repo/.worktrees/feat-y' },
+    });
+    expect(findWorktreeForCwd(undefined, [sessionRepo])).toBeNull();
+    expect(findWorktreeForCwd('   ', [sessionRepo])).toBeNull();
+    expect(findWorktreeForCwd('/tmp/nowhere', [sessionRepo])).toBeNull();
+    expect(findWorktreeForCwd('/repo', [])).toBeNull();
+  });
+
+  it('#15 复用：能定位到卡片 cwd 所在工作副本（主副本 / linked 都可识别）', () => {
+    expect(findWorktreeForCwd('/repo/apps/web', [sessionRepo])).toMatchObject({
+      worktree: { path: '/repo', isMain: true },
+    });
+    expect(findWorktreeForCwd('/repo/.worktrees/feat-x/apps', [sessionRepo])).toMatchObject({
+      worktree: { path: '/repo/.worktrees/feat-x', isMain: false },
+    });
+  });
+});
+
+describe('groupCardsByWorktree · 会话 cwd 兜底归属（v0.21.0 #14）', () => {
+  it('卡片 cwd 在主工作副本、会话在 linked 工作副本 → 改归该工作副本并记 attribution', () => {
+    const card = makeCard('card', { cwd: '/repo', sessionIds: ['feat-x'] });
+    const groups = groupCardsByWorktree([card], [sessionRepo], { sessions });
+    const [repo] = groups.repos;
+    const [mainWt, featX, featY] = repo!.worktrees;
+    expect(mainWt?.cards).toEqual([]);
+    expect(featX?.cards.map((item) => item.id)).toEqual(['card']);
+    expect(featY?.cards).toEqual([]);
+    expect(repo?.cardCount).toBe(1);
+    expect(groups.unassigned).toEqual([]);
+    expect(groups.sessionAttributed).toEqual([
+      {
+        cardId: 'card',
+        sessionId: 'feat-x',
+        sessionCwd: '/repo/.worktrees/feat-x',
+        worktreePath: '/repo/.worktrees/feat-x',
+      },
+    ]);
+  });
+
+  it('会话执行目录在主工作副本 → 不兜底（维持主副本归属）', () => {
+    const groups = groupCardsByWorktree(
+      [makeCard('card', { cwd: '/repo', sessionIds: ['main'] })],
+      [sessionRepo],
+      { sessions },
+    );
+    expect(groups.repos[0]?.worktrees[0]?.cards.map((item) => item.id)).toEqual(['card']);
+    expect(groups.sessionAttributed).toEqual([]);
+  });
+
+  it('卡片 cwd 已落在 linked 工作副本 → 卡片 cwd 优先（即使会话在别的工作副本）', () => {
+    const groups = groupCardsByWorktree(
+      [makeCard('card', { cwd: '/repo/.worktrees/feat-y', sessionIds: ['feat-x'] })],
+      [sessionRepo],
+      { sessions },
+    );
+    const [, featX, featY] = groups.repos[0]!.worktrees;
+    expect(featY?.cards.map((item) => item.id)).toEqual(['card']);
+    expect(featX?.cards).toEqual([]);
+    expect(groups.sessionAttributed).toEqual([]);
+  });
+
+  it('会话 cwd 在另一个仓库的 linked 工作副本 → 跨仓库不兜底', () => {
+    const otherRepo = makeRepo('/other', [
+      makeWorktree('/other', { isMain: true }),
+      makeWorktree('/other/.worktrees/z', { branch: 'feat/z' }),
+    ]);
+    const groups = groupCardsByWorktree(
+      [makeCard('card', { cwd: '/repo', sessionIds: ['other-linked'] })],
+      [sessionRepo, otherRepo],
+      { sessions: [makeSession('other-linked', '/other/.worktrees/z')] },
+    );
+    expect(groups.repos[0]?.worktrees[0]?.cards.map((item) => item.id)).toEqual(['card']);
+    expect(groups.repos[1]?.worktrees[1]?.cards).toEqual([]);
+    expect(groups.sessionAttributed).toEqual([]);
+  });
+
+  it('多会话：跳过没有 cwd 的会话，取第一个命中的（子目录 cwd 也算命中）', () => {
+    const groups = groupCardsByWorktree(
+      [makeCard('card', { cwd: '/repo', sessionIds: ['missing', 'no-cwd', 'nested', 'feat-x'] })],
+      [sessionRepo],
+      { sessions },
+    );
+    const [, featX, featY] = groups.repos[0]!.worktrees;
+    expect(featX?.cards.map((item) => item.id)).toEqual(['card']);
+    expect(featY?.cards).toEqual([]);
+    expect(groups.sessionAttributed).toMatchObject([
+      { cardId: 'card', sessionId: 'nested', worktreePath: '/repo/.worktrees/feat-x' },
+    ]);
+  });
+
+  it('卡片没有 cwd → 仍进未指定，不做会话兜底', () => {
+    const groups = groupCardsByWorktree([makeCard('card', { sessionIds: ['feat-x'] })], [sessionRepo], {
+      sessions,
+    });
+    expect(groups.unassigned.map((item) => item.id)).toEqual(['card']);
+    expect(groups.repos[0]?.worktrees.every((worktree) => worktree.cards.length === 0)).toBe(true);
+    expect(groups.sessionAttributed).toEqual([]);
+  });
+
+  it('sessions 缺省时不兜底（向后兼容），sessionAttributed 为空', () => {
+    const groups = groupCardsByWorktree(
+      [makeCard('card', { cwd: '/repo', sessionIds: ['feat-x'] })],
+      [sessionRepo],
+    );
+    expect(groups.repos[0]?.worktrees[0]?.cards.map((item) => item.id)).toEqual(['card']);
+    expect(groups.sessionAttributed).toEqual([]);
+  });
+
+  it('sessionAttributed 顺序与卡片遍历顺序一致，只在真正改归时记录', () => {
+    const cards = [
+      makeCard('a', { cwd: '/repo', sessionIds: ['feat-x'] }),
+      makeCard('b', { cwd: '/repo', sessionIds: ['main'] }),
+      makeCard('c', { cwd: '/repo', sessionIds: ['feat-y'] }),
+    ];
+    const groups = groupCardsByWorktree(cards, [sessionRepo], { sessions });
+    expect(groups.sessionAttributed.map((attribution) => attribution.cardId)).toEqual(['a', 'c']);
+  });
+});
+
+describe('evaluateWorktreeCleanup · 终态卡片不占用清理判定（v0.21.0 #15）', () => {
+  const mergedClean = {
+    mergedIntoBase: true,
+    upstream: { ref: 'origin/main', ahead: 0, behind: 0 },
+    modifiedCount: 0,
+    untrackedCount: 0,
+    dirty: false,
+  };
+
+  it('只有 done / canceled 卡片 → 可安全清理（终态不再占用）', () => {
+    const check = evaluateWorktreeCleanup(
+      cleanupInput({
+        ...mergedClean,
+        cards: [makeCard('done', { status: 'done' }), makeCard('canceled', { status: 'canceled' })],
+      }),
+    );
+    expect(check).toMatchObject({
+      canCleanup: true,
+      blocked: null,
+      cardCount: 0,
+      runningCardCount: 0,
+      safe: true,
+    });
+  });
+
+  it('混有未完成卡片 → 仍不可清理，cardCount 只数未完成卡片', () => {
+    const check = evaluateWorktreeCleanup(
+      cleanupInput({
+        ...mergedClean,
+        cards: [
+          makeCard('done', { status: 'done' }),
+          makeCard('canceled', { status: 'canceled' }),
+          makeCard('todo'),
+        ],
+      }),
+    );
+    expect(check).toMatchObject({ canCleanup: false, blocked: 'in-use', cardCount: 1, runningCardCount: 0 });
+  });
+
+  it('混有运行中 + done → 原因仍是「有卡片在跑」，计数只数未完成卡片', () => {
+    const check = evaluateWorktreeCleanup(
+      cleanupInput({
+        ...mergedClean,
+        cards: [makeCard('done', { status: 'done' }), makeCard('running', { status: 'running' })],
+      }),
+    );
+    expect(check).toMatchObject({ canCleanup: false, blocked: 'running', cardCount: 1, runningCardCount: 1 });
+  });
+
+  it('卡片都已完成但工作副本未并入 → 可清理，仍需要第二层危险确认', () => {
+    const check = evaluateWorktreeCleanup(
+      cleanupInput({
+        mergedIntoBase: false,
+        aheadOfBase: 2,
+        modifiedCount: 0,
+        untrackedCount: 0,
+        cards: [makeCard('done', { status: 'done' })],
+      }),
+    );
+    expect(check).toMatchObject({
+      canCleanup: true,
+      blocked: null,
+      cardCount: 0,
+      needsDangerConfirm: true,
+    });
   });
 });

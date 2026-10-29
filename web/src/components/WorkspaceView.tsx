@@ -9,7 +9,7 @@
  * - 清理（Phase B）两段式确认 + 软删除；运行中会话所在工作副本禁止清理（客户端安全层）。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Card, GitTrashEntry } from '../types';
+import type { Card, GitTrashEntry, SessionRow } from '../types';
 import { api } from '../api';
 import { useI18n } from '../i18n';
 import type { I18nKey, Lang, Translate } from '../i18n';
@@ -34,6 +34,7 @@ import {
   worktreeStatusBadges,
 } from '../lib/useWorkspaces';
 import type {
+  SessionAttribution,
   WorkspaceCardScope,
   WorkspaceRepoGroup,
   WorkspaceWorktreeGroup,
@@ -51,12 +52,16 @@ interface WorkspaceViewProps {
   /** 全部未归档卡片（scope=all 与清理占用判定用） */
   allCards: Card[];
   workspaces: WorkspacesController;
+  /** v0.21.0 #14：休眠会话执行目录，用于 cwd 兜底归属（缺省=不兜底） */
+  sessions?: SessionRow[];
   /** 运行中会话的 cwd（客户端清理安全层；服务端不知道会话 cwd） */
   runningSessionCwds?: string[];
   /** 相对时间基准（App 的 15s 时钟）；缺省 Date.now() */
   now?: number;
   /** 点击 mini 卡片打开详情（App 的 actions.onOpenDetail） */
   onOpenCard: (cardId: string) => void;
+  /** v0.21.0 #16：卡片行「重新绑定目录」入口（只在「未指定」块提供） */
+  onRebindCard?: (card: Card) => void;
   /** 操作结果 toast（App 的 actions.onNotify） */
   onNotify?: (message: string, tone?: 'info' | 'success' | 'error') => void;
 }
@@ -68,6 +73,9 @@ const SCOPE_STORAGE_KEY = 'dsh-kanban.workspaces.scope';
 
 /** 服务端每仓库最多返回 12 个工作副本；被截断时给出提示（契约 §12 v0.20）。 */
 const WORKTREE_DISPLAY_LIMIT = 12;
+
+/** 缺省会话列表（保持引用稳定，避免分组 memo 失效）。 */
+const NO_SESSIONS: SessionRow[] = [];
 
 /** 工作副本展示路径：主工作副本用仓库名；子工作副本用相对仓库根的路径；兜底取末两段。 */
 function worktreeLabel(repo: WorkspaceRepoGroup, worktree: WorkspaceWorktreeGroup): string {
@@ -246,10 +254,14 @@ interface MiniCardListProps {
   cards: Card[];
   onOpenCard: (cardId: string) => void;
   emptyLabel?: string;
+  /** v0.21.0 #14：cardId → attribution，命中的卡片在标题后加「按会话归属」小标签 */
+  sessionAttributed?: ReadonlyMap<string, SessionAttribution>;
+  /** v0.21.0 #16：提供时每张卡片行尾出现「重新绑定目录」小按钮 */
+  onRebind?: (card: Card) => void;
 }
 
 /** 关联卡片 mini 列表：状态点 + 标题（单行省略），默认最多 5 张，可展开全部。 */
-function MiniCardList({ cards, onOpenCard, emptyLabel }: MiniCardListProps) {
+function MiniCardList({ cards, onOpenCard, emptyLabel, sessionAttributed, onRebind }: MiniCardListProps) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   if (!cards.length) {
@@ -260,20 +272,42 @@ function MiniCardList({ cards, onOpenCard, emptyLabel }: MiniCardListProps) {
   return (
     <div className="kb-workspace__card-wrap">
       <ul className="kb-workspace__cards">
-        {shown.map((card) => (
-          <li key={card.id}>
-            <button
-              type="button"
-              className="kb-workspace__card"
-              title={card.title}
-              aria-label={t('workspace.openCard', { title: card.title })}
-              onClick={() => onOpenCard(card.id)}
-            >
-              <span className={`kb-dot kb-dot--${STATUS_TONE[card.status]}`} aria-hidden="true" />
-              <span className="kb-workspace__card-title">{card.title}</span>
-            </button>
-          </li>
-        ))}
+        {shown.map((card) => {
+          const attribution = sessionAttributed?.get(card.id);
+          return (
+            <li className="kb-workspace__card-row" key={card.id}>
+              <button
+                type="button"
+                className="kb-workspace__card"
+                title={card.title}
+                aria-label={t('workspace.openCard', { title: card.title })}
+                onClick={() => onOpenCard(card.id)}
+              >
+                <span className={`kb-dot kb-dot--${STATUS_TONE[card.status]}`} aria-hidden="true" />
+                <span className="kb-workspace__card-title">{card.title}</span>
+                {attribution ? (
+                  <span
+                    className="kb-tag kb-workspace__session-tag"
+                    title={t('workspace.sessionAttributionTitle', { cwd: attribution.sessionCwd })}
+                  >
+                    {t('workspace.sessionAttribution')}
+                  </span>
+                ) : null}
+              </button>
+              {onRebind ? (
+                <button
+                  type="button"
+                  className="kb-btn kb-btn--sm kb-btn--ghost kb-workspace__rebind"
+                  title={t('workspace.rebindCwdTitle', { title: card.title })}
+                  aria-label={t('workspace.rebindCwdTitle', { title: card.title })}
+                  onClick={() => onRebind(card)}
+                >
+                  {t('workspace.rebindCwd')}
+                </button>
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
       {hiddenCount > 0 ? (
         <button
@@ -351,6 +385,8 @@ interface WorktreeRowProps {
   /** 清理判定用的占用卡片（来自全部未归档卡片，不受筛选范围影响） */
   occupancyCards: Card[];
   runningSessionCwds: string[];
+  /** v0.21.0 #14：cardId → 按会话归属记录（工作副本行只显示标签，不提供重新绑定） */
+  sessionAttributed: ReadonlyMap<string, SessionAttribution>;
   now: number;
   onOpenCard: (cardId: string) => void;
   onCleanup: (worktree: WorkspaceWorktreeGroup) => void;
@@ -364,6 +400,7 @@ function WorktreeRow({
   worktree,
   occupancyCards,
   runningSessionCwds,
+  sessionAttributed,
   now,
   onOpenCard,
   onCleanup,
@@ -443,7 +480,7 @@ function WorktreeRow({
           ) : null}
         </div>
       </div>
-      <MiniCardList cards={worktree.cards} onOpenCard={onOpenCard} />
+      <MiniCardList cards={worktree.cards} onOpenCard={onOpenCard} sessionAttributed={sessionAttributed} />
       <CleanupControl
         check={check}
         prunable={worktree.prunable === true}
@@ -458,6 +495,7 @@ interface RepoSectionProps {
   repo: WorkspaceRepoGroup;
   occupancyByPath: Map<string, Card[]>;
   runningSessionCwds: string[];
+  sessionAttributed: ReadonlyMap<string, SessionAttribution>;
   now: number;
   onOpenCard: (cardId: string) => void;
   onCleanup: (worktree: WorkspaceWorktreeGroup) => void;
@@ -474,6 +512,7 @@ function RepoSection({
   repo,
   occupancyByPath,
   runningSessionCwds,
+  sessionAttributed,
   now,
   onOpenCard,
   onCleanup,
@@ -497,6 +536,7 @@ function RepoSection({
       worktree={worktree}
       occupancyCards={occupancyByPath.get(worktree.path) ?? worktree.cards}
       runningSessionCwds={runningSessionCwds}
+      sessionAttributed={sessionAttributed}
       now={now}
       onOpenCard={onOpenCard}
       onCleanup={onCleanup}
@@ -584,12 +624,14 @@ function RepoSection({
 interface UnassignedSectionProps {
   cards: Card[];
   onOpenCard: (cardId: string) => void;
+  /** v0.21.0 #16：卡片行尾「重新绑定目录」入口 */
+  onRebind?: (card: Card) => void;
   collapsed: boolean;
   onToggle: () => void;
 }
 
 /** 「未指定」块：无 cwd / 不可用 / 没匹配到工作副本的卡片；整行可点收起/展开。 */
-function UnassignedSection({ cards, onOpenCard, collapsed, onToggle }: UnassignedSectionProps) {
+function UnassignedSection({ cards, onOpenCard, onRebind, collapsed, onToggle }: UnassignedSectionProps) {
   const { t } = useI18n();
   const panelId = 'kb-workspace-panel-unassigned';
   const name = t('workspace.unassigned');
@@ -625,7 +667,7 @@ function UnassignedSection({ cards, onOpenCard, collapsed, onToggle }: Unassigne
       ) : (
         <div id={panelId}>
           <p className="kb-workspace__hint">{t('workspace.unassignedHint')}</p>
-          <MiniCardList cards={cards} onOpenCard={onOpenCard} />
+          <MiniCardList cards={cards} onOpenCard={onOpenCard} onRebind={onRebind} />
         </div>
       )}
     </section>
@@ -736,13 +778,16 @@ export function WorkspaceView({
   cards,
   allCards,
   workspaces,
+  sessions,
   runningSessionCwds = [],
   now,
   onOpenCard,
+  onRebindCard,
   onNotify,
 }: WorkspaceViewProps) {
   const { t } = useI18n();
   const nowValue = now ?? Date.now();
+  const sessionRows = sessions ?? NO_SESSIONS;
   const [collapsedRepos, setCollapsedRepos] = useState<Set<string>>(readCollapsedRepos);
   const [unassignedCollapsed, setUnassignedCollapsed] = useState<boolean>(readUnassignedCollapsed);
   const [idleExpandedRepos, setIdleExpandedRepos] = useState<Set<string>>(() => new Set());
@@ -812,13 +857,19 @@ export function WorkspaceView({
 
   const scopeCards = useMemo(() => selectWorkspaceCards(scope, cards, allCards), [scope, cards, allCards]);
   const displayGroups = useMemo(
-    () => groupCardsByWorktree(scopeCards, workspaces.repos),
-    [scopeCards, workspaces.repos],
+    () => groupCardsByWorktree(scopeCards, workspaces.repos, { sessions: sessionRows }),
+    [scopeCards, workspaces.repos, sessionRows],
   );
   const allGroups = useMemo(
-    () => groupCardsByWorktree(allCards, workspaces.repos),
-    [allCards, workspaces.repos],
+    () => groupCardsByWorktree(allCards, workspaces.repos, { sessions: sessionRows }),
+    [allCards, workspaces.repos, sessionRows],
   );
+  /** v0.21.0 #14：展示中的卡片 → 按会话归属记录（工作副本行显示「按会话归属」标签） */
+  const attributionByCardId = useMemo(() => {
+    const map = new Map<string, SessionAttribution>();
+    for (const attribution of displayGroups.sessionAttributed) map.set(attribution.cardId, attribution);
+    return map;
+  }, [displayGroups.sessionAttributed]);
   const displayRepos = useMemo(() => sortRepoGroups(displayGroups.repos), [displayGroups.repos]);
   const occupancyByPath = useMemo(() => {
     const map = new Map<string, Card[]>();
@@ -998,6 +1049,7 @@ export function WorkspaceView({
           repo={repo}
           occupancyByPath={occupancyByPath}
           runningSessionCwds={runningSessionCwds}
+          sessionAttributed={attributionByCardId}
           now={nowValue}
           onOpenCard={onOpenCard}
           onCleanup={(worktree) => setCleanupTarget({ repo, worktree })}
@@ -1013,6 +1065,7 @@ export function WorkspaceView({
         <UnassignedSection
           cards={displayGroups.unassigned}
           onOpenCard={onOpenCard}
+          onRebind={onRebindCard}
           collapsed={unassignedCollapsed}
           onToggle={toggleUnassigned}
         />

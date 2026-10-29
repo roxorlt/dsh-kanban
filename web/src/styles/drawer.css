@@ -1677,3 +1677,26 @@
     display: none;
   }
 }
+
+/* ------------------------------------ 工作目录（v0.21.0 #16：可重新绑定） */
+
+.kb-drawer__cwd-row dd {
+  flex-wrap: wrap;
+}
+
+.kb-drawer__cwd-row .kb-meta-grid__code {
+  min-width: 0;
+}
+
+.kb-drawer__cwd-missing {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-drawer__cwd-invalid {
+  flex: none;
+}
+
+.kb-drawer__cwd-rebind {
+  flex: none;
+  margin-left: auto;
+}

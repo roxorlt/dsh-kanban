@@ -374,3 +374,131 @@
   color: var(--dsw-alias-label-tertiary);
   font: var(--dsw-font-xxs-12);
 }
+
+/* ------------------------------------ 重新绑定工作目录（v0.21.0 #16） */
+
+.kb-rebind {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kb-rebind__hint {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-rebind__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.kb-rebind__search .kb-icon {
+  position: absolute;
+  left: 9px;
+  width: 14px;
+  height: 14px;
+  color: var(--dsw-alias-label-caption);
+  pointer-events: none;
+}
+
+.kb-rebind__search .kb-input {
+  padding-left: 28px;
+}
+
+.kb-rebind__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: min(52vh, 420px);
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.kb-rebind__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kb-rebind__item:hover {
+  border-color: var(--dsw-alias-border-l3);
+}
+
+.kb-rebind__item--current {
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-rebind__info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kb-rebind__label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-rebind__label {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-strong-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-rebind__current {
+  flex: none;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.kb-rebind__detail {
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-rebind__path {
+  overflow: hidden;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  font-family: var(--ds-font-family-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-rebind__apply {
+  flex: none;
+}
+
+.kb-rebind__empty {
+  margin: 0;
+  padding: 18px 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  text-align: center;
+}
+
+.kb-rebind__error {
+  margin: 0;
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xxs-12);
+}

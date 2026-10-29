@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
+import { isTerminalCardStatus } from './sessionArchive';
 import { formatRelative } from './time';
 import type { Lang } from './time';
 import type {
@@ -151,6 +152,24 @@ export interface WorkspaceGroups {
   cardCount: number;
   /** 进行中（status=running）的卡片数 */
   runningCount: number;
+  /** v0.21.0 #14：按会话 cwd 兜底归组的卡片（顺序与卡片遍历顺序一致） */
+  sessionAttributed: SessionAttribution[];
+}
+
+/** 会话 cwd 兜底归属记录（v0.21.0 #14）。 */
+export interface SessionAttribution {
+  cardId: string;
+  sessionId: string;
+  /** 会话执行目录（原文，trim 后） */
+  sessionCwd: string;
+  /** 被归到的工作副本路径 */
+  worktreePath: string;
+}
+
+/** groupCardsByWorktree 的可选项（v0.21.0 #14）。 */
+export interface GroupCardsByWorktreeOptions {
+  /** 会话列表；缺省=不按会话兜底（保持卡片 cwd 归属） */
+  sessions?: readonly SessionRow[];
 }
 
 /** 去掉末尾 `/`，用于最长前缀匹配（避免 `/repo/` 与 `/repo` 匹配不上）。 */
@@ -165,13 +184,112 @@ function cwdInsideWorktree(cwd: string, worktreePath: string): boolean {
   return cwd === root || cwd.startsWith(`${root}/`);
 }
 
+/** cwd → 工作副本匹配表（byDir 精确映射 + flat 最长前缀扫描）。 */
+interface WorktreeLookupEntry<R, W> {
+  repo: R;
+  worktree: W;
+}
+
+interface WorktreeLookup<R, W> {
+  flat: WorktreeLookupEntry<R, W>[];
+  byDir: Map<string, WorktreeLookupEntry<R, W>>;
+}
+
+/**
+ * 建立 cwd 匹配表：服务端给的 `worktrees[].dirs` 原文精确映射优先，
+ * 其次按工作副本路径最长前缀匹配（契约 §12/§4.7）。
+ */
+function buildWorktreeLookup<R extends { root: string }, W extends { path: string; dirs?: string[] }>(
+  repos: readonly R[],
+  worktreesOf: (repo: R) => readonly W[],
+): WorktreeLookup<R, W> {
+  const flat: WorktreeLookupEntry<R, W>[] = [];
+  const byDir = new Map<string, WorktreeLookupEntry<R, W>>();
+  for (const repo of repos) {
+    for (const worktree of worktreesOf(repo)) {
+      const entry = { repo, worktree };
+      flat.push(entry);
+      for (const dir of worktree.dirs ?? []) {
+        if (typeof dir === 'string' && dir.trim()) byDir.set(dir.trim(), entry);
+      }
+    }
+  }
+  return { flat, byDir };
+}
+
+/** 在匹配表里查 cwd 归属的工作副本；找不到返回 null。 */
+function lookupWorktree<R, W extends { path: string }>(
+  lookup: WorktreeLookup<R, W>,
+  cwd: string,
+): WorktreeLookupEntry<R, W> | null {
+  const exact = lookup.byDir.get(cwd);
+  if (exact) return exact;
+  let matched: WorktreeLookupEntry<R, W> | null = null;
+  let matchedLength = -1;
+  for (const entry of lookup.flat) {
+    if (!cwdInsideWorktree(cwd, entry.worktree.path)) continue;
+    const length = trimTrailingSlash(entry.worktree.path).length;
+    if (length > matchedLength) {
+      matched = entry;
+      matchedLength = length;
+    }
+  }
+  return matched;
+}
+
+/**
+ * 找到 cwd 归属的工作副本（byDir 精确优先，其次最长前缀）；找不到返回 null。
+ * v0.21.0 #14 起导出，供 #15 的清理提示复用（与工作区视图同源判定）。
+ */
+export function findWorktreeForCwd(
+  cwd: string | undefined,
+  repos: readonly GitWorkspaceRepo[],
+): { repo: GitWorkspaceRepo; worktree: GitWorkspaceWorktree } | null {
+  const dir = cwd?.trim();
+  if (!dir) return null;
+  return lookupWorktree(buildWorktreeLookup(repos, (repo) => repo.worktrees), dir);
+}
+
+/** 会话 cwd 兜底命中：卡片绑定的会话执行目录落在同仓库的 linked 工作副本里。 */
+interface SessionWorktreeFallback {
+  entry: WorktreeLookupEntry<WorkspaceRepoGroup, WorkspaceWorktreeGroup>;
+  sessionId: string;
+  sessionCwd: string;
+}
+
+/**
+ * v0.21.0 #14：卡片 cwd 落在**主工作副本**时，按 `sessionIds` 顺序找第一个「有 cwd 的会话」，
+ * 若该会话 cwd 落在**同仓库的 linked 工作副本**则改归到那里（契约 §1 步骤 2–4）。
+ * 第一个有 cwd 的会话不满足条件时维持原归属（不继续找后面的会话）。
+ */
+function findSessionWorktree(
+  card: Card,
+  sessionById: ReadonlyMap<string, SessionRow>,
+  lookup: WorktreeLookup<WorkspaceRepoGroup, WorkspaceWorktreeGroup>,
+  repoRoot: string,
+): SessionWorktreeFallback | null {
+  for (const sessionId of card.sessionIds) {
+    const sessionCwd = sessionById.get(sessionId)?.cwd?.trim();
+    if (!sessionCwd) continue; // 没有 cwd 的会话不参与兜底
+    const entry = lookupWorktree(lookup, sessionCwd);
+    if (!entry || entry.repo.root !== repoRoot || entry.worktree.isMain) return null;
+    return { entry, sessionId, sessionCwd };
+  }
+  return null;
+}
+
 /**
  * 把卡片按 cwd 归到「最长前缀匹配」的工作副本（契约 §12/§4.7）。
  * 没有 cwd、cwd 不在任何已探测工作副本下的卡片进 unassigned。
+ *
+ * v0.21.0 #14：卡片 cwd 落在主工作副本、但绑定会话执行目录在同仓库 linked 工作副本时，
+ * 改归到该工作副本并记一条 `sessionAttributed`；卡片 cwd 已落在 linked 工作副本时 cwd 优先。
+ * 没有 cwd 的卡片不做会话兜底（避免历史卡片大面积漂移）。
  */
 export function groupCardsByWorktree(
   cards: readonly Card[],
   repos: readonly GitWorkspaceRepo[],
+  options: GroupCardsByWorktreeOptions = {},
 ): WorkspaceGroups {
   const repoGroups: WorkspaceRepoGroup[] = repos.map((repo) => ({
     ...repo,
@@ -179,18 +297,10 @@ export function groupCardsByWorktree(
     cardCount: 0,
   }));
 
-  const flat: { worktree: WorkspaceWorktreeGroup; repo: WorkspaceRepoGroup }[] = [];
-  /** 服务端给的 dir → 工作副本精确映射（解决 /tmp ↔ realpath 前缀不一致） */
-  const byDir = new Map<string, { worktree: WorkspaceWorktreeGroup; repo: WorkspaceRepoGroup }>();
-  for (const repo of repoGroups) {
-    for (const worktree of repo.worktrees) {
-      const entry = { worktree, repo };
-      flat.push(entry);
-      for (const dir of worktree.dirs ?? []) {
-        if (typeof dir === 'string' && dir.trim()) byDir.set(dir.trim(), entry);
-      }
-    }
-  }
+  const lookup = buildWorktreeLookup(repoGroups, (repo) => repo.worktrees);
+  const sessionById = new Map<string, SessionRow>();
+  for (const session of options.sessions ?? []) sessionById.set(session.id, session);
+  const sessionAttributed: SessionAttribution[] = [];
 
   const unassigned: Card[] = [];
   for (const card of cards) {
@@ -199,21 +309,23 @@ export function groupCardsByWorktree(
       unassigned.push(card);
       continue;
     }
-    let matched: { worktree: WorkspaceWorktreeGroup; repo: WorkspaceRepoGroup } | null = byDir.get(cwd) ?? null;
-    let matchedLength = matched ? trimTrailingSlash(matched.worktree.path).length : -1;
-    if (!matched) {
-      for (const entry of flat) {
-        const path = trimTrailingSlash(entry.worktree.path);
-        if (!cwdInsideWorktree(cwd, entry.worktree.path)) continue;
-        if (path.length > matchedLength) {
-          matched = entry;
-          matchedLength = path.length;
-        }
-      }
-    }
+    let matched = lookupWorktree(lookup, cwd);
     if (!matched) {
       unassigned.push(card);
       continue;
+    }
+    // 只有 cwd 落在主工作副本时才尝试会话兜底（卡片 cwd 已指到 linked 工作副本时以 cwd 为准）
+    if (matched.worktree.isMain) {
+      const fallback = findSessionWorktree(card, sessionById, lookup, matched.repo.root);
+      if (fallback) {
+        matched = fallback.entry;
+        sessionAttributed.push({
+          cardId: card.id,
+          sessionId: fallback.sessionId,
+          sessionCwd: fallback.sessionCwd,
+          worktreePath: fallback.entry.worktree.path,
+        });
+      }
     }
     matched.worktree.cards.push(card);
     matched.repo.cardCount += 1;
@@ -222,9 +334,10 @@ export function groupCardsByWorktree(
   return {
     repos: repoGroups,
     unassigned,
-    worktreeCount: flat.length,
+    worktreeCount: lookup.flat.length,
     cardCount: cards.length,
     runningCount: cards.filter((card) => card.status === 'running').length,
+    sessionAttributed,
   };
 }
 
@@ -399,15 +512,19 @@ function cwdInsidePath(cwd: string, path: string): boolean {
 
 /**
  * 清理判定（纯函数，契约 §12/§13）：
- * 没被 git 锁定 + 非主工作副本 + 没有运行中会话 / 卡片在跑 + 没被未归档卡片占用 才允许清理；
+ * 没被 git 锁定 + 非主工作副本 + 没有运行中会话 / 卡片在跑 + 没被未完成卡片占用 才允许清理；
  * 允许但「未并入主线 / 有改动」时需要第二层危险确认。
  * 阻塞原因优先级：已锁定 > 主工作副本 > 有会话在跑 > 有卡片在跑 > 有卡片占用。
+ *
+ * v0.21.0 #15：`done` / `canceled` 是终态，不再占用工作副本的清理判定；
+ * `cardCount` / `runningCardCount` 都只统计未完成卡片（与服务端 §13 一致）。
  */
 export function evaluateWorktreeCleanup(
   worktree: WorktreeCleanupInput,
   options: WorktreeCleanupOptions = {},
 ): WorktreeCleanupCheck {
-  const cards = worktree.cards;
+  // 终态卡片不再占用工作副本（卡片完成后工作副本可能立刻变成可清理）
+  const cards = worktree.cards.filter((card) => !isTerminalCardStatus(card.status));
   const runningCardCount = cards.filter((card) => card.status === 'running').length;
   const runningSessionCount = (options.sessionCwds ?? []).filter((cwd) =>
     cwdInsidePath(cwd.trim(), worktree.path),
