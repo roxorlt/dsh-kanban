@@ -16,7 +16,7 @@
 - i18n（`web/src/i18n.tsx`，zh 源字典 + en 一一对应）：新增 14 的 `workspace.sessionAttribution*`、15 的 `workspace.cleanupNudge*`、16 的 `workspace.rebindCwd*` / `drawer.cwdMissing` / `drawer.cwdInvalid` / `drawer.rebindCwd` / `rebind.*`；微调 `workspace.unassignedHint`、`workspace.cleanupBlockedInUse`、`workspace.cleanupErrorInUse`（占用口径改为「未完成卡片」）。
 - 设计规范与架构：`docs/03-design-system.md` 新增 §7.25 按会话归属标签、§7.26 完成卡片可清理的可操作 toast、§7.27「重新绑定工作目录」对话框；`docs/04-architecture.md` 代码地图补三个新文件与 `WorkspaceView` / `DetailDrawer` 新 props，`§7` 安全边界补清理占用口径。
 - 测试：服务端 **228/228**（+4：终态卡片不阻塞清理 / 终态 cwd 仍在探测允许集合 / 混入未完成卡片 409 且 count 只数未完成 / PATCH 已完成·已取消卡片 cwd）；Web **30 文件 / 392 例**（+37：useWorkspaces +15、rebindDir 13、worktreeCleanupNudge 9）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning；并入主线（与 v0.20.1 合并）后全量服务端 **259/259**、Web **31 文件 / 412 例** 全绿；隔离 dev-server + 演示仓库真 git + headless Chrome 1440×900 DPR2 / 390×844 实测 9 项关键行为全过、console error 0。
-- 验证：隔离 dev-server + 演示仓库真实 git 工作副本走通「完成 → 可清理提示 → 清理 → 重新绑定目录」闭环，截图与逐项结果见 docs/06 §1.38；真实宿主重启复验结果同步记录在该节。
+- 验证：隔离 dev-server + 演示仓库真实 git 工作副本走通「完成 → 可清理提示 → 清理 → 重新绑定目录」闭环，截图与逐项结果见 docs/06 §1.38。**真实宿主 2026-10-29 重启后复验通过**：health=0.21.0；真实 80 卡 / 2 仓库 / 13 工作副本数据下出现「按会话归属」标签；真实卡片完成后出现可清理可操作 toast，清理成功（终态卡片不再阻塞）；清理后已完成卡片详情显示失效警示并可重绑到主副本，服务端 `cwd` 更新 + 时间线评论节点，console error 0（临时验证数据已清理）。
 - 生效方式：含服务端改动，**已合入 main（merge `0a27ddf`），需重启 DSH 后生效**；纯前端部分刷新看板即生效。
 - 已知限制：14 只影响工作区视图的归组展示，不改卡片数据、不影响看板/列表；15 依赖最近一次工作区探测（≤20s，数据未就绪时不提示，宁可少提醒不误报）、只对 `done` 提示不对 `canceled` 提示；16 候选只来自「已探测仓库的工作副本 + 卡片绑定会话的执行目录」，不提供手输任意路径，服务端不校验新目录是否存在（改绑后仍由工作区探测发现失效）。
 - 分支：`feat/workspace-batch2`（基于 `e98f408` = v0.20.0），**已合入 main（merge `0a27ddf`）**。
