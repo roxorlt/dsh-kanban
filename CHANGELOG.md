@@ -17,7 +17,7 @@
 - 生效：含服务端改动，**需合入 main 并重启 DSH**；「补绑推荐」纯前端，刷新看板即生效。
 - 已知限制：① reuse 补全 `workspaceId` 用宿主 canonical 路径精确匹配，会话在 worktree / 子目录时可能只补 `cwd`（显式传 `workspaceId` 或 `sessionMode:"new"` 可解）；② 防孤儿 precheck 与真实写入之间理论上有极低概率竞态，极端情况下宿主可能残留一个空会话（宿主无删除 API 可回滚）。
 - 真实宿主复验：待重启桌面 DSH 后执行（步骤与证据见 docs/06 §1.37）。
-- 分支：`feat/agent-auto-bind`（基于 `e98f408`）。
+- 分支：`feat/agent-auto-bind`（基于 `e98f408`），**已合入 main（merge `e6d5f3e`）**。
 
 ## v0.20.0 — 2026-10-28
 

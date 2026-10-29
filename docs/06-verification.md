@@ -585,8 +585,8 @@
 | 测试 | 服务端 **255/255**（基线 224 + 31：`test/session-binding.test.mjs` 24 例 + `test/tools.test.mjs` 7 例集成）；Web **29 文件 / 375 例**（基线 28/355 + 20 例）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning |
 | 隔离验证（无真实宿主） | 服务端单测覆盖 reuse 自动绑定+时间线、new 新建+rename、宿主不支持/创建失败降级、none、显式 sessionId、防孤儿 precheck；Lead 用 fake ctx（模拟 `ctx.inject` 懒注入 + fake registry/controller）手工冒烟 `apply()` 全链路（teammate 执行，脚本未提交）。**未做真实宿主 E2E**（子会话不能重启桌面 DSH） |
 | 真实宿主复验（待重启后执行） | ① 重启桌面 DSH，`GET /api/kanban/health` 返回 `0.20.1`；② 在任一会话里让 agent 用默认 `kanban_create_card` 建卡 → `card.sessionIds[0]` = 该会话、`cwd`/`workspaceId` 非空、时间线出现「建卡时自动绑定了当前会话」；③ 传 `sessionMode:"new"` + 目标 `workspaceId`/`cwd` 建卡 → 宿主会话列表实时出现新会话且标题 = 卡片标题，`binding.created=true`、`warnings` 为空；④ 打开一张未绑会话、有 workspaceId/cwd 的旧卡 → 详情出现「补绑推荐」，点「绑定推荐会话」后 `POST /cards/:id/session` 写入、时间线出现 `session_linked`；⑤ 旧宿主降级路径（可选）：临时去掉 `sessionController` 注入 → 卡片照常创建 + `warnings` 提示手动新建会话 |
-| 生效方式 | 含服务端改动，**合入 main 后需重启 DSH**；「补绑推荐」纯前端，刷新看板即生效 |
-| 分支 | `feat/agent-auto-bind`（基于 `e98f408`）；版本 0.20.1 |
+| 生效方式 | 含服务端改动，**已合入 main（merge `e6d5f3e`），需重启 DSH 后生效**；「补绑推荐」纯前端，刷新看板即生效 |
+| 分支 | `feat/agent-auto-bind`（基于 `e98f408`），**已合入 main（merge `e6d5f3e`）**；版本 0.20.1 |
 
 ## 2. 自动化测试
 
