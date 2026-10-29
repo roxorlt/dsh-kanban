@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.20.1 — 2026-10-29
+
+### 新增：agent 建卡自动绑定会话/工作区（工具上下文补全 + `sessionMode:"new"` 真实新建会话 + 补绑推荐）
+
+- 反馈（卡片 `card-974dc87b`）：agent 自己建的卡片常常没有绑定工作区/会话；拆子任务时该复用原会话的复用、该新建会话的按项目/目录建新会话，不要一直空着。
+- 服务端（新增 `lib/session-binding.js`，改 `lib/tools.js` / `lib/index.js`）：
+  - `kanban_create_card` 默认 `sessionMode:"reuse"`：从工具上下文 `exec.agent.session` 直接读当前 DSH 会话 id 与 `header.cwd`，自动补全 `sessionId`/`cwd`，并用宿主 `workspaceRegistry`（会话归属 → 路径解析）补全 `workspaceId`；同一事务写 `session_linked` 时间线（data 标 `action/source/created`，区分自动绑定 / 显式绑定 / 新建绑定）。
+  - `sessionMode:"new"`：按显式 `workspaceId`/`cwd`（都不传则继承当前会话位置）解析目标工作区，经宿主 `sessionController.create` **真实新建一个 DSH 会话**并绑定（attach 到工作区；显式子目录时卡片保留子目录、会话落在工作区根），再 best-effort `rename` 把会话标题设为卡片标题。宿主不支持或新建失败 → **卡片照常创建**，`warnings` 提示「已填好目录/工作区，请手动新建会话」，绝不整体失败。
+  - `sessionMode:"none"`：不绑会话但仍补全目录/工作区；显式 `sessionId` 始终优先（`source:"explicit"`）。
+  - 防孤儿会话：只有真要 `new` 时才先用 store 快照试跑一次 domain 校验（看板存在/卡片上限/标题/状态/优先级），校验失败直接返回错误、不建会话。
+  - 旧宿主 / 无工具上下文（dev-server、旧测试）→ 完全不补全，行为与 v0.20.0 一致；`createTools({store})` 不传 `sessionBinding` 时也不返回 `binding`。
+- Web（`SessionSection` + 新增 `web/src/lib/sessionSuggest.ts`）：未绑会话的卡片给「补绑推荐」——排除已归档/已绑会话，按「同工作区 300 > 同 cwd 220 > cwd 互为前缀 150 > project 对应工作区 120」互斥取最高档打分，`updatedAt` 只在同档 tie-break，低于阈值不显示；只推荐 + 一键绑定，**不自动改用户绑定**；中英双语文案 + 虚线「建议」样式（全 `--dsw-*` 令牌）。
+- 文档：README（功能/工具/使用表）、`skills/manage-kanban`（新增「建卡自动绑定会话/工作区」一节 + 示例 + 反模式）、docs/04 代码地图。
+- 测试：服务端 **255/255**（+31：新 `test/session-binding.test.mjs` 24 例 + `test/tools.test.mjs` 7 例集成）；Web **29 文件 / 375 例**（+20）；`tsc --noEmit` / `vite build` / 令牌 lint（10 CSS 0 error / 0 warning）全过。
+- 生效：含服务端改动，**需合入 main 并重启 DSH**；「补绑推荐」纯前端，刷新看板即生效。
+- 已知限制：① reuse 补全 `workspaceId` 用宿主 canonical 路径精确匹配，会话在 worktree / 子目录时可能只补 `cwd`（显式传 `workspaceId` 或 `sessionMode:"new"` 可解）；② 防孤儿 precheck 与真实写入之间理论上有极低概率竞态，极端情况下宿主可能残留一个空会话（宿主无删除 API 可回滚）。
+- 真实宿主复验：待重启桌面 DSH 后执行（步骤与证据见 docs/06 §1.37）。
+- 分支：`feat/agent-auto-bind`（基于 `e98f408`）。
+
 ## v0.20.0 — 2026-10-28
 
 ### 新增：P2 批 1（复制路径 / locked·prunable / 上限提示）

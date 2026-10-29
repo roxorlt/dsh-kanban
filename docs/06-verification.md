@@ -574,14 +574,28 @@
 | 生效方式 | 含服务端改动，需合入 main 并重启 DSH |
 | 分支 | feat/workspace-batch1；版本 0.20.0 |
 
+## 1.37 v0.20.1（agent 建卡自动绑定会话/工作区 + 补绑推荐，2026-10-29）
+
+| 项 | 结果 |
+|---|---|
+| 用户问题（卡片 `card-974dc87b`） | agent 自己建的卡片常常没绑工作区/会话；拆子任务时该复用原会话的复用、该新建会话的按项目/目录建新会话，不要一直空着 |
+| 宿主能力核实（DSH 0.2.1-rc.3 源码） | 工具 exec = `{callId,name,arguments,agent,signal}`，`exec.agent.session` 提供 `.id` / `.header.cwd`；宿主 `workspaceRegistry`（`.list/.get/.resolveByPath/.archivedSessionIds`）与 `sessionController`（`create({workspaceId\|cwd})` → `{sessionId}`、`rename({sessionId,title})`）可在服务端插件内直接调用 → 自动补全 + 真实新建会话可行，无需 agent 手写 |
+| 服务端实现 | 新增 `lib/session-binding.js`：`planCreate` 纯解析（reuse/new/none、显式参数优先、工作区解析与降级 warning）+ `prepareCreate`（懒读服务、precheck、`create`/`rename`、失败降级）；`kanban_create_card` 默认 `sessionMode:"reuse"` 自动填 `sessionId`/`cwd`/`workspaceId` 并写 `session_linked`，`"new"` 经宿主新建会话并绑定，`"none"` 不绑；显式 `sessionId` 优先；宿主不支持/新建失败只降级 warning、卡片照常创建；`lib/index.js` 懒注入 `sessionController` |
+| Web 实现 | 新增 `web/src/lib/sessionSuggest.ts` + `SessionSection` 推荐块：未绑会话卡片按「同工作区 300 > 同 cwd 220 > cwd 互为前缀 150 > project 对应工作区 120」互斥取最高档，`updatedAt` 仅同档 tie-break，低于阈值不显示；只推荐 + 一键绑定，不自动改 |
+| 测试 | 服务端 **255/255**（基线 224 + 31：`test/session-binding.test.mjs` 24 例 + `test/tools.test.mjs` 7 例集成）；Web **29 文件 / 375 例**（基线 28/355 + 20 例）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning |
+| 隔离验证（无真实宿主） | 服务端单测覆盖 reuse 自动绑定+时间线、new 新建+rename、宿主不支持/创建失败降级、none、显式 sessionId、防孤儿 precheck；Lead 用 fake ctx（模拟 `ctx.inject` 懒注入 + fake registry/controller）手工冒烟 `apply()` 全链路（teammate 执行，脚本未提交）。**未做真实宿主 E2E**（子会话不能重启桌面 DSH） |
+| 真实宿主复验（待重启后执行） | ① 重启桌面 DSH，`GET /api/kanban/health` 返回 `0.20.1`；② 在任一会话里让 agent 用默认 `kanban_create_card` 建卡 → `card.sessionIds[0]` = 该会话、`cwd`/`workspaceId` 非空、时间线出现「建卡时自动绑定了当前会话」；③ 传 `sessionMode:"new"` + 目标 `workspaceId`/`cwd` 建卡 → 宿主会话列表实时出现新会话且标题 = 卡片标题，`binding.created=true`、`warnings` 为空；④ 打开一张未绑会话、有 workspaceId/cwd 的旧卡 → 详情出现「补绑推荐」，点「绑定推荐会话」后 `POST /cards/:id/session` 写入、时间线出现 `session_linked`；⑤ 旧宿主降级路径（可选）：临时去掉 `sessionController` 注入 → 卡片照常创建 + `warnings` 提示手动新建会话 |
+| 生效方式 | 含服务端改动，**合入 main 后需重启 DSH**；「补绑推荐」纯前端，刷新看板即生效 |
+| 分支 | `feat/agent-auto-bind`（基于 `e98f408`）；版本 0.20.1 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
 
 ```
 $ npm test
-# tests 162
-# pass 162 / # fail 0
+# tests 255
+# pass 255 / # fail 0
 # duration_ms ~4.6s
 ```
 
@@ -593,7 +607,7 @@ $ npm test
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
 > vite build     # dist: JS gzip ~113KB / CSS gzip ~14KB
-$ npm --prefix web run test    # vitest 28 文件 / 346 测试（含 sessionPicker 33 例）
+$ npm --prefix web run test    # vitest 29 文件 / 375 测试（含 sessionPicker 33 例、sessionSuggest 20 例）
 $ npm --prefix web run lint:tokens
 # 9 个 CSS 文件：0 error / 0 warning
 ```
