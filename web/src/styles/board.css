@@ -1557,3 +1557,27 @@
   flex: none;
   color: var(--dsw-alias-label-caption);
 }
+
+
+/* ------------------------------------------ v0.22 父子卡 / 依赖徽标（卡片） */
+/* 徽标塞进 .kb-card-props 的换行流里：先按内容定宽，父卡小字再截断，不撑破卡片。 */
+
+.kb-rel-badge {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-rel-badge--open {
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.kb-rel-parent {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -180,6 +180,12 @@ export interface Card {
   archivedAt?: number;
   /** v0.8 交接摘要：新会话启动提示会拼接 */
   handoff?: Handoff;
+  /** v0.22 父子卡：唯一父卡 id（可选；旧服务端/旧数据没有该字段） */
+  parentCardId?: string;
+  /** v0.22 依赖：前置卡 id 列表（可选，服务端上限 8） */
+  dependsOn?: string[];
+  /** v0.22 合并归档：本卡被合并到的目标卡 id（归档源卡上的只读记录） */
+  mergedInto?: string;
   createdAt: number;
   updatedAt: number;
   startedAt?: number;

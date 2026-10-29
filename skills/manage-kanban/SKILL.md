@@ -16,6 +16,22 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 
 一次性问答、小于 2 分钟且无需回看的小改动，不必建卡。
 
+### 拆卡纪律（v0.22.0，先想清楚再建卡）
+
+**卡片 = 一个用户会单独验收的交付物或决定**；步骤、执行线程、研究过程都不是卡片。建卡前先过「拆卡三问」，全都「是」才拆：
+
+1. 用户需要**单独验收**这个子项吗？
+2. 它能**独立排期或被阻塞**吗？
+3. 它有独立的负责人/会话，且**生命周期不同**吗？
+
+三个问题有任何一个「否」，就不要拆卡，改用：
+
+- **步骤/批次**（如「视觉 V2~V6」「动效 M1~M3」这类）→ 当前卡的 `checklists` + 时间线；
+- **并行执行线程**（同一个交付物分几条线跑）→ 一张卡绑多个会话（`kanban_link_session`），**新会话 ≠ 新卡**；
+- **研究/讨论/选型** → 时间线节点 + 结论写进摘要/结果，需要用户拍板时用审批。
+
+确实要拆时：子卡传 `parentCardId`（不传时若当前会话只绑定一张 running 卡，会自动挂到那张父卡）；先后顺序用 `dependsOn` 表达，依赖满足后受阻卡会自动回待办。子卡全部收口前，父卡完成会被拦截（确需强完成用 `forceComplete` 并留审计）。
+
 ## 标准工作流
 
 1. **找卡**：`kanban_boards` 看板列表与各列计数；`kanban_cards` 按 `status`/`project`/`label`/`q`/`sessionId` 找目标卡；`kanban_card` 读完整详情（时间线、checklist、pending approval）。
@@ -38,13 +54,16 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 | `kanban_cards` | 查卡片摘要列表 | `boardId` `status` `project` `label` `q` `sessionId` `limit` |
 | `kanban_card` | 单卡详情 + 最近时间线 | `cardId` `activityLimit` |
 | `kanban_decisions` | 只读查询决策日志（审批原始事件流） | `cardId` `boardId` `type` `state` `limit` `before` `since` `until` |
-| `kanban_create_card` | 建卡（默认自动绑定当前会话/目录） | `title`(必填) `summary` `status` `priority` `labels` `project` `sessionMode`(默认 `reuse`；拆到新会话用 `new`，不需要会话用 `none`) `workspaceId` `cwd` `sessionId` |
-| `kanban_update_card` | 更新字段 | `cardId` + 任意字段（`currentAction` `progress` `checklists` `status` `result`…） |
-| `kanban_move_card` | 换列/换状态 + 原因 | `cardId` `column` 或 `status` `text` |
+| `kanban_create_card` | 建卡（默认自动绑定当前会话/目录；可挂父卡/依赖） | `title`(必填) `summary` `status` `project` `sessionMode`(默认 `reuse`；`new` 新建会话；`none` 不绑) `parentCardId`(子件挂父卡；`null` 显式不挂) `dependsOn`(前置卡数组 ≤8) `workspaceId` `cwd` `sessionId` |
+| `kanban_update_card` | 更新字段 | `cardId` + 任意字段（`currentAction` `progress` `checklists` `status` `result` `parentCardId` `dependsOn` `forceComplete`…） |
+| `kanban_move_card` | 换列/换状态 + 原因 | `cardId` `column` 或 `status` `text` `forceComplete` |
 | `kanban_add_activity` | 追加时间线节点 | `cardId` `text` `type` `data` `metadata` |
 | `kanban_request_approval` | 请求审批（→待你确认） | 单题：`title` `detail` `options`(1–8) `multiSelect`；多题：`questions`(1–6 题，每题独立单选/多选) |
 | `kanban_link_session` | 绑定当前会话 | `cardId` `sessionId` `title` |
-| `kanban_complete_card` | 完成并写结果 | `cardId` `result` |
+| `kanban_complete_card` | 完成并写结果 | `cardId` `result` `force`(有未收口子卡时强完成) |
+| `kanban_review_board` | 收敛巡检（只读） | `boardId` `staleDays`(默认7) `limit` |
+| `kanban_merge_cards` | 合并碎片卡 | `sourceCardId` `targetCardId` `title`(可选) `dryRun` |
+| `kanban_archive_cards` | 批量归档 / 恢复 | `cardIds` `reason` `restore`(恢复) `dryRun` |
 
 回顾历史决定、等待时长（`waitedMs`）或某张卡经历过的审批时，用 `kanban_decisions` 只读查询决策日志——原始审批事件流存在 `dataDir/decisions.jsonl`（默认 `~/.dsh-kanban/decisions.jsonl`），包含仍在等待、已提交、未提交就关闭的条目；它只读，不写数据，也不替你或用户做决定。
 
@@ -64,6 +83,16 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 - 用户手动绑定的值优先：**不要**用建卡自动值覆盖用户已经改过的绑定/目录；发现数据明显不对（目录不存在、会话与任务明显不符）时提示用户确认，不要静默使用。
 - 返回 JSON 里看 `binding`（实际绑了什么、`created` 表示是否新建会话）和 `warnings`（例如宿主不支持自动新建会话、目录与复用会话不一致）——有 warning 要处理或告诉用户。
 - 老卡片没绑会话时，用户可以在卡片详情里用「补绑推荐」一键绑定；agent 侧也可以 `kanban_link_session` 补绑。
+
+## 卡片关系与收敛（v0.22.0）
+
+- **父子卡**：只有「子件是独立交付物」时才挂父卡。建卡不传 `parentCardId` 时，若当前会话恰好只绑定 1 张进行中卡，会自动挂到那张卡；显式传 `null` 不挂。父卡能看到子卡进度（徽标「子卡 done/total」），子卡进入 done/canceled/failed/needs_you 会写父卡时间线（不改父卡状态）。
+- **完成拦截**：父卡还有未收口子卡时，`kanban_complete_card` / 移到 done 会返回 409（`error.extra.openChildren`）。先收口子卡；确需强完成传 `force:true`（工具）/`forceComplete:true`（move/update），会写一条审计节点。
+- **依赖**：先后顺序用 `dependsOn`（≤8 张前置卡）。依赖全部 done/canceled 时会写「依赖已就绪」，`blocked` 卡自动回待办；不要用它表达「父子归属」。
+- **收敛巡检**：感觉看板膨胀 / 开新卡前，先跑 `kanban_review_board`（只读）——陈旧待办、已完成未归档、疑似重复、同会话多张进行中、无 cwd 卡，一次列清并按建议处理。
+- **合并**：碎片卡用 `kanban_merge_cards`（先 `dryRun:true` 看报告）——子卡改挂、依赖重指、源会话归并、摘要并入，源卡归档并记录 `mergedInto`，信息可追。
+- **归档与恢复**：批量清理用 `kanban_archive_cards`（先 `dryRun:true`）；归档不删数据，用户可在列表视图「归档箱」恢复，agent 也可 `restore:true` 批量恢复。有未收口子卡的卡会被跳过（先处理子卡）。
+- **纪律**：卡片=交付物/决定；步骤用 checklist；执行线程用一卡多会话（`kanban_link_session`）；不要为了「看起来在推进」而建卡。
 
 ## 调用示例
 

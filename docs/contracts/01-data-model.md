@@ -74,6 +74,9 @@ interface Card {
   workspaceId?: string;          // DSH workspace id（可选）
   cwd?: string;                  // 绝对路径（创建会话时用）
   sessionIds: string[];          // 主会话在前；≤ 8
+  parentCardId?: string;         // v0.22：唯一父卡（"card-"+8hex），用于「交付物→子件」聚合；不可成环
+  dependsOn?: string[];          // v0.22：前置卡（≤ 8 张），全部 done/canceled 后视为依赖就绪（可唤醒 blocked→backlog）
+  mergedInto?: string;           // v0.22：本卡被合并进的目标卡片 id（仅在归档源卡上出现，只读）
   agent?: { name: string; id?: string };    // 执行 agent 展示名
   progress?: { step: number; total?: number; percent?: number; text?: string };
   checklists: ChecklistItem[];
@@ -96,6 +99,20 @@ interface Card {
   startedAt?: number;
   completedAt?: number;
 }
+
+### 2.aa 卡片关系与收敛规则（v0.22.0）
+
+卡片只表达「用户会单独验收的交付物/决定」；步骤写 checklist、执行线程用一卡多会话（见 `skills/manage-kanban` 的拆卡纪律）。
+
+| 字段 | 规则 |
+| --- | --- |
+| `parentCardId` | 唯一父卡；目标必须存在且未归档（404 `CARD_NOT_FOUND`），不能引用自己，父卡链深度 ≤ 64 且不能成环（409 `CARD_RELATION_CYCLE`）；PATCH 传 `null` 清除。 |
+| `dependsOn` | ≤ 8 张前置卡；每项必须存在且未归档、不能自引用、依赖图不能成环（409 `CARD_RELATION_CYCLE`）；PATCH 传 `[]` 清除。依赖全部 `done/canceled` 时写「依赖已就绪」节点，`blocked` 卡自动回 `backlog`。 |
+| `mergedInto` | 由 `kanban_merge_cards` 写入归档源卡，指向目标卡；只读展示，不参与状态机。 |
+
+- **完成拦截**：直接子卡（`parentCardId` 指向本卡、未归档）中存在未收口（状态不是 `done/canceled`）时，`completeCard`、PATCH `status=done`、移动到 done 都会返回 409 `CARD_HAS_OPEN_CHILDREN`，`extra.openChildren` 带子卡 id/title/status；调用方显式 `forceComplete:true`（工具为 `force`）才放行，并在时间线写「强制完成，留下 N 张未收口子卡」审计节点。
+- **子卡状态回写父卡**：子卡进入 `done/canceled/failed/needs_you` 时，父卡时间线写一条 progress 节点（不改父卡状态）。
+- **归档可恢复（v0.22）**：归档不删数据；`POST /cards/:id/unarchive` 恢复，卡片回到原状态列列尾，时间线写 `unarchived` 节点；归档箱列表见 HTTP 契约 `GET /archive`。
 
 interface ChecklistItem {
   id: string;                    // "ck-" + 6 hex

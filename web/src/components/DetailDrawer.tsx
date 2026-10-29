@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Approval, Card, SessionRow, WorkspaceRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
@@ -10,6 +10,7 @@ import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 import { Composer } from './Composer';
 import { ConfirmDialog } from './ConfirmDialog';
 import { GitBranchSection } from './GitBranchSection';
+import { RelationSection } from './CardRelations';
 import { SessionSection } from './SessionSection';
 import { Timeline, TimelineLoadMore } from './Timeline';
 import type { CardActionHandlers } from './types';
@@ -19,6 +20,7 @@ import {
   replyTargetOptions,
   resolveReplyTarget,
 } from '../lib/replyTarget';
+import { buildCardRelationIndex } from '../lib/cardRelations';
 import { pushOverlay } from '../lib/overlayStack';
 import { copyText } from '../lib/clipboard';
 import { formatHandoffCopy } from '../lib/handoff';
@@ -126,6 +128,8 @@ export function DetailDrawer({
   onRebindDir,
 }: DetailDrawerProps) {
   const { t, lang } = useI18n();
+  // v0.22 关系索引：用全量卡片算父子/依赖，避免详情抽屉里再请求接口
+  const relations = useMemo(() => buildCardRelationIndex(allCards), [allCards]);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -317,6 +321,8 @@ export function DetailDrawer({
               </span>
             ) : null}
           </div>
+
+          <RelationSection card={card} relations={relations} onOpenCard={actions.onOpenDetail} />
 
           {card.currentAction ? (
             <section className="kb-drawer__section">

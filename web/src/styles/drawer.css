@@ -1747,3 +1747,116 @@
   flex: none;
   margin-left: auto;
 }
+
+
+/* ------------------------------------------ v0.22 关系区块（父卡 / 子卡 / 依赖） */
+
+.kb-rel {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.kb-rel__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-rel__label {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-rel__group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.kb-rel__group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-rel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kb-rel__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-rel__link {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.kb-rel__link:hover {
+  color: var(--dsw-alias-state-business-primary);
+  text-decoration: underline;
+}
+
+.kb-rel__link:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.kb-rel__muted {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-rel__pill {
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-rel__tag {
+  flex: none;
+}
+
+.kb-rel__tag--warn {
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.kb-rel__tag--muted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-rel__merged {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}

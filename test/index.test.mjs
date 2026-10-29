@@ -43,7 +43,7 @@ test('插件导出 name/inject/apply 契约', () => {
   assert.equal(typeof apply, 'function')
 })
 
-test('apply 注册两条前缀路由与 11 个工具，并种下 demo 数据', async t => {
+test('apply 注册两条前缀路由与 14 个工具，并种下 demo 数据', async t => {
   const dir = await tempDir(t)
   const { ctx, state } = fakeContext()
   apply(ctx, { dataDir: dir, seed: 'demo' })
@@ -69,7 +69,7 @@ test('apply 注册两条前缀路由与 11 个工具，并种下 demo 数据', a
   // 清理：按注册顺序执行 disposer，不应抛错
   for (const dispose of state.effects.reverse()) if (typeof dispose === 'function') await dispose()
   assert.equal(state.routeDisposers, 2)
-  assert.equal(state.toolDisposers, 11)
+  assert.equal(state.toolDisposers, TOOL_NAMES.length)
 })
 
 test('apply 支持 seed=empty 与自定义 dataDir', async t => {

@@ -222,7 +222,10 @@ sequenceDiagram
 | `lib/session-sync.js` | 会话运行失败同步：监听宿主 `session/event` 的 `turn/end`，失败/恢复回写卡片（v0.11） |
 | `lib/git.js` | 卡片 Git 上下文：详情完整上下文、批量摘要、工作区聚合；v0.17 增工作副本清理判定字段与 `cleanupWorktree`（回收站 + prune + 可选删分支） |
 | `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`）、决策日志、会话归档与卡片 Git 上下文接口；v0.21.0 起工作副本清理占用只数**未完成**卡片（`done`/`canceled` 终态不占用，探测允许集合不变） |
-| `lib/tools.js` | 11 个 `kanban_*` agent 工具 |
+| `lib/tools.js` | 14 个 `kanban_*` agent 工具（v0.22 增 review_board / merge_cards / archive_cards；create/update 支持父子卡与依赖） |
+| `web/src/lib/cardRelations.ts` | 父子卡/依赖索引与描述、409 `openChildren` 解析（脏数据容错）（v0.22） |
+| `web/src/components/CardRelations.tsx` | 卡片关系徽标（子卡 done/total、属于父卡）+ 详情抽屉「关系」区块（v0.22） |
+| `web/src/components/ArchiveBox.tsx` | 列表视图「归档箱」：归档卡片列表 + 单张恢复（v0.22） |
 | `web/` | 看板 UI（React + Vite），构建产物 `web/dist` 由服务端直接服务 |
 | `web/src/lib/nativeInbox.ts` | 原生待确认的纯函数：风险分档、文案解析、计划审批派生、会话/卡片关联、排序 |
 | `web/src/components/NativeInbox.tsx` | 「待你确认」列顶部的收件区（来源徽标/风险/作答入口） |
@@ -286,7 +289,7 @@ sequenceDiagram
 | 阶段 | 内容 |
 | --- | --- |
 | M1 | 单看板、4 列、卡片 CRUD、审批、会话绑定、回复、SSE、双布局、响应式 |
-| M2（进行中） | 多会话回复目标（**v0.12 完成**：Composer 上方「回复/审批目标」下拉、主会话切换写 `session_primary` 时间线、默认目标跟随）、handoff 交接摘要（v0.8）、**审批收件箱合并（v0.10：原生工具授权/提问/计划审批进「待你确认」列）**；剩余：卡片依赖与阻塞、每 workspace 一个看板 |
+| M2（进行中） | 多会话回复目标（**v0.12 完成**：Composer 上方「回复/审批目标」下拉、主会话切换写 `session_primary` 时间线、默认目标跟随）、handoff 交接摘要（v0.8）、**审批收件箱合并（v0.10：原生工具授权/提问/计划审批进「待你确认」列）**；剩余：每 workspace 一个看板（~~卡片依赖与阻塞~~ **v0.22.0 完成**：parentCardId/dependsOn + 完成拦截 + 依赖唤醒 + 子卡回写父卡 + review/merge/archive 收敛工具） |
 | M3 | 会话事件自动回填（工具调用计数、耗时、搜索结果数）；原生待确认的持久策略（always allow）入口；定时/周期卡 |
 | M4 | 团队协作（远端同步）、Jira/GitHub 集成、看板仪表盘（吞吐/阻塞时长）、导出 Markdown/JSON |
 | 暂不做 | 甘特图、看板内嵌对话全文、云端账号体系（参考项目有，但对个人工作流是负担） |

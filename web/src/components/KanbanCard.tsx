@@ -7,6 +7,7 @@ import { COLUMN_OF_STATUS, COLUMNS, STATUS_OF_COLUMN, STATUS_TONE, isWarningStat
 import { elapsedMs, formatDateTime, formatDuration } from '../lib/time';
 import { CARD_TIMELINE_PREVIEW, CARD_TIMELINE_STEP, visibleActivities } from '../lib/activities';
 import type { ActivityFeed } from '../lib/activities';
+import type { CardRelationIndex } from '../lib/cardRelations';
 import type { WorklineStatus } from '../lib/worklineSummary';
 import { ApprovalPanel } from './ApprovalPanel';
 import { canStartCard } from '../lib/startCard';
@@ -15,6 +16,7 @@ import { MenuButton } from './MenuButton';
 import type { MenuEntry } from './MenuButton';
 import { Timeline, TimelineLoadMore } from './Timeline';
 import { WorklineBadge } from './WorklineBadge';
+import { CardRelationBadges } from './CardRelations';
 import {
   IconArchive,
   IconChevronDown,
@@ -45,6 +47,8 @@ interface KanbanCardProps {
   sessions: SessionRow[];
   /** 卡片「工作线」徽标状态：undefined=未就绪，null=探测失败（未知） */
   worklineStatus?: WorklineStatus | null;
+  /** v0.22 父子卡/依赖关系索引（徽标用；旧数据无关系时为空索引） */
+  relations: CardRelationIndex;
   resolvingApprovalId: string | null;
   selectionMode: boolean;
   selectionSelected: boolean;
@@ -83,6 +87,7 @@ export function KanbanCard({
   onLoadEarlier,
   sessions,
   worklineStatus,
+  relations,
   resolvingApprovalId,
   selectionMode,
   selectionSelected,
@@ -331,6 +336,7 @@ export function KanbanCard({
             {t('handoff.badge')}
           </span>
         ) : null}
+        <CardRelationBadges card={card} relations={relations} />
       </div>
 
       {mediaCount ? (

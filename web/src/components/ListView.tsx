@@ -15,6 +15,9 @@ import type { CardActionHandlers, CardViewShared } from './types';
 import type { WorklineStatus } from '../lib/worklineSummary';
 import type { WorklineStatusMap } from '../lib/useWorklineStatuses';
 import { WorklineBadge } from './WorklineBadge';
+import { CardRelationBadges } from './CardRelations';
+import { ArchiveBox } from './ArchiveBox';
+import type { ArchiveBoxProps } from './ArchiveBox';
 import { ApprovalPanel } from './ApprovalPanel';
 import { NativeInbox } from './NativeInbox';
 import type { NativeInboxProps } from './NativeInbox';
@@ -54,6 +57,8 @@ interface ListViewProps {
   highlightedCardId: string | null;
   /** 原生待确认收件（工具授权 / Agent 提问 / 计划审批） */
   nativeInbox: NativeInboxProps;
+  /** v0.22 底部「归档箱」（无归档卡时不渲染） */
+  archiveBox: ArchiveBoxProps;
 }
 
 const COLUMN_TONE: Record<ColumnId, string> = {
@@ -81,6 +86,7 @@ export function ListView({
   onToggleSelection,
   highlightedCardId,
   nativeInbox,
+  archiveBox,
 }: ListViewProps) {
   const { t } = useI18n();
   const [doneVisible, setDoneVisible] = useState(DONE_LIST_LIMIT);
@@ -203,6 +209,7 @@ export function ListView({
           </section>
         );
       })}
+      <ArchiveBox {...archiveBox} />
     </div>
   );
 }
@@ -367,6 +374,7 @@ function ListRow({
               {t('handoff.badge')}
             </span>
           ) : null}
+          <CardRelationBadges card={card} relations={shared.relations} parentClassName="kb-rel-parent--list" />
           {card.status === 'running' && !card.sessionIds.length ? (
             <span className="kb-list__session-warn" title={t('drawer.runningNoSessionWarn')}>
               {t('card.noSessionWarn')}
