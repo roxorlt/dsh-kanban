@@ -563,7 +563,7 @@
 | 生效方式 | 纯前端改动（含 `web/dist` 重新构建），**合入 main 后刷新看板即生效，无需重启 DSH** |
 | 分支 | `feat/session-picker`（基于 `8e6a808`）；版本 0.19.0 |
 
-## 1.36 v0.20.0（复制路径 / locked·prunable / 上限提示，2026-10-28）
+## 1.37 v0.20.0（复制路径 / locked·prunable / 上限提示，2026-10-28）
 
 | 项 | 结果 |
 |---|---|
@@ -588,15 +588,30 @@
 | 生效方式 | 含服务端改动，**已合入 main（merge `e6d5f3e`），需重启 DSH 后生效**；「补绑推荐」纯前端，刷新看板即生效 |
 | 分支 | `feat/agent-auto-bind`（基于 `e98f408`），**已合入 main（merge `e6d5f3e`）**；版本 0.20.1 |
 
+## 1.38 v0.21.0（14 按会话归属 / 15 完成卡片可清理提示 / 16 重新绑定工作目录，2026-10-29）
+
+| 项 | 结果 |
+|---|---|
+| 范围 | 用户确认 P2 批 2：做 11、12、14、15、16、20（11a / 12 / 20 已在 v0.20.0 落地），13 不做，17/18/19/21 暂不做。本版落 14 / 15 / 16，版本 0.21.0，分支 `feat/workspace-batch2`（基于 `e98f408` = v0.20.0） |
+| 14 会话 cwd 兜底归属 | `groupCardsByWorktree(cards, repos, { sessions })`：卡片 `cwd` 命中**主工作副本**、且「`sessionIds` 里第一个有执行目录的会话」落在**同仓库 linked 工作副本**时，改归到该工作副本并记 `WorkspaceGroups.sessionAttributed[]`；卡片行标题后加「按会话归属」`kb-tag`（`title` 显示会话执行目录）。规则：第一个有 cwd 的会话不满足条件即维持原归属（不继续往后找）；卡片 `cwd` 已在 linked 时 `cwd` 优先；无 `cwd` 不兜底（仍进「未指定」）；跨仓库不兜底。新增导出 `findWorktreeForCwd`（#15 复用同一归属判定） |
+| 15 完成卡片可清理提示（客户端） | 卡片从非终态移入「已完成」后，`buildCleanupNudge` 复用工作区清理判定：工作副本已并入主线 + 干净 + 无未完成卡片 / 运行中会话占用时，弹**可操作 toast**（10s，普通 toast 仍 4.2s）「卡片完成：工作副本「X」已并入主线且干净，可清理」+「打开工作区」按钮；不弹窗、不打断、不改当前视图，点按钮才切到工作区视图。主工作副本 / git `locked` / `prunable` / `canceled` / 工作区数据未探测到该副本时不提示（不谎报） |
+| 15 服务端语义变化 | `done` / `canceled` 终态卡片**不再占用**工作副本清理：`POST /api/kanban/git/worktrees/cleanup` 的占用检查只数「未完成的未归档卡片」，409 `WORKTREE_IN_USE` 的 `count` / `cards` 同口径；探测允许集合**不变**（仍含终态卡片 cwd，工作区地图不消失）。`lib/domain.js` 新增 `isTerminalCardStatus()`；前端 `evaluateWorktreeCleanup` 同步过滤终态卡片 |
+| 16 重新绑定工作目录 | 详情抽屉「工作目录」行总是显示：无 `cwd` →「未设置工作目录」；目录已失效 → 追加「工作目录已失效（可能已被清理）」警示标签；行尾「重新绑定目录」。工作区「未指定」块每张卡行尾同入口。对话框候选顺序 = 绑定会话执行目录（按 `sessionIds`）→ 各仓库主工作副本 → linked worktree（排除 `prunable`、按 path 去重），支持搜索、当前项标「当前」并禁用、逐行「使用此目录」；提交 `PATCH /cards/:id` 改 `cwd`（已完成 / 已取消卡片也允许）→ 写评论节点「重新绑定工作目录：旧 → 新」→ 刷新卡片与工作区 + toast；乐观锁冲突走版本冲突人话 |
+| 测试 | 服务端 **228/228**（+4：终态卡片不阻塞清理 / 终态 cwd 仍在探测允许集合 / 混入未完成卡片 409 且 count 只数未完成 / PATCH 已完成·已取消卡片 cwd）；Web **30 文件 / 392 例**（+37：`useWorkspaces` +15〔`findWorktreeForCwd` 3、#14 归属 8、#15 清理 4〕、`rebindDir` 13、`worktreeCleanupNudge` 9）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning |
+| 隔离 dev-server 验收（真 `lib/routes.js` + 演示仓库真 git 工作副本 + headless Chrome 1440×900 DPR2 / 390×844） | ① 移卡前 feat/done 行「有卡片在跑，先等它完成」→ 移到已完成后同行变「可安全清理」且「清理」可点（终态卡片不再阻塞）；② 移入已完成同时出现两条 toast：普通「已移动到「已完成」」+ 可操作清理提示（含「打开工作区」按钮），点按钮切到工作区视图；③ 清理 feat/done 成功（回收站出现 `repo / feat-done` 可恢复条目，toast「已清理并删除本地分支 feat/done（回收站保留 7 天）」），两处行消失；④ 清理后原卡片进「未指定」块，行尾出现「重新绑定目录」；⑤ 对话框候选 = 主工作副本 · repo / feat/graph / feat/long（`prunable` 排除），当前项标「当前」且禁用，搜索 `long` 只剩 feat/long；⑥ 选主工作副本 → toast「已重新绑定工作目录」、卡片 `cwd` 更新为 `/private/tmp/.../repo`、工作区 main 行卡片数 +1、时间线出现评论「重新绑定工作目录：/tmp/.../.worktrees/feat-done → /private/tmp/.../repo」；⑦ 已完成卡片在详情抽屉里看到「工作目录已失效」警示 + 重新绑定入口，从抽屉改绑 feat/graph 成功、警示消失；⑧ 390×844 对话框变底部弹层（x=0、宽 390）、无横向溢出；⑨ 全程 console error 0。<br>注：dev-server 以 `HOME=/tmp/dsh-kanban-v021-home` 启动（回收站目录 `~/.dsh-kanban/trash` 需可写）；14 需要宿主会话列表，独立预览没有会话数据，故在真实宿主复验 |
+| 真实宿主重启复验 | 待重启 DSH 后执行（清单：`/health` version=0.21.0；工作区视图出现「按会话归属」标签与实际会话 cwd 一致；完成卡片出现可清理可操作 toast；清理后旧卡片在详情 / 未指定块可重新绑定目录；console 0 error）。**本卡验收时补结果** |
+| 截图 | `docs/assets/screens/workspace-cleanup-nudge.png`（完成卡片可清理 toast）、`workspace-rebind-dialog.png`（重新绑定目录对话框）、`drawer-cwd-rebind.png`（已完成卡片失效 cwd + 重绑入口）、`workspace-rebind-390.png`（390 底部弹层） |
+| 生效方式 | 含服务端改动，**合入 main 后需重启 DSH 生效**（纯前端部分刷新看板即可） |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
 
 ```
 $ npm test
-# tests 255
-# pass 255 / # fail 0
-# duration_ms ~4.6s
+# tests 259
+# pass 259 / # fail 0
+# duration_ms ~17s
 ```
 
 覆盖：`store`（原子写 / 串行队列 / revision / 损坏备份重建 / schema 迁移）、`domain`（状态列映射 / 规范化 / 种子 / 写原语 / 审批决策事件收集 / 会话运行失败与恢复回写）、`git`（卡片 Git 上下文：普通仓库 / detached / 分叉 + linked worktree / upstream 领先落后 / 主分支探测 / 工作树截断 / 提交上限 / 全部不可用原因 / `?cwd=` 候选采用与忽略）、`session-sync`（turn 失败判定口径 / 主会话过滤 / 同轮去重 / 监听器接线与容错）、`decisions`（追加格式 / 派生状态 / 筛选分页 / 坏行容忍 / 回填 / store 接线与日志失败中止）、`session-archive`（能力探测 / 预检 / 批量 / HTTP 降级 / 活动写入）、`routes`（CRUD / move / 乐观锁 409 / 审批 resolve / comments / session link / 同源 403 / SSE 首帧 / 静态资源防穿越与 SPA fallback / 决策日志与会话归档接口 / 卡片 Git 上下文接口）、`tools`（11 个工具 schema 与 execute）、`index`（插件注册、决策日志回填、会话运行失败监听接线）。
@@ -606,10 +621,10 @@ $ npm test
 ```
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
-> vite build     # dist: JS gzip ~113KB / CSS gzip ~14KB
-$ npm --prefix web run test    # vitest 29 文件 / 375 测试（含 sessionPicker 33 例、sessionSuggest 20 例）
+> vite build     # dist: JS gzip ~137KB / CSS gzip ~18KB
+$ npm --prefix web run test    # vitest 31 文件 / 412 测试（v0.21.0：rebindDir 13 / worktreeCleanupNudge 9 / 会话归属 15；另含 sessionSuggest 20 例）
 $ npm --prefix web run lint:tokens
-# 9 个 CSS 文件：0 error / 0 warning
+# 10 个 CSS 文件：0 error / 0 warning
 ```
 
 ### 2.3 令牌规范

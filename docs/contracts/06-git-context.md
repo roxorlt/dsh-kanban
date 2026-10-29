@@ -243,8 +243,8 @@ GET /api/kanban/cards/:cardId/git[?cwd=<绝对路径>]
 ### 4.8 工作副本清理（Phase A 信息 + Phase B 软删除，v0.17）
 
 - 信息层（Phase A）：`/git/workspaces` 的每个 worktree 增 `mergedIntoBase` / `upstream` / `modifiedCount` / `untrackedCount` / `locked` / `prunable` / `lastCommitAt`；前端据此显示「已并入主线 / 还没并入（多 N）」「已同步线上 / 有未推送 / 无远端」「有未保存改动 / 有未跟踪文件」「可安全清理或不可清理原因」。
-- 清理（Phase B）：仅非主工作副本且没有被未归档卡片使用时可执行；脏或未合并需用户在**二次危险确认**里明确 `confirmLoss`；服务端把目录移入 `~/.dsh-kanban/trash`（保留 7 天，可补救），再 `git worktree prune`；可选择同时删除本地分支（已合并 `-d`，未合并需二次确认后 `-D`）。接口契约见 02 §13。
-- 安全底线：绝不删除主工作副本；不使用 `--force` 删目录（用移入回收站替代）；不在存在未归档卡片 cwd 时删除；任何删除都有二次确认与回收站兜底。
+- 清理（Phase B）：仅非主工作副本且没有被**未完成**（非 done/canceled）卡片使用时可执行（v0.21.0 #15 起 `done`/`canceled` 终态卡片不再算占用；清理后旧卡片 cwd 失效，可在详情 / 工作区「未指定」块用「重新绑定目录」改绑，v0.21.0 #16）；脏或未合并需用户在**二次危险确认**里明确 `confirmLoss`；服务端把目录移入 `~/.dsh-kanban/trash`（保留 7 天，可补救），再 `git worktree prune`；可选择同时删除本地分支（已合并 `-d`，未合并需二次确认后 `-D`）。接口契约见 02 §13。
+- 安全底线：绝不删除主工作副本；不使用 `--force` 删目录（用移入回收站替代）；不在存在**未完成**卡片 cwd 时删除（探测允许集合仍包含全部未归档卡片 cwd，保证终态卡片的工作区地图可见）；任何删除都有二次确认与回收站兜底。
 
 ### 4.7 工作区地图（`POST /git/workspaces`，v0.16）
 

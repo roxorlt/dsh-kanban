@@ -171,6 +171,37 @@ test('卡片 PATCH 乐观锁：缺 version=400、过期=409 带最新卡、force
   assert.equal(badStatus.status, 400)
 })
 
+test('卡片 PATCH：已完成/已取消卡片可重新绑定 cwd（v0.21.0 #16 清理后重绑）', async t => {
+  const { server } = await setup(t)
+  const newDir = await tempDir(t, 'dsh-kanban-rebind-')
+  // 旧 cwd 指向已被清理、不再存在的目录：服务端只校验字符串，不探路径
+  const oldDir = join(await tempDir(t, 'dsh-kanban-stale-'), 'gone')
+  const card = await createCard(server, { title: '清理后重绑', status: 'done', cwd: oldDir })
+  assert.equal(card.status, 'done')
+  assert.equal(card.cwd, oldDir)
+
+  const rebound = await api(server, `/api/kanban/cards/${card.id}`, {
+    method: 'PATCH', body: { version: 1, changes: { cwd: newDir } },
+  })
+  assert.equal(rebound.status, 200, rebound.text)
+  assert.equal(rebound.json.ok, true)
+  assert.equal(rebound.json.card.cwd, newDir)
+  assert.equal(rebound.json.card.status, 'done')
+  assert.equal(rebound.json.card.version, 2)
+  const state = await api(server, '/api/kanban/state')
+  assert.equal(state.json.cards.find(item => item.id === card.id).cwd, newDir)
+
+  // 已取消且原本没有 cwd 的卡片也能补绑
+  const canceled = await createCard(server, { title: '已取消无 cwd', status: 'canceled' })
+  assert.equal(canceled.cwd, undefined)
+  const filled = await api(server, `/api/kanban/cards/${canceled.id}`, {
+    method: 'PATCH', body: { version: 1, changes: { cwd: newDir } },
+  })
+  assert.equal(filled.status, 200, filled.text)
+  assert.equal(filled.json.card.cwd, newDir)
+  assert.equal(filled.json.card.status, 'canceled')
+})
+
 test('卡片 DELETE：归档、隐藏、版本校验、重复删除 404', async t => {
   const { server } = await setup(t)
   const card = await createCard(server)

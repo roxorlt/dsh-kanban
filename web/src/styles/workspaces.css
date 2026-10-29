@@ -404,6 +404,43 @@
   padding: 4px 12px 10px;
 }
 
+/* ------------------------------------- v0.21.0 #14 按会话归属 / #16 重新绑定 */
+
+/* 卡片行 = 卡片按钮 + 行尾「重新绑定目录」小按钮（提供 onRebind 时才渲染后者） */
+.kb-workspace__card-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kb-workspace__card-row .kb-workspace__card {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+/* 「重新绑定目录」：跟随 mini 卡片的轻量文字按钮（不用默认 sm 控件高度） */
+.kb-workspace__rebind {
+  flex: none;
+  height: 20px;
+  padding: 0 6px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.kb-workspace__rebind:hover {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* 「按会话归属」小标签：卡片 cwd 在主副本、按绑定会话执行目录归到 linked 工作副本 */
+.kb-workspace__session-tag {
+  flex: none;
+  height: 16px;
+  padding: 0 5px;
+  color: var(--dsw-alias-label-caption);
+}
+
 /* ------------------------------------------------- 清理按钮 / 对话框 */
 
 /* 工作副本行右侧：清理按钮 + 可安全清理提示 / 不可清理原因 */

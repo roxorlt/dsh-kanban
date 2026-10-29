@@ -216,12 +216,12 @@ sequenceDiagram
 | `lib/index.js` | 服务端插件入口：数据目录、路由注册、工具注册、SSE 广播、决策日志首次回填 |
 | `lib/store.js` | `~/.dsh-kanban/data.json` 原子写、串行队列、乐观锁、revision；决策日志写入顺序的编排 |
 | `lib/decisions.js` | 决策日志：`decisions.jsonl` 的只追加读写、派生状态、分页/筛选、回填与导出（v0.10） |
-| `lib/domain.js` | 状态/列映射、默认看板、种子数据、节点/审批构造；审批请求/提交/未决事件收集 |
+| `lib/domain.js` | 状态/列映射、默认看板、种子数据、节点/审批构造；审批请求/提交/未决事件收集；v0.21.0 增 `isTerminalCardStatus`（done/canceled 终态判定，清理占用与会话归档共用） |
 | `lib/session-archive.js` | 宿主会话归档适配器：包装 DSH `workspaceRegistry` 的可逆归档、能力探测与错误码（v0.11） |
 | `lib/session-binding.js` | 建卡时会话/目录补全：从 `exec.agent.session` 读当前会话与 cwd，解析工作区；`sessionMode:"new"` 时经宿主 `sessionController` 真实新建会话（含 best-effort 改名）并绑定，宿主不支持/失败时降级为 warning（v0.20.1） |
 | `lib/session-sync.js` | 会话运行失败同步：监听宿主 `session/event` 的 `turn/end`，失败/恢复回写卡片（v0.11） |
 | `lib/git.js` | 卡片 Git 上下文：详情完整上下文、批量摘要、工作区聚合；v0.17 增工作副本清理判定字段与 `cleanupWorktree`（回收站 + prune + 可选删分支） |
-| `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`）、决策日志、会话归档与卡片 Git 上下文接口 |
+| `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`）、决策日志、会话归档与卡片 Git 上下文接口；v0.21.0 起工作副本清理占用只数**未完成**卡片（`done`/`canceled` 终态不占用，探测允许集合不变） |
 | `lib/tools.js` | 11 个 `kanban_*` agent 工具 |
 | `web/` | 看板 UI（React + Vite），构建产物 `web/dist` 由服务端直接服务 |
 | `web/src/lib/nativeInbox.ts` | 原生待确认的纯函数：风险分档、文案解析、计划审批派生、会话/卡片关联、排序 |
@@ -233,11 +233,16 @@ sequenceDiagram
 | `web/src/lib/worklineSummary.ts` | 「工作线」结论纯函数：`buildWorklineStatus`（位置 / 与主线 / 与线上）供详情与徽标共用 + `buildWorklineSummary`（含图计数）（v0.14.1/v0.15） |
 | `web/src/lib/useWorklineStatuses.ts` | 看板批量拉取工作线摘要：cwd 去重、400ms 防抖、≤32/批、15s 缓存、20s 可见刷新、失败静默未知（v0.15） |
 | `web/src/components/WorklineBadge.tsx` | 卡片/列表行「工作线」徽标：彩点 + 分支 + 关系/线上短语，仅非主线 feature 显示（v0.15） |
-| `web/src/lib/useWorkspaces.ts` | 「工作区」视图数据：cwd 去重批量拉取、15s 缓存、20s 可见刷新；`groupCardsByWorktree` 按服务端 `dirs[]` 精确归组（v0.16） |
-| `web/src/components/WorkspaceView.tsx` | 「工作区」视图：按仓库分块、工作副本行（分支/Phase A 合并/远端/改动状态/清理按钮/路径/卡片 mini 列表/会话数）、未指定组（v0.16/v0.17） |
+| `web/src/lib/useWorkspaces.ts` | 「工作区」视图数据：cwd 去重批量拉取、15s 缓存、20s 可见刷新；`groupCardsByWorktree` 按服务端 `dirs[]` 精确归组；v0.21.0 增 `findWorktreeForCwd`、会话 cwd 兜底归组（`sessionAttributed`）、清理判定过滤终态卡片（v0.16/v0.21.0） |
+| `web/src/components/WorkspaceView.tsx` | 「工作区」视图：按仓库分块、工作副本行（分支/Phase A 合并/远端/改动状态/清理按钮/路径/卡片 mini 列表/会话数）、未指定组；v0.21.0 新 props `sessions` / `onRebindCard`，「按会话归属」标签与「未指定」块重新绑定入口（v0.16/v0.17/v0.21.0） |
 | `web/src/components/CleanupWorktreeDialog.tsx` | 工作副本清理两段式确认（普通确认 + 脏/未合并危险确认），软删除说明与删分支选项（v0.17） |
 | `web/src/components/ForkGraph.tsx` | Fork 风格多泳道提交图渲染；v0.16 增加 hover 高亮同色泳道（行/图例双向联动）（v0.14/v0.16） |
 | `web/src/components/GitBranchSection.tsx` | 详情抽屉「工作线」区块：人话总结 + 关键事实表 +「提交图」折叠区（ForkGraph + 多工作树列表，默认收起）（v0.13→v0.14→v0.14.1） |
+| `web/src/components/DetailDrawer.tsx` | 卡片详情抽屉：元信息 / 时间线 / 会话 / 审批 / 回复；v0.21.0 新 props `cwdState` / `onRebindDir`——「工作目录」行常显（无目录=未设置、失效=警示标签）+ 重新绑定入口 |
+| `web/src/lib/rebindDir.ts` | 「重新绑定工作目录」纯函数：`buildRebindCandidates`（会话目录 → 主工作副本 → linked worktree，排除 prunable / 按 path 去重）、`cardCwdState`（`ok`/`missing`/`invalid`）、`formatRebindComment`（时间线留痕文案）（v0.21.0） |
+| `web/src/components/RebindDirDialog.tsx` | 「重新绑定工作目录」对话框：候选列表 + 搜索过滤 + 当前项标记禁用 + 提交中 / 空候选 / 无匹配 / 错误（`role=alert`）态（v0.21.0） |
+| `web/src/lib/worktreeCleanupNudge.ts` | 完成卡片时的可清理提示判定（纯函数 `buildCleanupNudge`）：卡片 `done` + 非主副本 / 未锁定 / 未失效 + 已并入主线且干净、无未完成卡片与运行中会话才提示（v0.21.0） |
+| `web/src/components/Toast.tsx` | 反色 toast 区；v0.21.0 支持行内动作按钮（`ToastAction`，带按钮的 toast 停留 10s） |
 | `skills/manage-kanban/` | 教 agent 使用看板的工作流技能 |
 | `scripts/dev-server.mjs` | 不依赖 DSH 的联调服务器 |
 | `scripts/demo-git-repo.mjs` | 造「有分叉 / 远端 / linked worktree」的演示仓库，用于手工复跑「分支 / 工作树」可视化（v0.13） |
@@ -258,6 +263,7 @@ sequenceDiagram
 | 数据 | 存 `~/.dsh-kanban`；损坏文件先备份再重建；不写插件目录 |
 | 会话 | 只发文本；不读取会话内容回写卡片（agent 自己选择写什么进展） |
 | Git 探测（v0.13/v0.14） | 只对卡片 `card.cwd`（及同仓库 linked worktree 的会话执行目录候选）跑**只读** git 命令：`execFile` 不拼 shell、`GIT_OPTIONAL_LOCKS=0`、单条 2s / 整次 4s 超时、`maxBuffer=4MiB`；不 fetch、不写索引、不碰工作区；跨仓库候选一律拒绝；失败只回 `available:false` / `graph:null`；`graph` 只读取前 10 条引用与 48 条提交 |
+| 工作副本清理占用（v0.17/v0.21.0） | 只允许清理由未归档卡片 cwd 推导出的**非主**工作副本；占用判定只数**未完成**卡片（`done`/`canceled` 终态不占用，v0.21.0），但探测允许集合仍含全部未归档卡片 cwd（终态卡片的工作区地图可见）；脏或未合并需 `confirmLoss` 二次确认；目录移入 `~/.dsh-kanban/trash`（保留 7 天）而非强删 |
 
 ## 8. 失败与恢复
 

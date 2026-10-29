@@ -322,7 +322,7 @@ test('cleanup：主工作副本拒绝 400 WORKTREE_MAIN', async t => {
   assert.equal(res.json.error.code, 'WORKTREE_MAIN')
 })
 
-test('cleanup：有未归档卡片占用时 409 WORKTREE_IN_USE（归档后可清理）', async t => {
+test('cleanup：有未完成卡片占用时 409 WORKTREE_IN_USE（归档后可清理）', async t => {
   const { server } = await setupServer(t)
   const { repo, wt } = await makeCleanupFixture(t, { branch: 'feat/used' })
   await createCard(server, { cwd: repo })
@@ -338,6 +338,76 @@ test('cleanup：有未归档卡片占用时 409 WORKTREE_IN_USE（归档后可�
 
   // 归档占用卡片后即可清理
   assert.equal((await api(server, `/api/kanban/cards/${usingCard.id}?version=1`, { method: 'DELETE' })).status, 200)
+  const allowed = await cleanup(server, { repoRoot: repo, worktreePath: wt })
+  assert.equal(allowed.status, 200, allowed.text)
+  assert.equal(await exists(wt), false)
+})
+
+test('cleanup：只有 done/canceled 终态卡片占用时允许清理（v0.21.0 #15）', async t => {
+  const { server } = await setupServer(t)
+  const { repo, wt, realWt } = await makeCleanupFixture(t, { branch: 'feat/settled' })
+  // 卡片 cwd 都落在目标工作副本内，但都已收口为终态
+  await mkdir(join(wt, 'done-dir'))
+  await mkdir(join(wt, 'canceled-dir'))
+  const doneCard = await createCard(server, { title: '已完成卡片', cwd: join(wt, 'done-dir'), status: 'done' })
+  const canceledCard = await createCard(server, { title: '已取消卡片', cwd: join(wt, 'canceled-dir'), status: 'canceled' })
+  assert.equal(doneCard.status, 'done')
+  assert.equal(canceledCard.status, 'canceled')
+
+  const res = await cleanup(server, { repoRoot: repo, worktreePath: wt })
+  assert.equal(res.status, 200, res.text)
+  assert.equal(await exists(realWt), false)
+})
+
+test('cleanup：终态卡片 cwd 仍进入探测允许集合，工作区地图可见（v0.21.0 #15）', async t => {
+  const { server } = await setupServer(t)
+  const { repo, realWt } = await makeCleanupFixture(t)
+  const doneCard = await createCard(server, { title: '已完成卡片', cwd: repo, status: 'done' })
+
+  // allowedCardDirs 不变：done 卡片 cwd（repo）仍被接受，不落 unavailable:forbidden
+  const res = await api(server, '/api/kanban/git/workspaces', { method: 'POST', body: { dirs: [repo] } })
+  assert.equal(res.status, 200, res.text)
+  assert.deepEqual(res.json.unavailable, [])
+  assert.equal(res.json.repos.length, 1)
+  assert.equal(res.json.repos[0].root, await realpath(repo))
+  assert.equal(res.json.repos[0].worktrees.some(row => row.path === realWt), true)
+  // done 卡片仍在 /state 里，cwd 原样保留
+  const state = await api(server, '/api/kanban/state')
+  assert.equal(state.json.cards.find(card => card.id === doneCard.id).cwd, repo)
+})
+
+test('cleanup：混有未完成卡片时仍 409，count/details 只数未完成卡片（v0.21.0 #15）', async t => {
+  const { server } = await setupServer(t)
+  const { repo, wt } = await makeCleanupFixture(t, { branch: 'feat/mixed' })
+  for (const dir of ['done', 'canceled', 'running', 'backlog']) await mkdir(join(wt, dir))
+  const doneCard = await createCard(server, { title: '已完成', cwd: join(wt, 'done'), status: 'done' })
+  const canceledCard = await createCard(server, { title: '已取消', cwd: join(wt, 'canceled'), status: 'canceled' })
+  const runningCard = await createCard(server, { title: '进行中', cwd: join(wt, 'running'), status: 'running' })
+  const backlogCard = await createCard(server, { title: '待办', cwd: join(wt, 'backlog'), status: 'backlog' })
+
+  const refused = await cleanup(server, { repoRoot: repo, worktreePath: wt })
+  assert.equal(refused.status, 409)
+  assert.equal(refused.json.error.code, 'WORKTREE_IN_USE')
+  // 只数未完成卡片：done + canceled 不算占用
+  assert.equal(refused.json.count, 2)
+  assert.match(refused.json.error.message, /2 张未完成卡片使用/)
+  assert.deepEqual(
+    refused.json.cards.map(card => card.id).sort(),
+    [runningCard.id, backlogCard.id].sort(),
+  )
+  assert.equal(refused.json.cards.some(card => card.id === doneCard.id || card.id === canceledCard.id), false)
+  assert.equal(await exists(wt), true)
+
+  // 两张未完成卡片收口后即可清理
+  const finish = await api(server, `/api/kanban/cards/${runningCard.id}`, {
+    method: 'PATCH', body: { version: 1, changes: { status: 'done' } },
+  })
+  assert.equal(finish.status, 200, finish.text)
+  const cancel = await api(server, `/api/kanban/cards/${backlogCard.id}`, {
+    method: 'PATCH', body: { version: 1, changes: { status: 'canceled' } },
+  })
+  assert.equal(cancel.status, 200, cancel.text)
+
   const allowed = await cleanup(server, { repoRoot: repo, worktreePath: wt })
   assert.equal(allowed.status, 200, allowed.text)
   assert.equal(await exists(wt), false)

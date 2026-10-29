@@ -792,6 +792,28 @@ ul {
   opacity: 1;
 }
 
+/* 可操作 toast（v0.21.0 #15）：随 toast 反色的小按钮；不打断、不自绘新颜色 */
+.kb-toast__action {
+  flex: none;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: var(--dsw-font-xxs-strong-12);
+  cursor: pointer;
+}
+
+.kb-toast__action:hover {
+  opacity: 0.85;
+}
+
+.kb-toast__action:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
 /* -------------------------------------------------------- 空态 / 骨架 / 错误 */
 
 .kb-empty {

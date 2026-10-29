@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.21.0 — 2026-10-29
+
+### 新增：P2 批 2（14 按会话归属 / 15 完成卡片可清理提示 / 16 重新绑定工作目录）
+
+- 范围：P2 剩余三项一次落地；`docs/contracts/02-http-api.md` §13 与 `docs/contracts/06-git-context.md` §4.8 同步清理占用语义。
+- 14 会话 cwd 兜底归属（`web/src/lib/useWorkspaces.ts` + `WorkspaceView.tsx`）：卡片 `cwd` 落在**主工作副本**、但绑定会话的执行目录在**同仓库的 linked 工作副本**时，工作区视图把卡片归到会话所在副本，并在卡片标题后加「按会话归属」`kb-tag` 小标签（`title` 显示会话执行目录）。规则：按 `sessionIds` 顺序取**第一个有执行目录的会话**——它不满足条件就维持卡片 `cwd` 的原归属（不继续往后找）；卡片 `cwd` 已落在 linked 工作副本时以 `cwd` 为准；没有 `cwd` 的卡片不兜底（仍进「未指定」块），跨仓库不兜底。`groupCardsByWorktree` 增可选 `sessions`、`WorkspaceGroups` 增 `sessionAttributed[]`；新增导出 `findWorktreeForCwd` 供 #15 复用。
+- 15 完成卡片可清理提示（`web/src/lib/worktreeCleanupNudge.ts` + `Toast` + `App`）：卡片从非终态移入「已完成」后，若所在工作副本已并入主线、干净、且没有未完成卡片 / 运行中会话 / 进行中卡片占用，弹一条**可操作 toast**「卡片完成：工作副本「X」已并入主线且干净，可清理」+「打开工作区」按钮——不弹窗、不打断、不改变当前视图；带按钮的 toast 停留 **10s**（普通 toast 4.2s 不变）。判定与工作区视图的「可安全清理」同源（`buildCleanupNudge` → `evaluateWorktreeCleanup`）：主工作副本 / git `locked` / 目录失效（`prunable`）不提示，`canceled` 不提示，工作区数据还没探测到该副本时不提示（不谎报）。
+- 15 服务端语义变化（`lib/routes.js` / `lib/domain.js`）：`done` / `canceled` 是**终态，不再占用工作副本的清理判定**——`POST /api/kanban/git/worktrees/cleanup` 的占用检查从「所有未归档卡片」改为「**未完成**的未归档卡片」，409 `WORKTREE_IN_USE` 的 `count` / `cards` 只数未完成卡片，错误文案改为「该工作副本仍被 N 张未完成卡片使用」；`lib/domain.js` 新增导出 `isTerminalCardStatus()` 供路由与会话归档共用。**探测允许集合不变**：`/git/summaries`、`/git/workspaces` 与清理的 `repoRoot` 推导仍使用全部未归档卡片 cwd（含 `done`/`canceled`），否则已完成卡片的工作区地图会消失。前端 `evaluateWorktreeCleanup` 同步过滤终态卡片，`cardCount` 含义改为「未完成卡片数」；工作区视图的卡片计数展示仍显示全部卡片。
+- 16 重新绑定工作目录（`web/src/lib/rebindDir.ts` + `components/RebindDirDialog.tsx` + `DetailDrawer` / `WorkspaceView` / `App`）：工作副本被清理后旧卡片 `cwd` 指向已不存在的目录时，可改绑到另一个候选目录。
+  - 纯逻辑：`buildRebindCandidates`（候选顺序 = 卡片绑定会话的执行目录[按 `sessionIds`] → 各仓库主工作副本 → linked worktree；排除 `prunable`、按 path 去重、跳过空串）、`cardCwdState`（`ok` / `missing` / `invalid`）、`formatRebindComment`（有旧目录写「旧 → 新」，否则只写新目录）。
+  - 入口：详情抽屉元信息「工作目录」一行**总是显示**——无 `cwd` 显示「未设置工作目录」，目录已失效追加「工作目录已失效（可能已被清理）」警示标签，行尾「重新绑定目录」ghost 小按钮；工作区「未指定」块每张卡片行尾「重新绑定目录」小按钮（工作副本行不提供，避免误改正常卡片）。
+  - 对话框：复用 `Modal`（`size=md`），搜索按名称 / 说明 / 路径过滤，候选行 = 主文案 + 次级说明 + 等宽路径（`title` 全路径），当前目录标「当前」并禁用，逐行「使用此目录」（提交中「绑定中…」）；空候选、搜索无结果、`role=alert` 错误都有文案；提交中禁止关闭。
+  - 写入与反馈：`PATCH /cards/:id` 改 `cwd`（已完成 / 已取消卡片也允许，服务端不校验新目录是否存在）→ 成功写一条评论节点「重新绑定工作目录：旧 → 新」→ 刷新卡片与工作区 + toast「已重新绑定工作目录」；乐观锁冲突走版本冲突人话；时间线写入失败不影响改绑结果。
+- i18n（`web/src/i18n.tsx`，zh 源字典 + en 一一对应）：新增 14 的 `workspace.sessionAttribution*`、15 的 `workspace.cleanupNudge*`、16 的 `workspace.rebindCwd*` / `drawer.cwdMissing` / `drawer.cwdInvalid` / `drawer.rebindCwd` / `rebind.*`；微调 `workspace.unassignedHint`、`workspace.cleanupBlockedInUse`、`workspace.cleanupErrorInUse`（占用口径改为「未完成卡片」）。
+- 设计规范与架构：`docs/03-design-system.md` 新增 §7.25 按会话归属标签、§7.26 完成卡片可清理的可操作 toast、§7.27「重新绑定工作目录」对话框；`docs/04-architecture.md` 代码地图补三个新文件与 `WorkspaceView` / `DetailDrawer` 新 props，`§7` 安全边界补清理占用口径。
+- 测试：服务端 **228/228**（+4：终态卡片不阻塞清理 / 终态 cwd 仍在探测允许集合 / 混入未完成卡片 409 且 count 只数未完成 / PATCH 已完成·已取消卡片 cwd）；Web **30 文件 / 392 例**（+37：useWorkspaces +15、rebindDir 13、worktreeCleanupNudge 9）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning；隔离 dev-server + 演示仓库真 git + headless Chrome 1440×900 DPR2 / 390×844 实测 9 项关键行为全过、console error 0。
+- 验证：隔离 dev-server + 演示仓库真实 git 工作副本走通「完成 → 可清理提示 → 清理 → 重新绑定目录」闭环，截图与逐项结果见 docs/06 §1.38；真实宿主重启复验结果同步记录在该节。
+- 生效方式：含服务端改动，需**合入 main 并重启 DSH**；纯前端部分刷新看板即生效。
+- 已知限制：14 只影响工作区视图的归组展示，不改卡片数据、不影响看板/列表；15 依赖最近一次工作区探测（≤20s，数据未就绪时不提示，宁可少提醒不误报）、只对 `done` 提示不对 `canceled` 提示；16 候选只来自「已探测仓库的工作副本 + 卡片绑定会话的执行目录」，不提供手输任意路径，服务端不校验新目录是否存在（改绑后仍由工作区探测发现失效）。
+- 分支：`feat/workspace-batch2`（基于 `e98f408` = v0.20.0）。
+
 ## v0.20.1 — 2026-10-29
 
 ### 新增：agent 建卡自动绑定会话/工作区（工具上下文补全 + `sessionMode:"new"` 真实新建会话 + 补绑推荐）
