@@ -619,6 +619,16 @@
 | 生效方式 | 含服务端改动，**合入 main 后需重启 DSH**；纯前端部分刷新看板即生效 |
 | 分支 | `feat/card-convergence`（基于 `8562dd9`），**已合入 main（merge `1b48ae7`）**；版本 0.22.0 |
 
+## 1.40 v0.22.1（合并继承执行上下文 + 启动时回填工作区，2026-10-30）
+
+| 项 | 结果 |
+|---|---|
+| 背景 | v0.22.0 合并视觉/动效碎片后，保留卡丢失源卡 cwd/workspaceId；历史卡仍有「有 cwd、缺 workspaceId」，用户要求 agent 建卡与旧卡补全都不再人工 |
+| 服务端 | `mergeCards`：target 缺 `cwd`/`workspaceId`/`project` 时从 source 继承（不覆盖已有值；dryRun 报告提示）；新增 `lib/workspace-backfill.js`：启动时按 `workspaceRegistry.resolveByPath`（canonical 精确）回填未归档且缺 workspaceId 的卡，幂等、静默、跳过解析失败的卡，注册表未注入时 5×2s 重试；`config.workspaceBackfill:false` 可关 |
+| 测试 | 服务端 **294/294**（288 + 6：workspace-backfill 4 + domain 合并继承 2）；Web 无改动 |
+| 真实数据验证 | 手动回填 13 张 backlog 卡（dsh-kanban→ws 9a9515a1…；rea L2→ws a0f27190…）后：活跃 28 张中 workspace 覆盖 4→17、cwd 18→24、backlog workspace/cwd 14/14；重启后启动回填会把剩余旧卡（含 done）自动补齐 |
+| 生效方式 | 含服务端改动，**需重启 DSH 后生效**；分支 `feat/binding-backfill`（基于 `66da715`） |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）

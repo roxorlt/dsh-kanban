@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.22.1 — 2026-10-30
+
+### 改进：执行上下文自动补全（合并继承 + 启动时回填工作区）
+
+- 反馈：v0.22.0 合并卡片（视觉/动效碎片）后，保留卡丢掉了源卡的 cwd/workspaceId；历史卡片也仍有「有目录、没工作区」的旧数据，用户希望 agent 建卡与旧卡补全都不再需要人工补。
+- 服务端：`mergeCards` 在目标卡缺 `cwd`/`workspaceId`/`project` 时从源卡继承（不覆盖已有值，dryRun 报告会提示）；新增 `lib/workspace-backfill.js`：插件启动时把「未归档、有 cwd、缺 workspaceId」的卡片按宿主 `workspaceRegistry.resolveByPath` 精确匹配回填（幂等、静默、只动未归档卡，worktree/子目录解析不到则跳过；注册表未就绪自动重试 5 次×2s）；`config.workspaceBackfill:false` 可关闭。
+- 工具/配置：`package.json files` 补 `lib/workspace-backfill.js`；新增回归测试 `test/workspace-backfill.test.mjs`（4 例）+ domain 合并继承 2 例；治理审计脚本 `scripts/flow-audit.mjs` 纳入仓库（每日巡检/复跑用）。
+- 测试：服务端 **294/294**（v0.22.0 的 288 + 6）；Web 无改动（沿用 33 文件/438 例）。
+- 生效：含服务端改动，**需重启 DSH 后生效**（重启后启动回填自动跑一次）。
+- 分支：`feat/binding-backfill`（基于 `66da715`）。
+
 ## v0.22.0 — 2026-10-29
 
 ### 新增：卡片收敛机制（拆卡纪律 + 父子卡/依赖 hook + 收敛巡检 + 归档箱）

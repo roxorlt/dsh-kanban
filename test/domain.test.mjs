@@ -5,7 +5,7 @@ import {
   ACTIVITY_TYPES, COLUMNS, COLUMN_OF_STATUS, DEFAULT_BOARD_ID, LIMITS, STATUSES, STATUS_OF_COLUMN, DomainError,
   ackCard, applySeedMode, archiveCard, autoArchiveCandidates, autoArchiveCompleted, batchArchive, batchMove,
   cardsOfBoard, cleanText, completeCard, countsFor, createCard,
-  createSeed, isValidId, linkSession, moveCard, newActivityId, newApprovalId, newArtifactId, newBoardId, newQuestionId,
+  createSeed, isValidId, linkSession, mergeCards, moveCard, newActivityId, newApprovalId, newArtifactId, newBoardId, newQuestionId,
   newCardId, newChecklistId, normalizeHandoff, normalizeStore, patchCard, requestApproval, requireCard, resolveApproval,
   approvalOutcomeColumn,
   sortColumnCards, unlinkSession,
@@ -1157,4 +1157,35 @@ test('requestApproval 对缺少 approvals 数组的原始种子卡也能工作�
   const result = requestApproval(raw, card.id, { title: '原始种子卡能审批吗？', options: ['能'] }, { now: FIXED_NOW + 1 })
   assert.equal(result.card.approvals.length, 1)
   assert.ok((raw.__decisions || []).some(event => event.type === 'approval_requested' && event.approvalId === result.approval.id))
+})
+
+test('mergeCards v0.22.1：目标卡缺 cwd/workspaceId/project 时从源卡继承，不覆盖已有值', () => {
+  const draft = seedDraft()
+  const source = createCard(draft, { title: '合并源', cwd: '/repo/src', workspaceId: 'ws-src', project: 'proj-src' }).card
+  const target = createCard(draft, { title: '合并目标' }).card
+  const merged = mergeCards(draft, source.id, target.id, { actor: { kind: 'agent', name: 'DSH Agent' }, now: FIXED_NOW + 1 })
+  assert.equal(merged.target.cwd, '/repo/src')
+  assert.equal(merged.target.workspaceId, 'ws-src')
+  assert.equal(merged.target.project, 'proj-src')
+  assert.equal(merged.source.archived, true)
+  assert.equal(merged.source.mergedInto, target.id)
+
+  const draft2 = seedDraft()
+  const source2 = createCard(draft2, { title: '源2', cwd: '/repo/a', workspaceId: 'ws-a', project: 'proj-a' }).card
+  const target2 = createCard(draft2, { title: '目标2', cwd: '/repo/b', workspaceId: 'ws-b', project: 'proj-b' }).card
+  const merged2 = mergeCards(draft2, source2.id, target2.id, { now: FIXED_NOW + 2 })
+  assert.equal(merged2.target.cwd, '/repo/b')
+  assert.equal(merged2.target.workspaceId, 'ws-b')
+  assert.equal(merged2.target.project, 'proj-b')
+})
+
+test('mergeCards v0.22.1：dryRun 报告里提示将继承执行上下文', () => {
+  const draft = seedDraft()
+  const source = createCard(draft, { title: 'dry 源', cwd: '/repo/src', workspaceId: 'ws-src' }).card
+  const target = createCard(draft, { title: 'dry 目标' }).card
+  const result = mergeCards(draft, source.id, target.id, { dryRun: true, now: FIXED_NOW + 3 })
+  assert.equal(result.dryRun, true)
+  assert.ok(result.warnings.some(text => text.includes('继承源卡执行目录')))
+  assert.ok(result.warnings.some(text => text.includes('继承源卡工作区')))
+  assert.equal(target.cwd, undefined)
 })
