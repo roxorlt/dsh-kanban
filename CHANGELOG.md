@@ -9,7 +9,7 @@
 - 工具/配置：`package.json files` 补 `lib/workspace-backfill.js`；新增回归测试 `test/workspace-backfill.test.mjs`（4 例）+ domain 合并继承 2 例；治理审计脚本 `scripts/flow-audit.mjs` 纳入仓库（每日巡检/复跑用）。
 - 测试：服务端 **294/294**（v0.22.0 的 288 + 6）；Web 无改动（沿用 33 文件/438 例）。
 - 生效：含服务端改动，**需重启 DSH 后生效**（重启后启动回填自动跑一次）。
-- 分支：`feat/binding-backfill`（基于 `66da715`）。
+- 分支：`feat/binding-backfill`（基于 `66da715`），**已合入 main（merge `7c0da1d`）**。
 
 ## v0.22.0 — 2026-10-29
 
