@@ -219,6 +219,7 @@ sequenceDiagram
 | `lib/domain.js` | 状态/列映射、默认看板、种子数据、节点/审批构造；审批请求/提交/未决事件收集；v0.21.0 增 `isTerminalCardStatus`（done/canceled 终态判定，清理占用与会话归档共用） |
 | `lib/session-archive.js` | 宿主会话归档适配器：包装 DSH `workspaceRegistry` 的可逆归档、能力探测与错误码（v0.11） |
 | `lib/session-binding.js` | 建卡时会话/目录补全：从 `exec.agent.session` 读当前会话与 cwd，解析工作区；`sessionMode:"new"` 时经宿主 `sessionController` 真实新建会话（含 best-effort 改名）并绑定，宿主不支持/失败时降级为 warning（v0.20.1） |
+| `lib/workspace-backfill.js` | 启动时工作区回填：把「有 cwd、缺 workspaceId」的未归档卡片按宿主 `workspaceRegistry.resolveByPath` 精确补齐（幂等/静默/可关；v0.22.1） |
 | `lib/session-sync.js` | 会话运行失败同步：监听宿主 `session/event` 的 `turn/end`，失败/恢复回写卡片（v0.11） |
 | `lib/git.js` | 卡片 Git 上下文：详情完整上下文、批量摘要、工作区聚合；v0.17 增工作副本清理判定字段与 `cleanupWorktree`（回收站 + prune + 可选删分支） |
 | `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`）、决策日志、会话归档与卡片 Git 上下文接口；v0.21.0 起工作副本清理占用只数**未完成**卡片（`done`/`canceled` 终态不占用，探测允许集合不变） |
