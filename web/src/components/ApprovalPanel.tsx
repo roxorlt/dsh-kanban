@@ -238,6 +238,8 @@ export function ApprovalPanel({
   if (!multiQuestion) {
     const multiSelectSingle = approval.multiSelect === true;
     const rejectOption = approval.options.find(isRejectOption);
+    /** A-14：无拒绝选项时，按钮下方给可见说明，并用 aria-describedby 关联（触屏不依赖 title）。 */
+    const noRejectHintId = `${groupId}-no-reject`;
     const toggleSingle = (optionId: string) => {
       setValidation(null);
       setSingleSelection((current) =>
@@ -312,6 +314,7 @@ export function ApprovalPanel({
             className="kb-btn kb-btn--outline kb-btn--sm"
             disabled={busy || !rejectOption}
             title={rejectOption ? undefined : t('approval.noRejectOption')}
+            aria-describedby={rejectOption ? undefined : noRejectHintId}
             onClick={() => {
               if (rejectOption) onResolve(approval, { optionIds: [rejectOption.id] }, comment.trim(), 'reject');
             }}
@@ -337,6 +340,11 @@ export function ApprovalPanel({
                 : t('approval.approve')}
           </button>
         </div>
+        {rejectOption ? null : (
+          <p className="kb-decision-no-reject" id={noRejectHintId}>
+            {t('approval.noRejectOptionHint')}
+          </p>
+        )}
       </section>
     );
   }

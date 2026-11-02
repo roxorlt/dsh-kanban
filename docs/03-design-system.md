@@ -2,6 +2,7 @@
 
 > 交付：`design/mockup.html`（单文件可交互高保真）、`design/screens/01–20`（状态截图）、`design/lint/`（组件样式抽取与令牌 lint）。
 > 锚定 DSH `dsh-v0.1.5-rc.2` 设计令牌与 `dsh-ui-spec`；产品决定见 §10.3「已拍板」。
+> **视觉唯一事实源（single source of truth）＝ [`DESIGN.md`](../DESIGN.md)**：视觉规则、令牌、组件视觉与验收以它为准，本文与其冲突时以 DESIGN.md 为准（动效细则另见 [`docs/11-motion.md`](11-motion.md)）。
 
 ## 1. 设计目标与原则
 
@@ -198,11 +199,11 @@ flowchart LR
 | 遮罩 | `--dsw-alias-bg-mask-2` + `--dsw-mask-blur` | `rgba(0,0,0,.12)` | `.20` |
 | 待办 | `--dsw-alias-label-caption`（空心环） | `#adb2b8` | `#81858c` |
 | 进行中 / 会话活动 | `--dsw-alias-state-business-primary` | `#4176e6` | `#679efe` |
-| 待你确认 | `--dsw-alias-state-warn-primary`；文字 `state-warn-label` | `#f59e0b` / `#dd8629` | 同亮色 |
+| 待你确认 | `--dsw-alias-state-warn-primary`；**文字令牌见 [DESIGN.md §2.5](../DESIGN.md)**（`--kb-status-needs-text`，浅色收敛） | `#f59e0b` / `#dd8629` | 同亮色 |
 | 受阻 | `--dsw-alias-state-error-primary`（按契约与失败同色） | `#ec1313` | `#f25a5a` |
 | 失败 | `--dsw-alias-state-error-primary` | `#ec1313` | `#f25a5a` |
 | 已完成 | `--dsw-alias-state-success-primary` | `#22c55e` | 同亮色 |
-| 审批块底 | `--dsw-alias-state-warn-tertiary` | `#fef5e7` | `#27241f` |
+| 审批块底 | 见 [DESIGN.md §3](../DESIGN.md)（A-04 起审批是卡片内分区，不再用大面积 `warn-tertiary` 底色） | — | — |
 | 主会话徽标 / 同步底 | `--dsw-alias-state-business-tertiary` + `-primary` | `#e4edfd` | `#34415b` |
 | 链接 / 会话入口 | `--dsw-alias-link` | `#4176e6` | `#679efe` |
 | 骨架 | `--dsw-alias-bg-skeleton` | `rgba(0,0,0,.04)` | `rgba(255,255,255,.08)` |
@@ -223,13 +224,15 @@ flowchart LR
 
 ### 4.1 字体层级
 
+> **现行字体层级以 [DESIGN.md §2.7](../DESIGN.md) 为准**：页/顶栏标题 16/22/600、卡片 14/20/500、分区/列头 12/16/600 + 0.02em、meta 11–12、数字 tabular-nums。下表只保留「角色 → 可用字体令牌」对照，字号/行高/字重以 DESIGN.md 为准。
+
 | 角色 | 令牌 | 规格 | 用例 |
 |---|---|---|---|
-| 页面 / 卡片 / 抽屉标题 | `font-l-20` / `font-s-strong-14` / `font-base-strong-16` | 500 20/28；500 14/22；500 16/24 | 竖屏标题；卡片标题；抽屉 |
-| 摘要 / 正文 | `font-xxs-12` / `font-xs-13` | 12/18；13/20 | 摘要、选项说明、输入 |
-| 列头 / 按钮 | `font-xs-strong-13` / `font-xxs-strong-12` | 500 | 列名、Tab、按钮 |
-| 元信息 | `font-xxxs-11` + tabular-nums | 11/14 | 耗时、工具/搜索数、标签、徽标、计数 |
-| 等宽 | `font-markdown-code-block` + `--ds-font-family-code` | 11/19 | 会话 ID、路径、迁移号 |
+| 页面 / 卡片 / 抽屉标题 | 页/顶栏用 `--dsw-font-family` + 显式字号；卡片 `--dsw-font-s-strong-14`；抽屉 16/24/500 | **页/顶栏 16/22/600；卡片 14/20/500；抽屉 16/24/500** | 竖屏标题；卡片标题；抽屉 |
+| 摘要 / 正文 | `--dsw-font-xxs-12` / `--dsw-font-xs-13` | 12/18；13/20 | 摘要、选项说明、输入 |
+| 列头 / 按钮 | `--dsw-font-xs-strong-13`（列名/Tab）/ `--dsw-font-xxs-strong-12`（按钮） | **列头 12/16/600 + 0.02em；按钮 12/500** | 列名、Tab、按钮 |
+| 元信息 | `--dsw-font-xxxs-11` + tabular-nums | 11/14 | 耗时、工具/搜索数、标签、徽标、计数 |
+| 等宽 | `--ds-font-family-code` + `--dsw-font-xxxs-11` | 11/19 | 会话 ID、路径、迁移号 |
 
 ### 4.2 间距、控件、动作区
 
@@ -250,7 +253,7 @@ flowchart LR
 ### 4.4 阴影与动效
 
 - 卡片不用阴影，只用发丝线 + 悬停底色；菜单/浮层 `elevation-panel`；抽屉/Modal/确认框 `elevation-prominent`；唯一的 `shadow-lv1` 用于分段控件选中指示。
-- 时长：hover/颜色 100ms；展开、Toast、抽屉淡入 200ms；抽屉/底部弹层滑入 300ms；`prefers-reduced-motion` 下全部压到 0.01ms，呼吸点静默。
+- 时长：hover/颜色 120ms；展开、Toast、批量条 180ms；抽屉/底部弹层滑入 220ms，离场统一快一档（140/180ms）；`prefers-reduced-motion` 下位移类即时、纯透明度类保留 120ms 淡变。**动效细则（该动/不该动、tokens、逐项规格、性能与审查门槛）以 [`docs/11-motion.md`](11-motion.md) 为唯一事实源**，本节只保留摘要。
 - 展开区内部滚动不触发页面滚动；抽屉/弹层打开时焦点圈定。
 
 
@@ -270,7 +273,7 @@ flowchart LR
 | 卡片标题 | 14 / 22 | **14 / 20，500** | `--dsw-font-s-strong-14` + `line-height: 20px` |
 | 摘要 / 当前动作 | 12 / 18 | **13 / 20；动作 12 / 17** | 摘要用 `--dsw-font-xs-13`；动作可 12px |
 | meta / 工具 / 耗时 | 11 / 14 | **12 / 16** | 数字 `tabular-nums`；徽标仍 11px |
-| 列表行 | 约 11px 上下 padding | **min-height 44，padding 8×12** | 摘要单行省略；动作按钮 24px 高 |
+| 列表行 | 约 11px 上下 padding | 行高与主栏宽见 [DESIGN.md §2.8](../DESIGN.md)：min-height **58（56–64）**、padding 10×12、内容主栏 `max-width: 1180px` | 摘要单行省略；动作按钮 24px 高 |
 | 列表组头 | 40px | **36px** | 与列头同密度 |
 | 区块间距 | 16px | **12px** | 卡片间 8、区块间 12、页面 padding 16–20 |
 | 按钮 | 次级 28；主 34–36；行内 26 | 次级 28；主 32；行内 24；审批 30（竖屏 40） | icon 24–28；触控主决策热区 ≥44 |
@@ -303,9 +306,9 @@ flowchart LR
 | **顶栏** | 看板名 + 未归档卡片数 + 待你确认数 + 会话运行中数；计数之间 0.5px 分隔；无「Agents /」面包屑；右侧 Board/List、主题、帮助 |
 | **列** | 列内独立滚动；列头 40px：状态图标 + 中文名 + 英文副标 + 计数 + 折叠 + 新建；待你确认列有 5% 琥珀底；受阻/失败不另开列 |
 | **卡片** | `0.5px` l2、圆角 12、padding 10；标题 + 摘要 + 当前动作 + 属性行 + 页脚；hover 提亮 1.5%；选中 inset 2px 业务蓝；失败卡描边偏红 |
-| **状态点** | 8px（页脚 6px）；待办空心环、进行中蓝 + 呼吸、待你确认琥珀、受阻/失败红、已完成绿；必须配状态文字 |
+| **状态点** | 8px（页脚 6px）；待办空心环、进行中蓝 + 呼吸、待你确认琥珀、受阻/失败红、已完成绿；必须配状态文字，文字色用 `--kb-status-*-text`（见 [DESIGN.md §2.5](../DESIGN.md)） |
 | **徽章** | 项目 + 文件夹图标；交接徽标中性；均只读 |
-| **审批卡** | 问题标题 + 来源/时间 + 影响说明；全部选项（radio/checkbox，含说明）完整展示；备注输入；`驳回`（次级）与 `提交选择`（主按钮）；多选有“可多选，至少 1 项”提示；所有选项不折叠 |
+| **审批卡** | 问题标题 + 来源/时间 + 影响说明；全部选项（radio/checkbox，含说明）完整展示；备注输入；`驳回`（次级）与 `提交选择`（主按钮）；多选有“可多选，至少 1 项”提示；所有选项不折叠；**视觉权重见 [DESIGN.md §3](../DESIGN.md)**（卡内分区，不超过卡片标题） |
 | **审批编辑器** | 拖/移到待你确认时自动生成默认问题并弹窗；可改标题、影响说明、两个选项名、是否多选；保存后展示在卡片内；脏草稿关闭二次确认 |
 | **时间线** | 竖线 + 7px 节点；done/current/pending/error 四态；右侧相对时间；会话摘要节点带「摘要」标记；最近 3 条 + 加载更早；展开区限高滚动，详情全量 |
 | **媒体行** | 缩略图（26px 方块）+ 类型数量 + `在会话中查看`；不内联大图；只出现在展开区/详情 |

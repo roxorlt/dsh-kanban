@@ -1,11 +1,22 @@
-import { IconAlert } from './Icons';
-import { useI18n } from '../i18n';
+export interface EmptyStateProps {
+  title: string;
+  hint?: string;
+  /** 可选行动入口（如「清空筛选」）；全局空态只给一个入口，列/组内局部提示不带 CTA。 */
+  actionLabel?: string;
+  onAction?: () => void;
+}
 
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+/** 空态：一句标题 + 一句 hint + 至多一个行动入口（App 的「还没有卡片」与 A-12 的全局无结果共用）。 */
+export function EmptyState({ title, hint, actionLabel, onAction }: EmptyStateProps) {
   return (
     <div className="kb-empty">
       <span className="kb-empty__title">{title}</span>
       {hint ? <span className="kb-empty__hint">{hint}</span> : null}
+      {actionLabel && onAction ? (
+        <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={onAction}>
+          {actionLabel}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -46,35 +57,6 @@ export function SkeletonBoard() {
           <SkeletonCards count={index === 1 ? 3 : 2} />
         </section>
       ))}
-    </div>
-  );
-}
-
-export function ErrorState({
-  title,
-  hint,
-  code,
-  retryLabel,
-  onRetry,
-}: {
-  title: string;
-  hint?: string;
-  code?: string;
-  retryLabel: string;
-  onRetry: () => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <div className="kb-error" role="alert">
-      <span className="kb-icon" style={{ color: 'var(--dsw-alias-state-error-primary)' }}>
-        <IconAlert />
-      </span>
-      <div className="kb-error__title">{title}</div>
-      {hint ? <div className="kb-error__hint">{hint}</div> : null}
-      {code ? <div className="kb-error__code">{code}</div> : null}
-      <button type="button" className="kb-btn kb-btn--outline" onClick={onRetry} aria-label={t('common.retry')}>
-        {retryLabel}
-      </button>
     </div>
   );
 }

@@ -83,7 +83,8 @@ import { CardFormModal } from './components/CardFormModal';
 import type { CardFormValues } from './components/CardFormModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { DetailDrawer } from './components/DetailDrawer';
-import { EmptyState, ErrorState, SkeletonBoard } from './components/feedback';
+import { EmptyState, SkeletonBoard } from './components/feedback';
+import { IconAlert } from './components/Icons';
 import { HelpDialog } from './components/HelpDialog';
 import { ListView } from './components/ListView';
 import { WorklineFilterBar, WorklineView } from './components/WorklineView';
@@ -271,6 +272,8 @@ export function App() {
   });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
+  /** 错误页默认只给用户文案；错误码/原始错误收进「诊断信息」按需展开（docs/10 A-09）。 */
+  const [showLoadDiagnostics, setShowLoadDiagnostics] = useState(false);
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
   const boardIdRef = useRef<string | null>(null);
@@ -279,6 +282,8 @@ export function App() {
   >(() => undefined);
   const { toasts, notify, dismiss } = useToasts();
   notifyRef.current = notify;
+  const tRef = useRef(t);
+  tRef.current = t;
   const [helpOpen, setHelpOpen] = useState(false);
   const appRef = useRef<HTMLDivElement | null>(null);
   const [unsentDecision, setUnsentDecision] = useState<UnsentDecision | null>(null);
@@ -303,10 +308,13 @@ export function App() {
         revision: payload.revision ?? 0,
       });
       setLoadError(null);
+      setShowLoadDiagnostics(false);
     } catch (error) {
       const next = toLoadError(error);
       setLoadError(next);
-      if (silent) notifyRef.current(next.message, 'error');
+      // 后台静默刷新失败只走工具栏同步状态 + 内联错误条；toast 用本地化文案，
+      // 不再把 `Failed to fetch` 之类的英文原始错误透给用户（docs/10 A-09）。
+      if (silent) notifyRef.current(tRef.current('app.syncFailureHint'), 'error');
     } finally {
       setLoading(false);
     }
@@ -316,11 +324,24 @@ export function App() {
     void refresh();
   }, [refresh]);
 
-  useRealtime({
+  const { status: realtimeStatus, reconnect: reconnectRealtime } = useRealtime({
     enabled: embedded ? bridgeState.visible : true,
     revision: snapshot.revision,
     onRefresh: () => void refresh({ silent: true }),
   });
+
+  // SSE 从断线状态恢复后补一次全量刷新：断线期间可能错过 revision 变更（docs/10 A-08）。
+  const wasDisconnectedRef = useRef(false);
+  useEffect(() => {
+    if (realtimeStatus === 'degraded' || realtimeStatus === 'offline') {
+      wasDisconnectedRef.current = true;
+      return;
+    }
+    if (realtimeStatus === 'connected' && wasDisconnectedRef.current) {
+      wasDisconnectedRef.current = false;
+      void refresh({ silent: true });
+    }
+  }, [realtimeStatus, refresh]);
 
   // ------------------------------------------------------------------ 时间线分页缓存
   const [feeds, setFeeds] = useState<Record<string, ActivityFeed>>({});
@@ -1625,6 +1646,8 @@ export function App() {
   );
 
   const handleCreateCard = useCallback(() => {
+    // A-13：首屏数据未到达时不能新建（工具栏按钮已 disabled，这里兜住键盘 N 等入口）。
+    if (!snapshotRef.current.board) return;
     setFormError(null);
     setFormState({ mode: 'create', column: mobile ? activeColumn : 'backlog' });
   }, [activeColumn, mobile]);
@@ -1787,15 +1810,33 @@ export function App() {
   );
 
   const totalCards = snapshot.cards.filter((card) => !card.archived).length;
+  /** 首屏数据尚未到达：顶栏计数用占位条、依赖数据的操作禁用（docs/10 A-13）。 */
+  const firstLoad = loading && !snapshot.board;
   const toggleLang = useCallback(() => setLang(lang === 'zh' ? 'en' : 'zh'), [lang, setLang]);
+  /**
+   * 同步状态（docs/10 A-08）：SSE 连接状态与「一次刷新失败」都映射到同一组可见状态；
+   * 断线/重连优先于 standalone 预览标签（独立预览同样走 SSE，断线必须可见）。
+   * offline = 已断开/连续重试仍失败，reconnecting = 正在自动重试。
+   */
   const syncState: SyncState =
-    bridgeState.mode === 'standalone'
-      ? 'standalone'
-      : loadError && snapshot.board
+    loadError
+      ? snapshot.board
         ? 'reconnecting'
-        : loading && !snapshot.board
-          ? 'connecting'
-          : 'connected';
+        : 'offline'
+      : realtimeStatus === 'offline'
+        ? 'offline'
+        : realtimeStatus === 'degraded'
+          ? 'reconnecting'
+          : bridgeState.mode === 'standalone'
+            ? 'standalone'
+            : firstLoad
+              ? 'connecting'
+              : 'connected';
+  /** 断线提示上的「重试」：立即重连 SSE + 重新拉一次状态。 */
+  const handleSyncRetry = useCallback(() => {
+    reconnectRealtime();
+    void refresh();
+  }, [reconnectRealtime, refresh]);
   const inIframe = typeof window !== 'undefined' && window.parent !== window;
   const cycleTheme = useCallback(async () => {
     const next = nextThemePreference(bridgeState.themePreference);
@@ -2055,16 +2096,65 @@ export function App() {
   );
 
   const main = (() => {
-    if (loading && !snapshot.board) return <SkeletonBoard />;
+    if (firstLoad) return <SkeletonBoard />;
     if (loadError && !snapshot.board) {
+      // A-09：首屏只给用户可读的中文文案；错误码与原始错误收进按需展开的「诊断信息」。
       return (
-        <ErrorState
-          title={t('app.loadErrorTitle')}
-          hint={t('app.loadErrorHint')}
-          code={loadError.code}
-          retryLabel={t('app.retry')}
-          onRetry={() => void refresh()}
-        />
+        <div className="kb-error" role="alert">
+          <span className="kb-icon" style={{ color: 'var(--dsw-alias-state-error-primary)' }}>
+            <IconAlert />
+          </span>
+          <div className="kb-error__title">{t('app.loadErrorTitle')}</div>
+          <div className="kb-error__hint" style={{ color: 'var(--dsw-alias-label-secondary)' }}>
+            {t('app.loadErrorHint')}
+          </div>
+          <button
+            type="button"
+            className="kb-btn kb-btn--outline"
+            style={{ minHeight: 44, minWidth: 96 }}
+            onClick={() => {
+              setShowLoadDiagnostics(false);
+              void refresh();
+            }}
+          >
+            {t('app.retry')}
+          </button>
+          <button
+            type="button"
+            className="kb-link-btn"
+            aria-expanded={showLoadDiagnostics}
+            aria-controls="kb-load-diagnostics"
+            onClick={() => setShowLoadDiagnostics((current) => !current)}
+          >
+            {showLoadDiagnostics ? t('app.errorDiagnosticsHide') : t('app.errorDiagnosticsShow')}
+          </button>
+          {showLoadDiagnostics ? (
+            <div
+              id="kb-load-diagnostics"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                maxWidth: 460,
+                color: 'var(--dsw-alias-label-secondary)',
+              }}
+            >
+              <span style={{ font: 'var(--dsw-font-xxs-12)' }}>
+                {t('app.errorCode', { code: loadError.code })}
+              </span>
+              <code
+                style={{
+                  font: 'var(--dsw-font-xxs-12)',
+                  fontFamily: 'var(--ds-font-family-code)',
+                  overflowWrap: 'anywhere',
+                  color: 'var(--dsw-alias-label-tertiary)',
+                }}
+              >
+                {t('app.errorRaw', { message: loadError.message })}
+              </code>
+            </div>
+          ) : null}
+        </div>
       );
     }
     if (!snapshot.board) {
@@ -2177,14 +2267,15 @@ export function App() {
           onToggleLang={toggleLang}
           onNewCard={handleCreateCard}
           syncState={syncState}
-          syncError={loadError && snapshot.board ? loadError.message : null}
-          onRetry={() => void refresh()}
+          syncError={loadError && snapshot.board ? t('app.syncErrorInline') : null}
+          onRetry={handleSyncRetry}
           themePreference={bridgeState.themePreference}
           themeMode={bridgeState.themeMode}
           onCycleTheme={() => void cycleTheme()}
           onShowHelp={() => setHelpOpen(true)}
           selectionMode={selectionMode}
           onToggleSelection={handleToggleSelectionMode}
+          loading={firstLoad}
         />
         {selectionMode && view !== 'workspaces' ? (
           <SelectionBar

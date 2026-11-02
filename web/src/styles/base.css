@@ -38,7 +38,7 @@ button {
 }
 
 a {
-  color: var(--dsw-alias-link);
+  color: var(--kb-link-text);
   font-weight: 500;
   text-decoration: none;
 }
@@ -88,12 +88,40 @@ ul {
   --kb-dur: 180ms;
   --kb-dur-slow: 220ms;
 
+  /* 状态「色点/图标」用 --kb-status-*；状态「文字」用 --kb-status-*-text（docs/10 A-02）。
+     浅色把语义色向 label-primary 收敛到正文 ≥4.5:1；暗色沿用原语义色（暗底已达标，不回退）。
+     light-dark() 跟随 color-scheme（tokens.css 按 data-kanban-theme 设置），
+     百分比为离线计算 + 浏览器实测校准值：needs 68% / done 60% / failed 88% / running 84%。 */
   --kb-status-backlog: var(--dsw-alias-label-caption);
   --kb-status-running: var(--dsw-alias-state-business-primary);
+  --kb-status-running-text: light-dark(
+    color-mix(in srgb, var(--dsw-alias-state-business-primary) 84%, var(--dsw-alias-label-primary)),
+    var(--dsw-alias-state-business-primary)
+  );
   --kb-status-needs: var(--dsw-alias-state-warn-primary);
-  --kb-status-needs-text: var(--dsw-alias-state-warn-label);
+  --kb-status-needs-text: light-dark(
+    color-mix(in srgb, var(--dsw-alias-state-warn-label) 68%, var(--dsw-alias-label-primary)),
+    var(--dsw-alias-state-warn-label)
+  );
   --kb-status-done: var(--dsw-alias-state-success-primary);
+  --kb-status-done-text: light-dark(
+    color-mix(in srgb, var(--dsw-alias-state-success-primary) 60%, var(--dsw-alias-label-primary)),
+    var(--dsw-alias-state-success-primary)
+  );
   --kb-status-failed: var(--dsw-alias-state-error-primary);
+  --kb-status-failed-text: light-dark(
+    color-mix(in srgb, var(--dsw-alias-state-error-primary) 88%, var(--dsw-alias-label-primary)),
+    var(--dsw-alias-state-error-primary)
+  );
+  /* 链接文字（11px 可读正文）：浅色同样向 label-primary 收敛到 ≥4.5:1 */
+  --kb-link-text: light-dark(
+    color-mix(in srgb, var(--dsw-alias-link) 84%, var(--dsw-alias-label-primary)),
+    var(--dsw-alias-link)
+  );
+  /* 禁用按钮的可辨边界（A-11：不只靠淡化文字，边界对淡蓝底 ≥3:1）。
+     用 label-secondary 而不是 border-l2：0.5px 半透明发丝线在浅底上不足 3:1。 */
+  --kb-disabled-border: var(--dsw-alias-label-secondary);
+  --kb-disabled-fill: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
   --kb-surface-column: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, var(--dsw-alias-bg-base));
   --kb-surface-card: var(--dsw-alias-bg-layer-1);
   --kb-hairline: var(--dsw-alias-border-l2);
@@ -215,7 +243,7 @@ ul {
 }
 
 .kb-btn--danger {
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
 }
 
 .kb-btn--danger:hover {
@@ -271,7 +299,7 @@ ul {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--dsw-alias-link);
+  color: var(--kb-link-text);
   font: var(--dsw-font-xxxs-strong-11);
   cursor: pointer;
 }
@@ -327,7 +355,8 @@ ul {
   padding: 0 4px;
   border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 4px;
-  color: var(--dsw-alias-label-caption);
+  /* A-03：键帽文字是快捷键栏的一部分，属可读信息（caption 只留给装饰/禁用） */
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
@@ -401,23 +430,23 @@ ul {
 
 .kb-field__counter {
   flex: none;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
 
 .kb-field__hint {
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
   font: var(--dsw-font-xxs-12);
 }
 
 .kb-field__note {
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
 .kb-form__note {
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
 }
 
@@ -436,7 +465,7 @@ ul {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-strong-11);
 }
 
@@ -511,7 +540,7 @@ ul {
 /* 快捷键帮助 */
 .kb-help__hint {
   margin-bottom: 10px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
 }
 
@@ -554,7 +583,7 @@ ul {
   padding: 7px 10px;
   border-radius: var(--kb-r-ctl);
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent);
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
   font: var(--dsw-font-xxs-12);
 }
 
@@ -605,22 +634,22 @@ ul {
 
 .kb-pill--warn {
   background: var(--dsw-alias-state-warn-tertiary);
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 .kb-pill--error {
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
 }
 
 .kb-pill--success {
   background: var(--dsw-alias-state-success-tertiary);
-  color: var(--dsw-alias-state-success-primary);
+  color: var(--kb-status-done-text);
 }
 
 .kb-pill--business {
   background: var(--dsw-alias-state-business-tertiary);
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--kb-status-running-text);
 }
 
 /* ---------------------------------------------------------------- 状态点 */
@@ -822,7 +851,7 @@ ul {
   align-items: center;
   gap: 6px;
   padding: 24px 12px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   text-align: center;
 }
 
@@ -833,7 +862,7 @@ ul {
 
 .kb-empty__hint {
   max-width: 22em;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -855,12 +884,12 @@ ul {
 
 .kb-error__hint {
   max-width: 460px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xs-13);
 }
 
 .kb-error__code {
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
   font-family: var(--ds-font-family-code);
 }

@@ -38,7 +38,7 @@
 
 .kb-inbox__hint {
   flex-basis: 100%;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -94,12 +94,12 @@
 
 .kb-inbox-source--approval {
   background: var(--dsw-alias-state-warn-tertiary);
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 .kb-inbox-source--question {
   background: var(--dsw-alias-state-business-tertiary);
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--kb-status-running-text);
 }
 
 .kb-inbox-source--plan-review {
@@ -133,7 +133,7 @@
 
 .kb-inbox-risk--medium {
   background: var(--dsw-alias-state-warn-tertiary);
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 .kb-inbox-risk--low {
@@ -145,7 +145,7 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -160,7 +160,7 @@
   margin-left: auto;
   max-width: 45%;
   overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -200,12 +200,12 @@
 }
 
 .kb-inbox-meta {
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
 .kb-inbox-meta--warn {
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 .kb-inbox-card-link {
@@ -217,7 +217,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--dsw-alias-link);
+  color: var(--kb-link-text);
   font: var(--dsw-font-xxxs-11);
   cursor: pointer;
   overflow: hidden;
@@ -255,7 +255,7 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -280,7 +280,7 @@
   padding: 5px 9px;
   border-radius: 7px;
   background: var(--dsw-alias-state-warn-tertiary);
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
   font: var(--dsw-font-xxxs-strong-11);
 }
 
@@ -313,7 +313,7 @@
 
 .kb-plan__hint {
   margin: 0;
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -330,7 +330,7 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -345,7 +345,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 .kb-question-form__hint--warn .kb-icon {
@@ -356,7 +356,7 @@
 
 .kb-question-form__error {
   margin: 0;
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
   font: var(--dsw-font-xxs-12);
 }
 
@@ -385,7 +385,7 @@
 }
 
 .kb-question__index {
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   white-space: nowrap;
 }
@@ -398,7 +398,7 @@
 
 .kb-question__header {
   margin-right: 4px;
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--kb-status-running-text);
 }
 
 .kb-question__options {
@@ -451,7 +451,7 @@
 }
 
 .kb-question__option-desc {
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   line-height: 16px;
   overflow-wrap: anywhere;

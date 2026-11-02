@@ -1,6 +1,8 @@
 /* lint-tokens-ignore: global-sheet */
 /* 列表视图：按列分组的行式列表 */
 
+/* A-07：1440 宽屏把内容收进 1180px 主栏，缩短「标题 → meta」的空白路径；
+   行内改成「标题+摘要主栏 / meta 右栏」两列（.kb-list__main + .kb-list__row-meta）。 */
 .kb-list {
   flex: 1;
   min-height: 0;
@@ -9,6 +11,9 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
   padding: 12px var(--kb-pad-x) 20px;
 }
 
@@ -27,13 +32,13 @@
 }
 
 .kb-list__groupby-label {
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
 .kb-list__count {
   margin-left: auto;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -78,12 +83,14 @@
   background: var(--dsw-alias-bg-module-platform);
 }
 
+/* A-06 三级（分区标题）：12/16/600 + 0.02em */
 .kb-list__group-title {
   display: flex;
   align-items: baseline;
   gap: 6px;
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-xxs-strong-12);
+  font: 600 12px/16px var(--dsw-font-family);
+  letter-spacing: 0.02em;
 }
 
 .kb-list__group-add {
@@ -104,7 +111,7 @@
 
 .kb-list__empty {
   padding: 18px 12px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
   text-align: center;
 }
@@ -119,13 +126,22 @@
   border-top: 0.5px solid var(--dsw-alias-border-l1);
 }
 
+/* A-07：行高收到 56–64（原 44）；主栏（标题+摘要）与 meta 右栏两列 */
 .kb-list__row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 8px 12px;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 12px;
   transition: background-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-list__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .kb-list__row:hover {
@@ -135,6 +151,7 @@
 .kb-list__title {
   flex: 1;
   min-width: 0;
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -143,6 +160,7 @@
   background: transparent;
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-s-strong-14);
+  line-height: 20px;
   text-align: left;
 }
 
@@ -168,7 +186,8 @@
   align-items: center;
   gap: 8px;
   flex: none;
-  color: var(--dsw-alias-label-tertiary);
+  align-self: center;
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
@@ -226,7 +245,7 @@
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding: 0 12px 8px 29px;
+  padding: 0;
 }
 
 .kb-list__summary {
@@ -244,9 +263,27 @@
   align-items: center;
   gap: 6px;
   flex: none;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   white-space: nowrap;
+}
+
+/* A-02：行内状态文字用语义 text 令牌（浅色 ≥4.5:1，暗色沿用原语义色）；彩色 dot 保留 */
+.kb-list__item[data-status='needs_you'] .kb-list__status-line {
+  color: var(--kb-status-needs-text);
+}
+
+.kb-list__item[data-status='running'] .kb-list__status-line {
+  color: var(--kb-status-running-text);
+}
+
+.kb-list__item[data-status='done'] .kb-list__status-line {
+  color: var(--kb-status-done-text);
+}
+
+.kb-list__item[data-status='blocked'] .kb-list__status-line,
+.kb-list__item[data-status='failed'] .kb-list__status-line {
+  color: var(--kb-status-failed-text);
 }
 
 .kb-list__status-line .kb-dot {
@@ -275,9 +312,10 @@
   gap: 6px;
 }
 
+/* A-06 三级（展开区分区标题）：12/16/600 + 0.02em */
 .kb-list__section-title {
-  color: var(--dsw-alias-label-tertiary);
-  font: var(--dsw-font-xxxs-strong-11);
+  color: var(--dsw-alias-label-secondary);
+  font: 600 12px/16px var(--dsw-font-family);
   letter-spacing: 0.02em;
 }
 
@@ -340,7 +378,7 @@
 
 .kb-list__session-warn {
   flex: none;
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
   font: var(--dsw-font-xxxs-11);
   white-space: nowrap;
 }
@@ -351,7 +389,7 @@
 .kb-list__workline {
   display: flex;
   min-width: 0;
-  padding: 0 12px 6px 29px;
+  padding: 0 12px 6px;
 }
 
 .kb-list__workline:empty {
@@ -366,7 +404,7 @@
   display: block;
   max-width: 116px;
   overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -425,7 +463,7 @@
 .kb-archive__head-hint {
   min-width: 0;
   overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -438,7 +476,7 @@
 .kb-archive__hint {
   margin: 0;
   padding: 8px 10px 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -448,7 +486,7 @@
   gap: 8px;
   margin: 0;
   padding: 8px 10px 0;
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -495,7 +533,7 @@
   align-items: center;
   gap: 4px 8px;
   min-width: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -506,4 +544,69 @@
 .kb-archive__item .kb-btn {
   flex: none;
   margin-left: auto;
+}
+
+/* ------------------------------------------------- A-05/A-07（≤719px）
+   390 仍为堆叠单列：主栏独占一行、meta 换到下一行；复选框用 <label> 占满行高，
+   行内图标按钮热区抬到 44。 */
+@media (max-width: 719px) {
+  .kb-app-scope .kb-list__main {
+    flex: 1 1 100%;
+  }
+
+  .kb-app-scope .kb-list__check {
+    align-self: stretch;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .kb-app-scope .kb-list__summary-line {
+    padding: 0;
+  }
+
+  .kb-app-scope .kb-list__row-meta .kb-icon-btn,
+  .kb-app-scope .kb-list__row-meta .kb-btn--sm {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* A-07：390 堆叠单列时字段一个不丢 —— responsive.css 在 ≤899px 隐藏了带 title 的
+   meta 片段（耗时/搜索/工具），这里用更高优先级在列表行里恢复显示（换行堆叠，不横溢）。 */
+@media (max-width: 899px) {
+  .kb-app-scope .kb-list__row-meta > span[title] {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+
+/* ------------------------------------------- A-12 列表局部空态 / A-05 行标题热区 */
+.kb-list__filter-hint {
+  padding: 10px 0 10px 22px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}
+
+@media (max-width: 719px) {
+  /* A-05：行标题是主要可点区域，视觉行高不变，用 ::before 把有效热区补到 44×44。 */
+  .kb-list__title {
+    position: relative;
+  }
+
+  .kb-list__title::before {
+    content: '';
+    position: absolute;
+    /* 左边界让开行首复选框（44px），避免标题热区伸进复选框命中区 */
+    inset: -12px 0 -12px 56px;
+  }
+
+  /* A-05：复选框 label 是 44×44 命中区，抬到标题按钮/其伪元素之上，避免右缘被标题压住；
+     上下扩展区都落在行内（行高 ≥58），整块 44×44 都可命中。 */
+  .kb-app-scope .kb-list__check {
+    position: relative;
+    z-index: 1;
+  }
 }
