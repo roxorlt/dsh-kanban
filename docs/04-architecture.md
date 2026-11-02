@@ -212,7 +212,7 @@ sequenceDiagram
 
 | 文件 | 职责 |
 | --- | --- |
-| `lib/client.js` | 客户端插件：侧栏入口、`main` 全屏面板、iframe 桥（主题/会话/面板切换/原生待确认聚合） |
+| `lib/client.js` | 客户端插件：侧栏入口、`main` 全屏面板、iframe 桥（主题/会话/面板切换/原生待确认聚合）；v0.24.0 增 `host.capabilities` / `host.revealPath`——经 DSH 客户端 Remote 的 `session/canOpenWorkspacePath` + `session/openWorkspacePath(action:'reveal')` 把工作副本目录交给宿主桌面（含绝对路径边界） |
 | `lib/index.js` | 服务端插件入口：数据目录、路由注册、工具注册、SSE 广播、决策日志首次回填 |
 | `lib/store.js` | `~/.dsh-kanban/data.json` 原子写、串行队列、乐观锁、revision；决策日志写入顺序的编排 |
 | `lib/decisions.js` | 决策日志：`decisions.jsonl` 的只追加读写、派生状态、分页/筛选、回填与导出（v0.10） |
@@ -238,7 +238,8 @@ sequenceDiagram
 | `web/src/lib/useWorklineStatuses.ts` | 看板批量拉取工作线摘要：cwd 去重、400ms 防抖、≤32/批、15s 缓存、20s 可见刷新、失败静默未知（v0.15） |
 | `web/src/components/WorklineBadge.tsx` | 卡片/列表行「工作线」徽标：彩点 + 分支 + 关系/线上短语，仅非主线 feature 显示（v0.15） |
 | `web/src/lib/useWorkspaces.ts` | 「工作区」视图数据：cwd 去重批量拉取、15s 缓存、20s 可见刷新；`groupCardsByWorktree` 按服务端 `dirs[]` 精确归组；v0.21.0 增 `findWorktreeForCwd`、会话 cwd 兜底归组（`sessionAttributed`）、清理判定过滤终态卡片；v0.23.0 增 `formatWorktreeLabel`（工作区 / 工作线视图共用的工作副本展示名）（v0.16/v0.21.0/v0.23.0） |
-| `web/src/components/WorkspaceView.tsx` | 「工作区」视图：按仓库分块、工作副本行（分支/Phase A 合并/远端/改动状态/清理按钮/路径/卡片 mini 列表/会话数）、未指定组；v0.21.0 新 props `sessions` / `onRebindCard`，「按会话归属」标签与「未指定」块重新绑定入口（v0.16/v0.17/v0.21.0） |
+| `web/src/components/WorkspaceView.tsx` | 「工作区」视图：按仓库分块、工作副本行（分支/Phase A 合并/远端/改动状态/清理按钮/路径/卡片 mini 列表/会话数）、未指定组；v0.21.0 新 props `sessions` / `onRebindCard`，「按会话归属」标签与「未指定」块重新绑定入口；v0.24.0 新 props `revealPathAvailable` / `onRevealPath`，「在 Finder 中打开」按钮（无桥能力时不渲染）（v0.16/v0.17/v0.21.0/v0.24.0） |
+| `web/src/lib/revealPath.ts` | 「在 Finder 中打开」允许路径集合（v0.24.0）：`collectRevealablePaths` 从服务端 `/git/workspaces` 工作区地图取仓库根 + 工作副本路径，`isRevealablePath` 做精确匹配（不做前缀，任意路径 / 子目录不通过），与桥的绝对路径边界构成两道权限边界 |
 | `web/src/components/CleanupWorktreeDialog.tsx` | 工作副本清理两段式确认（普通确认 + 脏/未合并危险确认），软删除说明与删分支选项（v0.17） |
 | `web/src/components/ForkGraph.tsx` | Fork 风格多泳道提交图渲染；v0.16 增加 hover 高亮同色泳道（行/图例双向联动）（v0.14/v0.16） |
 | `web/src/components/GitBranchSection.tsx` | 详情抽屉「工作线」区块：人话总结 + 关键事实表 +「提交图」折叠区（ForkGraph + 多工作树列表，默认收起）（v0.13→v0.14→v0.14.1） |

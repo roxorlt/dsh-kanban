@@ -21,6 +21,8 @@ export type BridgeMethod =
   | 'panel.select'
   | 'toast'
   | 'theme.set'
+  | 'host.capabilities'
+  | 'host.revealPath'
   | 'pending.answerApproval'
   | 'pending.answerQuestion'
   | 'pending.dismiss';
@@ -38,6 +40,10 @@ export interface BridgeParamsMap {
   'panel.select': { panel: 'kanban' | 'conversation' };
   toast: { text: string; tone?: 'info' | 'success' | 'error' };
   'theme.set': { preference: ThemePreference };
+  /** 宿主能力探测（契约 03 §8）；旧版宿主返回 UNKNOWN_METHOD，调用方按「不支持」处理。 */
+  'host.capabilities': undefined;
+  /** 在工作副本目录上调用宿主的「在 Finder / 文件管理器中定位」（契约 03 §8）。 */
+  'host.revealPath': { path: string };
   'pending.answerApproval': { sessionId: string; key: string; outcome: 'allowed-once' | 'rejected' };
   'pending.answerQuestion': { sessionId: string; key: string; answers: NativeQuestionAnswer[] };
   'pending.dismiss': { sessionId: string; key: string };
@@ -56,6 +62,8 @@ export interface BridgeDataMap {
   'panel.select': { ok: true };
   toast: { ok: true };
   'theme.set': { applied: boolean };
+  'host.capabilities': { revealPath: boolean };
+  'host.revealPath': { ok: true };
   'pending.answerApproval': { ok: true };
   'pending.answerQuestion': { ok: true };
   'pending.dismiss': { ok: true };

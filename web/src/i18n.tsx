@@ -371,6 +371,10 @@ const zh = {
   'workspace.copiedBranch': '已复制分支名',
   'workspace.copyFailed': '复制失败：{message}',
   'workspace.copyUnavailable': '浏览器不允许访问剪贴板，请手动复制',
+  // v0.24 工作副本「在 Finder 中打开」（契约 03 §8）
+  'workspace.revealInFinder': '在 Finder 中打开',
+  'workspace.revealFailed': '无法在 Finder 中打开：{message}',
+  'workspace.revealForbidden': '只允许打开看板工作副本目录',
   'workspace.locked': '已锁定',
   'workspace.prunable': '文件夹已不存在',
   'workspace.cleanupBlockedLocked': '已锁定的工作副本',
@@ -1214,6 +1218,10 @@ const en: Record<I18nKey, string> = {
   'workspace.copiedBranch': 'Branch name copied',
   'workspace.copyFailed': 'Copy failed: {message}',
   'workspace.copyUnavailable': 'The browser does not allow clipboard access here; please copy manually',
+  // v0.24 reveal a worktree in the file manager (contract 03 §8)
+  'workspace.revealInFinder': 'Reveal in Finder',
+  'workspace.revealFailed': 'Could not reveal in Finder: {message}',
+  'workspace.revealForbidden': 'Only kanban worktree directories can be revealed',
   'workspace.locked': 'Locked',
   'workspace.prunable': 'Folder no longer exists',
   'workspace.cleanupBlockedLocked': 'This worktree is locked',

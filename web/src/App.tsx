@@ -67,6 +67,7 @@ import type { ListGroupBy } from './lib/listGroups';
 import { applyPage, EMPTY_FEED } from './lib/activities';
 import { useWorklineStatuses } from './lib/useWorklineStatuses';
 import { collectRunningSessionCwds, useWorkspaces } from './lib/useWorkspaces';
+import { collectRevealablePaths, isRevealablePath } from './lib/revealPath';
 import { buildWorklineOverview, findWorklineRow } from './lib/worklineOverview';
 import type { WorklineSelection } from './lib/worklineOverview';
 import { buildCleanupNudge } from './lib/worktreeCleanupNudge';
@@ -387,6 +388,7 @@ export function App() {
   useEffect(() => {
     if (!embedded) {
       setWorkspaces([]);
+      setRevealPathAvailable(false);
       return;
     }
     let cancelled = false;
@@ -396,6 +398,15 @@ export function App() {
         if (!cancelled) setHostInfo(info);
       })
       .catch(() => undefined);
+    // 契约 03 §8：旧版宿主没有 host.capabilities（UNKNOWN_METHOD）→ 视为不支持，入口隐藏。
+    bridge
+      .request('host.capabilities')
+      .then((capabilities) => {
+        if (!cancelled) setRevealPathAvailable(Boolean(capabilities?.revealPath));
+      })
+      .catch(() => {
+        if (!cancelled) setRevealPathAvailable(false);
+      });
     bridge
       .request('sessions.list')
       .then((data) => {
@@ -414,6 +425,11 @@ export function App() {
   // 归档集合以宿主为准：先 GET /sessions/archive 回填，之后以 kanban:sessions 推送为准。
   const [archivedSessionIds, setArchivedSessionIds] = useState<ReadonlySet<string>>(() => new Set());
   const [archiveAvailable, setArchiveAvailable] = useState(false);
+  /**
+   * v0.24：宿主能否在工作副本目录上「在 Finder / 文件管理器中定位」（契约 03 §8）。
+   * 旧版 DSH 没有该桥能力（或独立预览）时保持 false → 不显示入口。
+   */
+  const [revealPathAvailable, setRevealPathAvailable] = useState(false);
   const [archiveSessionTarget, setArchiveSessionTarget] = useState<SessionArchiveTarget | null>(null);
   const [archiveSessionBusy, setArchiveSessionBusy] = useState(false);
   const [stopArchiveTarget, setStopArchiveTarget] = useState<StopAndArchiveTarget | null>(null);
@@ -516,6 +532,8 @@ export function App() {
   const runningSessionCwds = useMemo(() => collectRunningSessionCwds(sessions), [sessions]);
   // 「工作区」视图：按仓库/工作副本聚合（探测全部未归档卡片的 cwd，范围切换时数据才完整）
   const workspaceState = useWorkspaces(unarchivedCards);
+  // v0.24：允许「在 Finder 中打开」的路径集合（服务端工作区地图里的仓库根 + 工作副本路径）
+  const revealablePaths = useMemo(() => collectRevealablePaths(workspaceState.repos), [workspaceState.repos]);
   // v0.23.0「工作线」总览：与「工作区」视图同一份仓库/工作副本数据 + 卡片归属（含按会话归属兜底）
   const worklineOverview = useMemo(
     () =>
@@ -616,6 +634,26 @@ export function App() {
   const notifyToast = useCallback(
     (text: string, tone: 'info' | 'success' | 'error' = 'info', action?: ToastAction) => notify(text, tone, action),
     [notify],
+  );
+
+  /**
+   * v0.24：把工作副本目录在 Finder / 文件管理器中定位（契约 03 §8）。
+   * 权限边界：只允许服务端工作区地图里的仓库根 / 工作副本路径；其它路径一律拒绝。
+   */
+  const handleRevealWorktreePath = useCallback(
+    async (path: string) => {
+      if (!isRevealablePath(path, revealablePaths)) {
+        notifyToast(t('workspace.revealForbidden'), 'error');
+        return;
+      }
+      try {
+        await bridge.request('host.revealPath', { path });
+      } catch (error) {
+        const message = error instanceof Error && error.message ? error.message : String(error);
+        notifyToast(t('workspace.revealFailed', { message }), 'error');
+      }
+    },
+    [notifyToast, revealablePaths, t],
   );
 
   // ---------------------------------------------------------- 会话归档/恢复
@@ -2056,6 +2094,8 @@ export function App() {
           now={now}
           onOpenCard={actions.onOpenDetail}
           onRebindCard={handleOpenRebind}
+          revealPathAvailable={revealPathAvailable}
+          onRevealPath={(path) => void handleRevealWorktreePath(path)}
           onNotify={actions.onNotify}
         />
       );
