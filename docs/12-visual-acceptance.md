@@ -3,7 +3,8 @@
 > 对应看板卡片 `card-4cc19d2b`「视觉后续（V2–V6 合并）：DESIGN.md + 批次1–3 修复 + 验收矩阵」  
 > 审计基准：[docs/10-visual-audit.md](./10-visual-audit.md)（问题清单 A-01…A-15、§4 不要改、§5 三批验收、附录 A 测量、附录 B checklist）  
 > 验收日期：2026-11-02（Asia/Shanghai）  
-> 结论：**A-01…A-15 全部通过（15 通过 / 0 未通过 / 0 跳过）**，craft 综合分 2.8 → **4.5 / 5**（剩余 5 项为非阻塞退回项，见 §5.2）
+> 结论：**A-01…A-15 全部通过（15 通过 / 0 未通过 / 0 跳过）**，craft 综合分 2.8 → **4.5 / 5**（剩余 5 项为非阻塞退回项，见 §5.2）  
+> v0.26.0 合并动效批次后复跑（merge `68fbc4f`）：**仍 15/15 通过**，截图已按合并后构建重拍（`index-DY3pnvWg.js` / `index-Bb_nao0w.css`）
 
 ## 0. craft 评分变化
 
@@ -26,7 +27,7 @@
 | 主题 | light / dark（`data-kanban-theme` + color-scheme，亮暗各跑一遍） |
 | 视图 | board / list / worklines / workspaces；抽屉、审批、批量选择、空态、loading、错误、断网等场景单独采样 |
 | 数据 | `dev-server.mjs --seed demo`：8 张卡（backlog 1 / running 1 / needs_you 3 / blocked 1 / failed 1 / done 1），3 张有待处理审批（含 1 张多题审批） |
-| 构建 | `.tmp/dist-verify`（Vite 生产构建，`index-C0eQ8oDv.js` / `index-Bz4M-54-.css`） |
+| 构建 | `.tmp/dist-verify`（Vite 生产构建；分支验收时 `index-C0eQ8oDv.js` / `index-Bz4M-54-.css`，合并动效后 `index-DY3pnvWg.js` / `index-Bb_nao0w.css`） |
 | 快照 | commit `65cbf6c` + 工作区未提交改动（43 files changed, 2242 insertions / 869 deletions） |
 | 运行 | final：2026-11-02 16:29:18 → 16:30:26（+08:00）；baseline：16:24（同脚本，改动前口径） |
 | 产物 | `.tmp/visual/final.json`、`.tmp/visual/matrix-final.md`、`docs/assets/screens/visual-v2/final/`（25 张）、`.../baseline/`（25 张） |

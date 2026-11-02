@@ -667,7 +667,7 @@
 | 批次3（状态细节） | A-12 全局空态去重（1440 board 4/5→1/2、list 3/4→1/2；390 均 1/1，列头/分组头保留）；A-13 首屏 loading 顶栏计数占位（不再显示 0）+ 筛选/选择/新建禁用 + 列内骨架；A-14 无 reject option 时拒绝按钮加可见说明「此审批未提供拒绝选项…」+ `aria-describedby`（390 不截断）；A-15 列表行状态文字 ×1、项目/meta/操作保留、行高不变 |
 | 验收工具 | 新增 **`scripts/visual-audit.mjs`**（零依赖：Node 22 内置 `WebSocket` + Chrome CDP；`--label/--only/--base/--note`），对构建产物实测 A-01…A-15 并输出 JSON + markdown 矩阵 + 截图矩阵，可纳入后续视觉回归 |
 | 验收结果 | **15 通过 / 0 未通过 / 0 跳过**（1440×900、1024×768、720×900、390×844 × 亮/暗 × board/list/worklines/workspaces + 抽屉/审批/选择/空态/loading/错误/断网场景）；craft 综合 2.8→**4.5/5**；5 项非阻塞退回项（390 页标题截断、tab 有效热区 43×43、tokens.css 3 个宿主令牌未镜像、`--kb-radius-lg` 无全局定义、未跑真实 SR/axe 与真实宿主 iframe 复验）见 `docs/12-visual-acceptance.md` §5.2 |
-| 测试 | 服务端 **315/315**、Web **36 文件 / 477 例**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS **0 error / 0 warning**；控制台 `console error 0 / 未捕获异常 0 / 4xx 0`（board/list/worklines/workspaces + 抽屉） |
+| 测试 | 分支快照：服务端 315/315、Web 36 文件 / 477 例；**合并动效批次后整树：服务端 310/310、Web 37 文件 / 489 例、视觉验收 15/15 复跑通过**；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS **0 error / 0 warning**；控制台 `console error 0 / 未捕获异常 0 / 4xx 0`（board/list/worklines/workspaces + 抽屉） |
 | 截图 | `docs/assets/screens/visual-v2/final/`（25 张：1440/1024/720/390 × 亮/暗 × 各视图 + 抽屉/审批/选择/composer/空态/loading/错误/断网/工作线/工作区）；修复前同场景在 `.../baseline/`（25 张） |
 | 报告 | [`docs/12-visual-acceptance.md`](12-visual-acceptance.md)（矩阵 + before→after + design-review/craft 评审 + 退回项 + 复跑方法）；机器可读 `.tmp/visual/final.json` |
 | 提交状态 | **已提交并合入 main**：分支 `feat/visual-v2`（`61d5aab`，按 hunk 拆分、只含视觉批次；并行会话的 WIP 与会话绑定改动未进本批次）→ merge `cad2af7`（2026-11-02）；`web/dist` 已在 v0.26.0 合并后统一重建 |
@@ -698,7 +698,7 @@
 | 测试 | 服务端 **308/308**（= HEAD 基线，无回归）；Web **36 文件 / 477 例**（+`usePresence.test.ts` 4 例）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 11 CSS 0/0；全流程 pageerror 0、React 告警 0 |
 | 浏览器实测（Playwright Chromium 1440×900，mock 数据 14 卡） | 卡片展开 44 帧 / max 16.7ms / >20ms 帧 0；批量条开 41 帧 / max 9.3 / 0；抽屉开 p95 25.1ms（blur 静置瞬间 4 帧 >20ms）、关 p95 16.6 / 2；拖拽 `.kb-column--received` 220ms + `.kb-card--dropped` 180ms；RM：遮罩 120ms opacity、抽屉本体 1e-05s、离场类正确。**本机 Chromium = SwiftShader 软件渲染（无 GPU），帧数只作下限参考，GPU 真机未验证**；截图在会话 `.tmp/motion-shots/`（未入库） |
 | 未验证 / 风险 | ① GPU 真机 60fps 未测；② 宿主 Composer 里「返回看板」气泡的 `@starting-style` 进场未在真实宿主验证（`--ds-ease-out` 不存在，用 `var(--ds-ease-out, var(--ds-ease-in-out))` 兜底）；③ 2000 卡规模为架构性保证（无 FLIP / 无逐卡 stagger / 只动 GPU 属性），非实测；④ 抽屉遮罩 blur **静止期**成本（软件渲染 ~25ms/帧）保留为产品决策项；⑤ 审查同根因连带恢复菜单/Modal 的既有进场效果（此前一直静默失效） |
-| 提交 | 分支 `feat/motion-batch`（基线 `65cbf6c`），**已合入 main（merge `6ec4dce`，v0.26.0，2026-11-02，与视觉批次 `cad2af7` 同版上线）**：App.tsx / styles/*.css 的合入冲突已按「视觉规则优先、动效增补保留」逐处对齐（KanbanCard 展开区改用 `kb-card-expand` 离场结构、BoardView 保留落位类常量、drawer.css 同时保留 A-05 触屏热区与审批提交反馈） |
+| 提交 | 分支 `feat/motion-batch`（基线 `65cbf6c`），**已合入 main（merge `68fbc4f`，v0.26.0，2026-11-02，与视觉批次 `cad2af7` 同版上线）**：App.tsx / styles/*.css 的合入冲突已按「视觉规则优先、动效增补保留」逐处对齐（KanbanCard 展开区改用 `kb-card-expand` 离场结构、BoardView 保留落位类常量、drawer.css 同时保留 A-05 触屏热区与审批提交反馈） |
 
 ## 2. 自动化测试
 

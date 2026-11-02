@@ -1,21 +1,12 @@
-## 未发布（`feat/motion-batch`）— 2026-11-02
+# Changelog
 
-### 动效第一批：tokens 审计 + 六项实现 + 独立审查（卡片 `card-4b0eacff`）
+## v0.26.0 — 2026-11-02
 
-- 背景：动效 backlog 合并批次（原 M1/M2/M3）；先把「该不该动」定下来，再实现，最后用 `review-animations` 独立审查。规范与预算是唯一事实源：[`docs/11-motion.md`](docs/11-motion.md)（`docs/03` §4.4 改为摘要 + 指向本文）。
-- **动效 tokens（`styles/base.css`）**：时长 `--kb-dur-press/fast/base/slow = 120/180/220ms` + 退出快一档 `--kb-dur-exit/exit-slow = 140/180ms`；曲线 `--kb-ease-out`(0.22,1,0.36,1)、`--kb-ease-in-out`(0.77,0,0.175,1)、`--kb-ease-drawer`(0.32,0.72,0,1)。**tokens 从 `.kb-app-scope` 上移到 `:root`**：Toast/Menu/Modal 都 portal 到 `document.body`，作用域外拿不到变量会让整条 `transition` 失效（审查命中的既有缺陷，修改后菜单/Modal 的既有进场才真正生效）。
-- **退出动画原语** `web/src/lib/usePresence.ts`：`usePresence` / `usePresenceValue`（携带离场数据快照）/ `presenceExitMs` 纯函数；React 卸载前先挂 `leaving` 类，用 CSS 过渡不用 keyframes（可打断）。
-- **六项实现**：① 卡片展开/收起＝手风琴 `grid-template-rows 0fr↔1fr`（进 180 / 出 140，420px 封顶，看板与列表同一套 hook）；② 详情抽屉＝`@starting-style` 进场 220ms `ease-drawer` + 离场 180ms（遮罩 140ms），离场第一帧解除焦点圈定/归还焦点，关闭幂等；③ 审批提交＝按压 `scale(.97)` 120ms + `.kb-spinner`「处理中…」+ `ApprovalSlot` 整块淡出 140ms；④ 批量条＝淡入 180ms、离场 140ms，离场期间沿用离场前「已选 N 张」快照（不再闪 0 张）；⑤「返回看板」气泡加 `@starting-style` 进场（宿主 `--ds-*` 令牌 + 兜底），来源卡片高亮复核通过；⑥ 拖拽＝拖起 opacity 120ms、落位 settle 180ms、跨列目标列 tint 220ms，**明确不做 FLIP**（首版因掉帧放弃，2000 卡目标下不成立）。
-- **reduced-motion 两级**：位移/缩放/高度类即时；纯透明度类（抽屉遮罩/Toast/批量条/审批区块）保留 120ms 淡变且锁 `opacity`、leaving 态 `transform: none`；返回看板的平滑滚动在 RM 下降级为 `auto`。
-- **审查（`review-animations`，结论 Approve 修复后）**：21 条 findings；修掉 2 个 Block（Toast 过渡作用域失效、批量条离场闪「已选 0 张」）+ P1 抽屉全屏 `backdrop-filter` 动画期掉帧（改「动画期关、静止后开」，软件渲染下动画窗口 p95 41.7→25.1ms、>20ms 帧 4）+ RM 下浮层瞬移 + 1 处死 `@starting-style`；另修 `usePresenceValue` 在调用方传内联对象时的无限更新。记录见 `docs/11-motion.md` §8.1。
-- 测试：服务端 **308/308**；Web **36 文件 / 477 例**（+`usePresence.test.ts` 4 例）；`tsc --noEmit` 0；`vite build` 通过；`lint:tokens` 11 CSS 0/0。
-- 浏览器实测：Playwright Chromium 1440×900 + mock 数据；卡片展开 44 帧 max 16.7ms / >20ms 帧 0，批量条 41 帧 max 9.3 / 0，抽屉开 p95 25.1（含 blur 静置 4 帧）、关 p95 16.6，RM 实测遮罩 120ms / 抽屉即时。**本机为 SwiftShader 软件渲染（无 GPU），帧数只作下限参考，GPU 真机未验证**；宿主页气泡进场与 2000 卡规模标注未实测/架构性保证。
-- 生效方式：**纯前端**，合入 main 后刷新看板即生效（`web/dist` 已重建）；`lib/client.js` 改动由 DSH `client-hmr` 自动重载。
-- 分支 `feat/motion-batch`（基线 `65cbf6c`），**尚未合入 main**：与并行进行的「视觉后续」会话在 `App.tsx` / `styles/*.css` / `ListView.tsx` 等文件上重叠，合入前需先对齐主工作区未提交改动。
+> 视觉后续 V2–V6（A-01…A-15 收口 + DESIGN.md + 验收矩阵/工具）与动效第一批（M1 审计 + 六项实现 + 审查）同版上线；两条线各自在 `feat/visual-v2`（`61d5aab`）与 `feat/motion-batch`（`3040760`）完成后依次合入 main（`cad2af7` / `68fbc4f`），冲突按「视觉规则优先、动效增补保留」对齐。
 
-## 未发布 — 视觉后续 V2–V6 收口（DESIGN.md + 批次1–3 + 验收矩阵，2026-11-02）
+### 视觉后续 V2–V6 收口（DESIGN.md + A-01…A-15 + 验收工具）
 
-> 工作副本变更记录（**未 git commit**；同一工作区还含并行动效任务与会话绑定任务的未提交改动，提交/发版时按文件拆分后套用正式版本号）。
+
 
 ### 新增：`DESIGN.md` 视觉唯一事实源
 
@@ -28,8 +19,24 @@
 - **批次3（状态细节与一致性）**：**A-12** 全局空态去重（1440 board 空态 4/CTA 5 → 1/2、list 3/4 → 1/2；390 均 1/1；列头/分组头保留，列内退化为一行紧凑提示）；**A-13** 首屏 loading 顶栏计数改占位条（不再显示「共 0 张」）+ 筛选/选择/新建禁用 + 骨架只出现在列内；**A-14** 无 reject option 时拒绝按钮加可见说明「此审批未提供拒绝选项…」+ `aria-describedby`（390 不截断）；**A-15** 列表行状态文字只保留一处（项目/meta/操作按钮不变，行高 62）。
 - **验收工具（新增）**：`scripts/visual-audit.mjs`（零依赖：Node 22 内置 `WebSocket` + Chrome DevTools Protocol）按 `docs/10` 附录 A/B 实测 A-01…A-15，输出 JSON + markdown 矩阵（含 before→after）+ 截图矩阵；`--label / --only / --base / --note` 可复跑，可纳入后续视觉回归。
 - 验收：**15 通过 / 0 未通过 / 0 跳过**（1440×900 / 1024×768 / 720×900 / 390×844 × 亮/暗 × board/list/worklines/workspaces + 抽屉/审批/选择/空态/loading/错误/断网）；craft 综合 2.8→4.5/5；5 项非阻塞退回项（390 页标题截断、tab 有效热区 43×43、`tokens.css` 3 个宿主令牌未镜像、`--kb-radius-lg` 无全局定义、未跑真实 SR/axe 与真实宿主 iframe 复验）见 `docs/12-visual-acceptance.md` §5.2。
-- 测试：服务端 **315/315**、Web **36 文件 / 477 例**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS **0 error / 0 warning**；控制台 `console error 0 / 未捕获异常 0 / 4xx 0`。
+- 测试：分支快照 服务端 **315/315**、Web 36 文件 / 477 例；合并动效批次后整树 服务端 **310/310**、Web **37 文件 / 489 例**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS **0 error / 0 warning**；控制台 `console error 0 / 未捕获异常 0 / 4xx 0`。
+- 合并：分支 `feat/visual-v2`（`61d5aab`，按 hunk 拆分、只含视觉批次）→ merge `cad2af7`；与动效批次 merge `68fbc4f` 同版上线，合并后视觉验收 **15/15 复跑通过**、截图已按合并后构建重拍。
 - 证据：`docs/12-visual-acceptance.md`（验收矩阵 + before→after + design-review/craft 评审 + 退回项 + 复跑方法）、`docs/06` §1.43、`docs/assets/screens/visual-v2/{baseline,final}/`（各 25 张）、`.tmp/visual/final.json`。
+
+### 动效第一批：tokens 审计 + 六项实现 + 独立审查（M1→M3）
+
+### 动效第一批：tokens 审计 + 六项实现 + 独立审查（卡片 `card-4b0eacff`）
+
+- 背景：动效 backlog 合并批次（原 M1/M2/M3）；先把「该不该动」定下来，再实现，最后用 `review-animations` 独立审查。规范与预算是唯一事实源：[`docs/11-motion.md`](docs/11-motion.md)（`docs/03` §4.4 改为摘要 + 指向本文）。
+- **动效 tokens（`styles/base.css`）**：时长 `--kb-dur-press/fast/base/slow = 120/180/220ms` + 退出快一档 `--kb-dur-exit/exit-slow = 140/180ms`；曲线 `--kb-ease-out`(0.22,1,0.36,1)、`--kb-ease-in-out`(0.77,0,0.175,1)、`--kb-ease-drawer`(0.32,0.72,0,1)。**tokens 从 `.kb-app-scope` 上移到 `:root`**：Toast/Menu/Modal 都 portal 到 `document.body`，作用域外拿不到变量会让整条 `transition` 失效（审查命中的既有缺陷，修改后菜单/Modal 的既有进场才真正生效）。
+- **退出动画原语** `web/src/lib/usePresence.ts`：`usePresence` / `usePresenceValue`（携带离场数据快照）/ `presenceExitMs` 纯函数；React 卸载前先挂 `leaving` 类，用 CSS 过渡不用 keyframes（可打断）。
+- **六项实现**：① 卡片展开/收起＝手风琴 `grid-template-rows 0fr↔1fr`（进 180 / 出 140，420px 封顶，看板与列表同一套 hook）；② 详情抽屉＝`@starting-style` 进场 220ms `ease-drawer` + 离场 180ms（遮罩 140ms），离场第一帧解除焦点圈定/归还焦点，关闭幂等；③ 审批提交＝按压 `scale(.97)` 120ms + `.kb-spinner`「处理中…」+ `ApprovalSlot` 整块淡出 140ms；④ 批量条＝淡入 180ms、离场 140ms，离场期间沿用离场前「已选 N 张」快照（不再闪 0 张）；⑤「返回看板」气泡加 `@starting-style` 进场（宿主 `--ds-*` 令牌 + 兜底），来源卡片高亮复核通过；⑥ 拖拽＝拖起 opacity 120ms、落位 settle 180ms、跨列目标列 tint 220ms，**明确不做 FLIP**（首版因掉帧放弃，2000 卡目标下不成立）。
+- **reduced-motion 两级**：位移/缩放/高度类即时；纯透明度类（抽屉遮罩/Toast/批量条/审批区块）保留 120ms 淡变且锁 `opacity`、leaving 态 `transform: none`；返回看板的平滑滚动在 RM 下降级为 `auto`。
+- **审查（`review-animations`，结论 Approve 修复后）**：21 条 findings；修掉 2 个 Block（Toast 过渡作用域失效、批量条离场闪「已选 0 张」）+ P1 抽屉全屏 `backdrop-filter` 动画期掉帧（改「动画期关、静止后开」，软件渲染下动画窗口 p95 41.7→25.1ms、>20ms 帧 4）+ RM 下浮层瞬移 + 1 处死 `@starting-style`；另修 `usePresenceValue` 在调用方传内联对象时的无限更新。记录见 `docs/11-motion.md` §8.1。
+- 测试：分支快照 服务端 308/308、Web 36 文件 / 477 例（+`usePresence.test.ts` 4 例）；合并后整树 服务端 **310/310**、Web **37 文件 / 489 例**；`tsc --noEmit` 0；`vite build` 通过；`lint:tokens` 11 CSS 0/0。
+- 浏览器实测：Playwright Chromium 1440×900 + mock 数据；卡片展开 44 帧 max 16.7ms / >20ms 帧 0，批量条 41 帧 max 9.3 / 0，抽屉开 p95 25.1（含 blur 静置 4 帧）、关 p95 16.6，RM 实测遮罩 120ms / 抽屉即时。**本机为 SwiftShader 软件渲染（无 GPU），帧数只作下限参考，GPU 真机未验证**；宿主页气泡进场与 2000 卡规模标注未实测/架构性保证。
+- 生效方式：**纯前端**，合入 main 后刷新看板即生效（`web/dist` 已重建）；`lib/client.js` 改动由 DSH `client-hmr` 自动重载。
+- 合并：分支 `feat/motion-batch`（基线 `65cbf6c`，`3040760`）→ **已合入 main（merge `68fbc4f`，v0.26.0）**；与视觉批次在 `App.tsx` / `styles/*.css` / `KanbanCard` 等重叠处按「视觉规则优先、动效增补保留」逐处对齐（展开区改用 `kb-card-expand` 离场结构、保留落位常量、drawer.css 同时保留 A-05 热区与审批反馈）。
 
 ## v0.25.0 — 2026-11-02
 
