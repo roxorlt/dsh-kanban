@@ -198,6 +198,9 @@ function createFakeContext(env) {
     uiWorkspace: { openSession() {} },
     theme: { getTheme: () => ({ id: 'light' }), setTheme() {} },
     uiSession: env.uiSession ? env.uiSession.service : undefined,
+    // v0.24：客户端 Remote（契约 03 §8）。这里模拟「宿主可注入但不是桌面环境」，
+    // 不渲染「在 Finder 中打开」；本文件只测原生待确认收件，不触发该能力。
+    remote: { session: { canOpenWorkspacePath: async () => ({ ok: true, value: false }) } },
   }
   ctx.dispose = () => {
     for (const disposer of disposers.reverse()) {

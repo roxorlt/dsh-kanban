@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.24.0 — 2026-11-02
+
+### 新增：工作副本「在 Finder 中打开」（DSH 客户端桥 `host.capabilities` / `host.revealPath`）
+
+- 背景：v0.23 之后「工作区」视图的工作副本行只能复制路径（P1 ⑪ 的另一半「在 Finder 打开」）；浏览器 iframe 没有系统权限，需要经 DSH 客户端能力把目录交给宿主桌面。卡片 `card-b30e301f`。
+- **DSH 侧结论（不改 DSH 本体）**：`0.2.1-rc.3` 已内建客户端 Remote `session/canOpenWorkspacePath`（能力探测，无需会话）与 `session/openWorkspacePath({path, action:'reveal'})`（宿主先 `verifyDesktopPath` 再执行 macOS `open -R`）。插件侧 `ctx.inject(['remote','remote.session'])` 后即可调用；**无需新增或修改 DSH 的桥 API**。注意 cordis 要求两个服务都显式 inject，否则访问 `ctx.remote.session` 抛 `cannot get property "remote.session" without inject`（真实宿主第一次验证即踩到）。
+- **客户端桥（`lib/client.js`）**：新增 `host.capabilities` → `{revealPath:boolean}`（true 缓存 30s / false 5s，宿主升级后能自动恢复）与 `host.revealPath {path}` → `{ok:true}`；错误码 `REVEAL_BAD_PATH` / `REVEAL_UNAVAILABLE` / `REVEAL_FAILED`。**权限边界**：桥只接受绝对路径（POSIX `/…` 或 Windows `C:\…`），拒绝空值 / >1024 字符 / 控制字符 / 含 `..` 段，随后由 DSH 宿主 `verifyDesktopPath` 再复核一次路径映射——桥不提供「打开任意路径 / 执行任意命令」的能力。
+- **Web UI**：工作副本路径行在「复制路径」旁新增「在 Finder 中打开」（`IconFolder`；中英 i18n 各 +3 键 `workspace.revealInFinder` / `revealFailed` / `revealForbidden`）。能力探测失败、旧版宿主（`UNKNOWN_METHOD`）或独立预览模式 → **不渲染按钮**，其它功能完全不受影响；点击前用 `web/src/lib/revealPath.ts` 精确校验路径属于服务端 `/git/workspaces` 工作区地图里的仓库根 / 工作副本路径（不做前缀匹配，任意路径 / 子目录 / 命令串都进不了允许集合），不在集合内 toast「只允许打开看板工作副本目录」；宿主失败时 toast「无法在 Finder 中打开：{message}」。
+- 契约：`docs/contracts/03-client-bridge.md` §2 方法表 + 新增 §8（能力、桥方法、两道权限边界、错误码、降级、调用顺序）。
+- 测试：服务端 **308/308**（v0.23.0 基线 294 + 14 例 `test/client-reveal.test.mjs`，覆盖能力探测/缓存/调用参数/Windows 盘符/旧宿主降级/非桌面/6 组非法路径/宿主拒绝与抛错/异源消息/`UNKNOWN_METHOD`）；Web **35 文件 / 473 例**（+`revealPath.test.ts` 6 例）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS 0/0。
+- 真实 DSH 验收（宿主 `0.2.1-rc.3`，未重启；`client-hmr` 自动重载客户端 bundle）：真实 GUI + headless Chromium 打开看板 → 工作区视图两条工作副本行都出现按钮，`host.capabilities` → `{revealPath:true}`；点 `dsh kanban` 行的按钮 → 桥响应 `{ok:true}`，**macOS 窗口列表新增标题为「dsh kanban」的 Finder 窗口**，`window.__DSH_KANBAN__.errors` 无新增；绕过前端直接以 `/etc/hosts` 调桥被宿主拒绝 `Path has no verified Host path`；同源直接打开 `/dsh-kanban/`（独立预览，无父页面）时 2 个工作副本行 **0 个按钮**、复制路径仍在。截图 `docs/assets/screens/workspace-reveal-finder.png`、`workspace-reveal-hidden.png`、`finder-reveal-window.png`（docs/06 §1.42）。
+- 生效方式：**纯客户端改动**，合入 main 后 DSH 的 `client-hmr` 会自动重载客户端 bundle（实测 rev 由 `9cf82bc58ea8` → `9fff0c220f58`），刷新看板即生效，**无需重启 DSH**；`web/dist` 已重新构建。
+- 已知限制：① 只在「工作区」视图的工作副本行提供（「工作线」总览的行是整体可点的筛选按钮，不嵌套按钮）；② 依赖宿主桌面能力，SSH / 无桌面后端时 `canOpenWorkspacePath=false`、入口隐藏；③ 目录已被手动删除（prunable）时点击会得到宿主失败提示，不会静默成功。
+- 分支：`feat/finder-reveal`（基于 `df82d31`）。
+
 ## v0.23.0 — 2026-11-02
 
 ### 新增：「工作线」总览视图（方案 2：按项目 / 仓库分组）+ 390 竖屏工具栏高度修复

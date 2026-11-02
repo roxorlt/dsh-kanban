@@ -40,6 +40,8 @@ type ParentResponse =
 | `card.open` | `{cardId, boardId}` | `{ok:true}` | 让看板 UI 自己处理，父页面仅记录 lastCard（可选） |
 | `panel.select` | `{panel:'kanban'|'conversation'}` | `{ok:true}` | 切换主面板 |
 | `toast` | `{text, tone?:'info'|'success'|'error'}` | `{ok:true}` | 可选：让父页面用 DSH 风格提示；MVP 允许 iframe 自绘 |
+| `host.capabilities` | – | `{revealPath:boolean}` | v0.24：宿主能力探测（详见 §8）；旧版宿主返回 `UNKNOWN_METHOD` |
+| `host.revealPath` | `{path}` | `{ok:true}` | v0.24：把工作副本目录在 Finder / 文件管理器中定位（详见 §8） |
 
 `SessionRow`：`{ id: string; title: string; running: boolean; updatedAt: number; workspaceId?: string; cwd?: string }`。
 
@@ -92,3 +94,25 @@ type ParentPush =
 - 父页面订阅 `ctx.workspaces.list` 的失效通知并按既有节流重推 `kanban:sessions`（归档/恢复/置顶/工作区变化都会触发）。
 - 会话使用前自动恢复：`session.open` / `session.prompt` / `session.ensure` 在执行前检查归档集合；命中则先 `ctx.uiWorkspace.unarchiveSession(sessionId)`（幂等）再继续。恢复失败（宿主无能力/调用失败）返回 `{code:'SESSION_ARCHIVE_UNAVAILABLE'}`，**不得**把消息继续发进归档会话（会被归档闸门静默拦下）。
 - iframe 侧以 `GET /api/kanban/sessions/archive` 做首屏能力/状态回填，之后以推送为准。
+
+## 8. v0.24 增量：工作副本「在 Finder 中打开」（host.capabilities / host.revealPath）
+
+- 需求：工作副本行提供「在 Finder 中打开」，把该目录在宿主桌面的 Finder（Windows = 资源管理器，Linux = 文件管理器）里定位。iframe 没有系统权限，所以由父页面调用 DSH 客户端 Remote 完成。
+- **DSH 侧能力（0.2.x 已内建，本插件不新增/不修改宿主 API）**：客户端插件注入 `remote` 服务后可用
+  - `ctx.remote.session.canOpenWorkspacePath()` → `{ok:true, value:boolean}`：本部署能否把宿主机路径交给原生桌面（无需会话；SSH 会话、无桌面后端为 false）。
+  - `ctx.remote.session.openWorkspacePath({ path, action:'reveal' })` → `{ok:true, value:{opened:true}}`：宿主先 `verifyDesktopPath`（路径映射校验 + resolve）再执行原生定位（macOS = `open -R`）。失败返回 `{ok:false, error:{code, message}}`。
+  - 参考实现：`@deepseek-ai/dsh-api-session-controller` 的 `session/canOpenWorkspacePath` / `session/openWorkspacePath`，原生命令在 `@deepseek-ai/dsh-native-command` 的 `revealNativePath`。
+- **桥方法**：
+
+| method | params | data | 说明 |
+| --- | --- | --- | --- |
+| `host.capabilities` | – | `{ revealPath: boolean }` | 能力探测；旧版宿主返回 `UNKNOWN_METHOD`，iframe 按「不支持」处理并隐藏入口 |
+| `host.revealPath` | `{ path }` | `{ ok: true }` | 在 Finder / 文件管理器中定位该目录 |
+
+- **权限边界（两道，目的：只允许工作副本目录，不提供「打开任意路径」能力）**：
+  1. iframe 侧：只允许传入服务端 `/git/workspaces` 工作区地图里的仓库根 / 工作副本路径（精确匹配，`web/src/lib/revealPath.ts`；服务端只接受由看板卡片 `cwd` 推导出的仓库）。任意路径、子目录、命令串都不在允许集合里。
+  2. 父页面侧：`host.revealPath` 只接受**绝对路径**（POSIX `/…` 或 Windows `C:\…`），拒绝空值 / 超长（>1024）/ 控制字符 / 含 `..` 段；随后宿主 `verifyDesktopPath` 再复核一次路径映射。
+- **错误码**：`REVEAL_BAD_PATH`（参数不是合法的绝对路径）、`REVEAL_UNAVAILABLE`（旧版宿主 / 独立预览 / 非桌面环境 / 能力探测为 false）、`REVEAL_FAILED`（宿主拒绝或原生命令失败，`message` 带宿主原因）。失败时 iframe 用 toast 提示「无法在 Finder 中打开：{message}」，其它功能不受影响。
+- **降级**：`host.capabilities` 失败、返回 false，或 iframe 处于独立预览模式（无父页面）→ 不渲染「在 Finder 中打开」按钮；旧版宿主的其它桥能力与看板功能不变。
+- iframe 侧调用顺序：点击 → 校验路径属于允许集合 → `host.revealPath` → 失败提示；成功不额外提示（Finder 窗口即反馈）。
+

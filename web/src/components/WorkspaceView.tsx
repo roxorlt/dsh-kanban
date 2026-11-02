@@ -15,7 +15,7 @@ import { useI18n } from '../i18n';
 import type { I18nKey, Lang, Translate } from '../i18n';
 import { STATUS_TONE } from '../lib/status';
 import { copyText } from '../lib/clipboard';
-import { IconChevronDown, IconCopy } from './Icons';
+import { IconChevronDown, IconCopy, IconFolder } from './Icons';
 import { shortenPath } from '../lib/forkGraph';
 import { formatDateTime } from '../lib/time';
 import {
@@ -63,6 +63,13 @@ interface WorkspaceViewProps {
   onOpenCard: (cardId: string) => void;
   /** v0.21.0 #16：卡片行「重新绑定目录」入口（只在「未指定」块提供） */
   onRebindCard?: (card: Card) => void;
+  /**
+   * v0.24：宿主是否支持「在 Finder / 文件管理器中定位」工作副本目录（契约 03 §8）。
+   * 旧版 DSH / 独立预览没有该桥能力 → 不显示入口，其它功能不受影响。
+   */
+  revealPathAvailable?: boolean;
+  /** v0.24：点击「在 Finder 中打开」；宿主调用、允许路径校验与失败 toast 都由 App 负责。 */
+  onRevealPath?: (path: string) => void;
   /** 操作结果 toast（App 的 actions.onNotify） */
   onNotify?: (message: string, tone?: 'info' | 'success' | 'error') => void;
 }
@@ -384,9 +391,12 @@ interface WorktreeRowProps {
   onCleanup: (worktree: WorkspaceWorktreeGroup) => void;
   onPrune: (worktree: WorkspaceWorktreeGroup) => void;
   onCopy: (text: string, kind: 'path' | 'branch') => void;
+  /** v0.24：宿主支持「在 Finder 中打开」时才渲染入口（契约 03 §8） */
+  revealPathAvailable: boolean;
+  onRevealPath?: (path: string) => void;
 }
 
-/** 单个工作副本行：文件夹图标 + 分支/状态徽标 + 最近提交 + 卡片预览 + 清理/复制按钮。 */
+/** 单个工作副本行：文件夹图标 + 分支/状态徽标 + 最近提交 + 卡片预览 + 清理/复制/定位按钮。 */
 function WorktreeRow({
   repo,
   worktree,
@@ -398,6 +408,8 @@ function WorktreeRow({
   onCleanup,
   onPrune,
   onCopy,
+  revealPathAvailable,
+  onRevealPath,
 }: WorktreeRowProps) {
   const { t, lang } = useI18n();
   const branch = worktree.branch ?? t('workspace.detached');
@@ -460,6 +472,20 @@ function WorktreeRow({
               </span>
               <span className="kb-workspace__copy-text">{t('workspace.copyPath')}</span>
             </button>
+            {revealPathAvailable && onRevealPath ? (
+              <button
+                type="button"
+                className="kb-workspace__copy kb-workspace__reveal"
+                title={t('workspace.revealInFinder')}
+                aria-label={t('workspace.revealInFinder')}
+                onClick={() => onRevealPath(worktree.path)}
+              >
+                <span className="kb-icon" aria-hidden="true">
+                  <IconFolder />
+                </span>
+                <span className="kb-workspace__copy-text">{t('workspace.revealInFinder')}</span>
+              </button>
+            ) : null}
           </span>
           <span className="kb-workspace__card-count">{t('workspace.cardCount', { count: worktree.cards.length })}</span>
           {sessionCount > 0 ? (
@@ -493,6 +519,9 @@ interface RepoSectionProps {
   onCleanup: (worktree: WorkspaceWorktreeGroup) => void;
   onPrune: (worktree: WorkspaceWorktreeGroup) => void;
   onCopy: (text: string, kind: 'path' | 'branch') => void;
+  /** v0.24：宿主支持「在 Finder 中打开」时才渲染入口（契约 03 §8） */
+  revealPathAvailable: boolean;
+  onRevealPath?: (path: string) => void;
   collapsed: boolean;
   onToggle: (root: string) => void;
   idleExpanded: boolean;
@@ -510,6 +539,8 @@ function RepoSection({
   onCleanup,
   onPrune,
   onCopy,
+  revealPathAvailable,
+  onRevealPath,
   collapsed,
   onToggle,
   idleExpanded,
@@ -534,6 +565,8 @@ function RepoSection({
       onCleanup={onCleanup}
       onPrune={onPrune}
       onCopy={onCopy}
+      revealPathAvailable={revealPathAvailable}
+      onRevealPath={onRevealPath}
     />
   );
   return (
@@ -775,6 +808,8 @@ export function WorkspaceView({
   now,
   onOpenCard,
   onRebindCard,
+  revealPathAvailable = false,
+  onRevealPath,
   onNotify,
 }: WorkspaceViewProps) {
   const { t } = useI18n();
@@ -1047,6 +1082,8 @@ export function WorkspaceView({
           onCleanup={(worktree) => setCleanupTarget({ repo, worktree })}
           onPrune={(worktree) => setPruneTarget({ repo, worktree })}
           onCopy={(text, kind) => void handleCopy(text, kind)}
+          revealPathAvailable={revealPathAvailable}
+          onRevealPath={onRevealPath}
           collapsed={collapsedRepos.has(repo.root)}
           onToggle={toggleRepo}
           idleExpanded={idleExpandedRepos.has(repo.root)}

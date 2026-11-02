@@ -643,15 +643,28 @@
 | 顺手修复 | `≤719px` 工具栏换行（搜索框独占一行 + 筛选/选择第二行）时 `.kb-toolbar` 仍固定 48px，第二行压在「工作区 / 工作线」视图内容上（v0.16 竖屏截图即存在）→ 改 `height:auto; min-height:48px`；视图 Tab 补 `aria-label`/`title`（窄屏只显示图标时仍可读） |
 | 生效方式 | 纯前端改动，**合入 main 后刷新看板即生效、无需重启 DSH**；`web/dist` 已重新构建；分支 `feat/workline-overview`（基于 `4de34cb`），**已合入 main（merge `9648a14`）** |
 
+## 1.42 v0.24.0（工作副本「在 Finder 中打开」：客户端桥 `host.capabilities` / `host.revealPath`，2026-11-02）
+
+| 项 | 结果 |
+|---|---|
+| 范围 | 客户端桥 + 前端（无服务端改动）：工作副本行新增「在 Finder 中打开」，经桥调用 DSH 客户端 Remote 把目录在 Finder / 文件管理器中定位；旧版宿主 / 独立预览没有该桥能力时不显示入口 |
+| DSH 侧确认（真实宿主 `0.2.1-rc.3`） | 客户端插件 `ctx.inject(['remote','remote.session'])` 后可调用 `session/canOpenWorkspacePath`（`{ok:true,value:boolean}`，无需会话）与 `session/openWorkspacePath({path,action:'reveal'})`（宿主 `verifyDesktopPath` 后执行 macOS `open -R`）；**不需要新增/修改 DSH 自身的桥 API**。cordis 要求 `remote` 与 `remote.session` 两个服务都显式 inject，否则访问 `ctx.remote.session` 抛 `cannot get property "remote.session" without inject`（首次真实宿主验证踩到并修复） |
+| 桥（父页面） | 新增 `host.capabilities` → `{revealPath:boolean}`（true 缓存 30s / false 缓存 5s）；`host.revealPath {path}` → `{ok:true}`；错误码 `REVEAL_BAD_PATH` / `REVEAL_UNAVAILABLE` / `REVEAL_FAILED`。权限边界：只接受绝对路径（POSIX `/…` 或 Windows `C:\…`），拒绝空值 / >1024 字符 / 控制字符 / 含 `..` 段，随后 DSH 宿主再 `verifyDesktopPath` 复核路径映射 |
+| Web | 工作副本路径行新增按钮（`IconFolder` + `workspace.revealInFinder`，中英各 3 键）；能力探测失败 / `UNKNOWN_METHOD` / 独立预览 → 不渲染按钮；点击前用 `web/src/lib/revealPath.ts` 精确校验路径属于服务端 `/git/workspaces` 工作区地图（仓库根 / 工作副本路径），不在集合内 toast「只允许打开看板工作副本目录」；失败 toast「无法在 Finder 中打开：{message}」 |
+| 测试 | 服务端 **308/308**（v0.23.0 基线 294 + 14 例 `test/client-reveal.test.mjs`：能力探测 / 缓存 / 调用参数 `{path, action:'reveal'}` / Windows 盘符 / 旧宿主降级 / 非桌面 / 非法路径 6 组 / 宿主拒绝与抛错映射 / 异源消息 / `UNKNOWN_METHOD`）；Web **35 文件 / 473 例**（+1 文件 6 例 `revealPath.test.ts`）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS 0/0 |
+| 真实 DSH 验收（宿主 `0.2.1-rc.3`，未重启；`client-hmr` 自动重载客户端 bundle rev `9fff0c220f58`） | headless Chromium + 真实 GUI（`http://127.0.0.1:58638/`）打开看板 → 工作区视图：两条工作副本行各出现「在 Finder 中打开」（`aria-label` 断言），`host.capabilities` → `{revealPath:true}`；点 `dsh kanban` 行的按钮 → 桥响应 `{ok:true}`，**macOS 窗口列表新增标题为「dsh kanban」的 Finder 窗口**（点击前 Finder 窗口 = 3×`rea L2`，点击后 = `dsh kanban` + 3×`rea L2`），`window.__DSH_KANBAN__.errors` 无新增；绕过前端直接以绝对路径 `/etc/hosts` 调桥被宿主拒绝 `REVEAL_FAILED / Path has no verified Host path`（第二道边界）。无桥场景：同源直接打开 `/dsh-kanban/`（`window.parent === window`，独立预览）→ 2 个工作副本行、`revealCount=0`、复制路径按钮仍在（功能不受影响） |
+| 截图 | `docs/assets/screens/workspace-reveal-finder.png`（真实宿主工作区视图 + 中英文「在 Finder 中打开」）、`workspace-reveal-hidden.png`（独立预览无桥：无按钮、复制路径仍在）、`finder-reveal-window.png`（点击后 Finder 定位到 dsh kanban 目录） |
+| 生效方式 | **纯客户端改动**：DSH 的 `client-hmr` 会检测 `lib/client.js` 变化并重载插件（已实测 bundle rev 自动更新），刷新看板即加载新 UI；不涉及服务端，不需要重启 DSH。分支 `feat/finder-reveal` |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
 
 ```
 $ npm test
-# tests 294
-# pass 294 / # fail 0
-# duration_ms ~14s
+# tests 308
+# pass 308 / # fail 0
+# duration_ms ~13s
 ```
 
 覆盖：`store`（原子写 / 串行队列 / revision / 损坏备份重建 / schema 迁移）、`domain`（状态列映射 / 规范化 / 种子 / 写原语 / 审批决策事件收集 / 会话运行失败与恢复回写）、`git`（卡片 Git 上下文：普通仓库 / detached / 分叉 + linked worktree / upstream 领先落后 / 主分支探测 / 工作树截断 / 提交上限 / 全部不可用原因 / `?cwd=` 候选采用与忽略）、`session-sync`（turn 失败判定口径 / 主会话过滤 / 同轮去重 / 监听器接线与容错）、`decisions`（追加格式 / 派生状态 / 筛选分页 / 坏行容忍 / 回填 / store 接线与日志失败中止）、`session-archive`（能力探测 / 预检 / 批量 / HTTP 降级 / 活动写入）、`routes`（CRUD / move / 乐观锁 409 / 审批 resolve / comments / session link / 同源 403 / SSE 首帧 / 静态资源防穿越与 SPA fallback / 决策日志与会话归档接口 / 卡片 Git 上下文接口）、`tools`（11 个工具 schema 与 execute）、`index`（插件注册、决策日志回填、会话运行失败监听接线）。
@@ -661,8 +674,8 @@ $ npm test
 ```
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
-> vite build     # dist: JS gzip ~137KB / CSS gzip ~18KB
-$ npm --prefix web run test    # vitest 34 文件 / 467 测试（v0.23.0：worklineOverview 29 例；另含 rebindDir 13 / worktreeCleanupNudge 9 / 会话归属 15 / sessionSuggest 20）
+> vite build     # dist: JS gzip ~147KB / CSS gzip ~19KB
+$ npm --prefix web run test    # vitest 35 文件 / 473 测试（v0.24.0：revealPath 6 例；v0.23.0：worklineOverview 29 例；另含 rebindDir 13 / worktreeCleanupNudge 9 / 会话归属 15 / sessionSuggest 20）
 $ npm --prefix web run lint:tokens
 # 11 个 CSS 文件：0 error / 0 warning
 ```
