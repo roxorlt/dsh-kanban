@@ -616,6 +616,13 @@ function normalizeWorkspaceUnavailable(raw: unknown): GitWorkspaceUnavailable | 
 /** 容错归一化清理结果（contract §13 的 `cleanup` 对象）。 */
 export function normalizeCleanupResult(raw: unknown): CleanupWorktreeResult {
   const payload = raw && typeof raw === 'object' ? (raw as Partial<CleanupWorktreeResult>) : {};
+  const affectedCards = Array.isArray(payload.affectedCards)
+    ? payload.affectedCards
+      .filter((item): item is { id: string; title: string } => Boolean(
+        item && typeof item === 'object' && typeof item.id === 'string' && item.id,
+      ))
+      .map((item) => ({ id: item.id, title: typeof item.title === 'string' ? item.title : item.id }))
+    : [];
   return {
     repoRoot: typeof payload.repoRoot === 'string' ? payload.repoRoot : '',
     worktreePath: typeof payload.worktreePath === 'string' ? payload.worktreePath : '',
@@ -626,6 +633,8 @@ export function normalizeCleanupResult(raw: unknown): CleanupWorktreeResult {
       typeof payload.trashRetentionDays === 'number' && payload.trashRetentionDays > 0
         ? payload.trashRetentionDays
         : 7,
+    // v0.25.0 ③：清理留痕卡片（旧服务端缺该字段 → 空数组，不谎报）
+    affectedCards,
   };
 }
 

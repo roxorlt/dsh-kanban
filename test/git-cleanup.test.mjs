@@ -522,3 +522,60 @@ test('cleanup：成功后工作区地图缓存立即失效（刷新后不再出�
   assert.equal(after.json.repos[0].worktrees.length, 1)
   assert.equal(after.json.repos[0].worktrees.some(row => row.path === realWt), false)
 })
+
+// ---------------- ③ 清理成功后给相关卡片/时间线留痕（v0.25.0） ----------------
+
+test('cleanup：清理成功后给 cwd 落在工作副本内的卡片写时间线留痕（含已完成卡片，不含归档卡）', async t => {
+  const { server, store } = await setupServer(t)
+  const { repo, wt, realWt } = await makeCleanupFixture(t, { branch: 'feat/trace' })
+  // 主仓库卡片：不属于被清理的工作副本，不该写留痕
+  await createCard(server, { cwd: repo })
+  await mkdir(join(wt, 'done-dir'), { recursive: true })
+  const doneCard = await createCard(server, { title: '已完成卡片', cwd: join(wt, 'done-dir'), status: 'done' })
+  // 已归档卡片：cwd 也落在工作副本内，但归档卡不写留痕
+  const archivedCard = await createCard(server, { title: '已归档卡片', cwd: join(wt, 'done-dir'), status: 'done' })
+  const archived = await api(server, `/api/kanban/cards/${archivedCard.id}?version=1`, { method: 'DELETE' })
+  assert.equal(archived.status, 200, archived.text)
+
+  const before = await api(server, '/api/kanban/state')
+  const res = await cleanup(server, { repoRoot: repo, worktreePath: wt })
+  assert.equal(res.status, 200, res.text)
+  assert.deepEqual(res.json.cleanup.affectedCards, [{ id: doneCard.id, title: '已完成卡片' }])
+  assert.ok(res.json.revision > before.json.revision, '留痕写入了新 revision')
+
+  // 卡片时间线新增一条 progress：data.kind / 回收站信息齐全，actor 是用户
+  const activities = await api(server, `/api/kanban/cards/${doneCard.id}/activities`)
+  assert.equal(activities.status, 200, activities.text)
+  const trace = activities.json.activities[0]
+  assert.equal(trace.type, 'progress')
+  assert.equal(trace.data.kind, 'worktree_cleaned')
+  assert.equal(trace.data.repoRoot, res.json.cleanup.repoRoot)
+  assert.equal(trace.data.worktreePath, realWt)
+  assert.equal(trace.data.trashedTo, res.json.cleanup.trashedTo)
+  assert.equal(trace.data.trashRetentionDays, 7)
+  assert.match(trace.text, /工作副本已清理/)
+  assert.match(trace.text, /回收站/)
+  assert.equal(trace.actor.kind, 'user')
+
+  // 归档卡不写；其它卡片也不写
+  const draft = await store.read()
+  assert.equal(draft.activities.some(item => item.cardId === archivedCard.id && item.data?.kind === 'worktree_cleaned'), false)
+  assert.equal(draft.activities.some(item => item.data?.kind === 'worktree_cleaned' && item.cardId !== doneCard.id), false)
+})
+
+test('cleanup：清理被拒绝时不留痕、revision 不变', async t => {
+  const { server } = await setupServer(t)
+  const { repo, wt } = await makeCleanupFixture(t, { branch: 'feat/trace-dirty' })
+  await mkdir(join(wt, 'done-dir'), { recursive: true })
+  const doneCard = await createCard(server, { title: '已完成卡片', cwd: join(wt, 'done-dir'), status: 'done' })
+  await writeFile(join(wt, 'a.txt'), 'changed\n', 'utf8')
+  const before = await api(server, '/api/kanban/state')
+
+  const refused = await cleanup(server, { repoRoot: repo, worktreePath: wt })
+  assert.equal(refused.status, 409)
+  assert.equal(refused.json.error.code, 'WORKTREE_DIRTY')
+  const activities = await api(server, `/api/kanban/cards/${doneCard.id}/activities`)
+  assert.equal(activities.json.activities.some(item => item.data?.kind === 'worktree_cleaned'), false)
+  const after = await api(server, '/api/kanban/state')
+  assert.equal(after.json.revision, before.json.revision)
+})

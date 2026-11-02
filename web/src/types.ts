@@ -606,6 +606,11 @@ export interface CleanupWorktreeResult {
   branchDeleted: boolean;
   /** 回收站保留天数（服务端契约固定 7） */
   trashRetentionDays: number;
+  /**
+   * v0.25.0 ③：清理成功后写入了「工作副本已清理」时间线留痕的卡片（未归档，
+   * cwd 落在被清理工作副本内）。旧服务端没有该字段 → undefined。
+   */
+  affectedCards?: { id: string; title: string }[];
 }
 
 // ------------------------------------------------ 回收站（v0.18，GET /git/trash 等）

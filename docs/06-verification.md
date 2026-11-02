@@ -656,14 +656,27 @@
 | 截图 | `docs/assets/screens/workspace-reveal-finder.png`（真实宿主工作区视图 + 中英文「在 Finder 中打开」）、`workspace-reveal-hidden.png`（独立预览无桥：无按钮、复制路径仍在）、`finder-reveal-window.png`（点击后 Finder 定位到 dsh kanban 目录） |
 | 生效方式 | **纯客户端改动**：DSH 的 `client-hmr` 会检测 `lib/client.js` 变化并重载插件（已实测 bundle rev 自动更新），刷新看板即加载新 UI；不涉及服务端，不需要重启 DSH。分支 `feat/finder-reveal`，**已合入 main（merge `03767c0`）** |
 
+## 1.43 v0.25.0（清理闭环：③ 清理留痕 + ⑯ 批量清理 + ⑱ 视图内可清理提醒，2026-11-02）
+
+| 项 | 结果 |
+|---|---|
+| 范围 | 按卡片 `card-facbab5d` 的 21 项盘点结论实施剩余 P0/P2 三项：P0 ③ 清理成功后给相关卡片时间线留痕（服务端）；P2 ⑯ 批量清理（只列安全项、逐项调用单接口，不新增 HTTP 接口）；P2 ⑱ 工作区视图内可清理提醒（24h 内可关闭、到期重现）。同卡确认 ⑬ 一卡多仓库归属永久移除；剩余 ⑰ 磁盘占用 / ⑲ 只拉可见仓库降轮询 / ㉑ Windows 权限继续待排期 |
+| 服务端 ③ | `lib/routes.js`：清理前采集「未归档 + cwd 落在目标工作副本内」的卡片（含 `done`/`canceled` 终态卡，归档卡不算），清理成功后在同一笔 `store.update` 里给每张卡写一条 `progress` 节点（`data.kind='worktree_cleaned'`，带 `repoRoot`/`worktreePath`/`trashedTo`/`trashRetentionDays`/`branchName`/`branchDeleted`），并 `touchCard` 前移 `updatedAt`/`version`；留痕写入失败只记日志、不回滚清理。响应新增 `cleanup.affectedCards`，`revision` 为留痕后的最新值（无相关卡片时与请求前一致，旧客户端不受影响） |
+| 前端 ⑯ | 新增 `web/src/lib/worktreeBatchCleanup.ts`（`collectBatchCleanupCandidates` 复用 `evaluateWorktreeCleanup` 的安全判定：非主工作副本 / 未锁定 / 目录未失效 / 已并入主线 / 干净 / 无未完成卡片 / 无运行中会话 cwd；`groupBatchCleanupCandidates` 分组；失败码→文案）+ `web/src/components/CleanupBatchDialog.tsx`（按仓库分组的候选预览、可选删除已合并分支、逐项结果）；WorkspaceView 顶部「批量清理（N）」入口，确认后**逐项**调用 `POST /git/worktrees/cleanup`（服务端逐项再校验，不提供任何带丢失风险的批量入口），单项失败不中断后续项 |
+| 前端 ⑱ | 工作区顶部内联提醒「有 N 个工作副本可安全清理」+「批量清理」+ 关闭按钮；关闭时间写 localStorage，`CLEANUP_NUDGE_DISMISS_TTL_MS`（24h）后重新出现；不弹窗、不打断，候选基于全部仓库、不受「只看当前筛选」影响 |
+| 契约/文档 | `docs/contracts/02-http-api.md` §13（③ 留痕语义与 `affectedCards`/`revision` 兼容、⑯ 批量=逐项调用单接口的编排约定）；`docs/contracts/01-data-model.md` §3 时间线节点增 `worktree_cleaned`；CHANGELOG / README / 根与 `web` 的 `package.json` 升到 v0.25.0 |
+| 测试 | 服务端 **310/310**（v0.24.0 基线 308 + 2 例 `test/git-cleanup.test.mjs`：清理成功后留痕含已完成卡片 / 不含归档卡 / revision 增加；清理被拒绝时不留痕、revision 不变）；Web **36 文件 / 485 例**（+1 文件 12 例 `worktreeBatchCleanup.test.ts`：安全候选与全部排除项 / 运行中会话 cwd / 分组顺序 / 提醒 24h TTL / 失败文案 / `affectedCards` 归一化；另更新 `useWorkspaces.test.ts` 的 `normalizeCleanupResult` 期望）；`tsc --noEmit` 0 error、`vite build` 通过（JS gzip ~149KB / CSS gzip ~19KB）、令牌 lint **11 个 CSS 0 error / 0 warning** |
+| 验收口径 | 用户确认「精简验收」：单测 + 构建 + CHANGELOG/README，本轮**不做**隔离 dev-server 截图与真实宿主复验；含服务端改动，合并后需重启 DSH 才生效（客户端部分刷新看板即可） |
+| 生效方式 | 服务端 + 客户端：合入 main 后需重启 DSH（`/health` version 0.25.0），`web/dist` 已重新构建；分支 `feat/workspace-cleanup-closure`（基于 `65cbf6c`） |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
 
 ```
 $ npm test
-# tests 308
-# pass 308 / # fail 0
+# tests 310
+# pass 310 / # fail 0
 # duration_ms ~13s
 ```
 
@@ -675,7 +688,7 @@ $ npm test
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
 > vite build     # dist: JS gzip ~147KB / CSS gzip ~19KB
-$ npm --prefix web run test    # vitest 35 文件 / 473 测试（v0.24.0：revealPath 6 例；v0.23.0：worklineOverview 29 例；另含 rebindDir 13 / worktreeCleanupNudge 9 / 会话归属 15 / sessionSuggest 20）
+$ npm --prefix web run test    # vitest 36 文件 / 485 测试（v0.25.0：worktreeBatchCleanup 12 例；v0.24.0：revealPath 6 例；v0.23.0：worklineOverview 29 例；另含 rebindDir 13 / worktreeCleanupNudge 9 / 会话归属 15 / sessionSuggest 20）
 $ npm --prefix web run lint:tokens
 # 11 个 CSS 文件：0 error / 0 warning
 ```

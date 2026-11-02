@@ -493,7 +493,7 @@ describe('normalizeGitWorkspaces v0.17 字段', () => {
 });
 
 describe('normalizeCleanupResult', () => {
-  it('归一化清理结果并对缺省值兜底', () => {
+  it('归一化清理结果并对缺省值兜底（含 v0.25.0 ③ affectedCards）', () => {
     expect(normalizeCleanupResult(null)).toEqual({
       repoRoot: '',
       worktreePath: '',
@@ -501,6 +501,7 @@ describe('normalizeCleanupResult', () => {
       branchName: null,
       branchDeleted: false,
       trashRetentionDays: 7,
+      affectedCards: [],
     });
     expect(
       normalizeCleanupResult({
@@ -510,6 +511,7 @@ describe('normalizeCleanupResult', () => {
         branchName: 'feat/x',
         branchDeleted: true,
         trashRetentionDays: 7,
+        affectedCards: [{ id: 'card-1', title: 'A' }],
       }),
     ).toEqual({
       repoRoot: '/repo',
@@ -518,6 +520,7 @@ describe('normalizeCleanupResult', () => {
       branchName: 'feat/x',
       branchDeleted: true,
       trashRetentionDays: 7,
+      affectedCards: [{ id: 'card-1', title: 'A' }],
     });
   });
 

@@ -305,6 +305,10 @@ interface StoreFile {
 
 // 恢复节点：type='progress'，actor=system
 { kind: 'session_turn_recovered', sessionId: string, turn: number, seq?: number }
+
+// 工作副本清理留痕（v0.25.0 ③）：type='progress'，actor=发起清理的用户
+{ kind: 'worktree_cleaned', repoRoot: string, worktreePath: string, trashedTo: string,
+  trashRetentionDays: number, branchName: string | null, branchDeleted: boolean }
 ```
 
 规则：

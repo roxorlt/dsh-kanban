@@ -6,7 +6,8 @@
  * - 每个仓库内：主工作副本固定第一、活跃工作副本按优先级排序、空闲工作副本收进默认收起的子分组；
  * - 顶部可切换卡片范围（只看当前筛选 / 显示全部，持久化）；
  * - 底部可收起「回收站（N）」：恢复 / 彻底删除（v0.18）；
- * - 清理（Phase B）两段式确认 + 软删除；运行中会话所在工作副本禁止清理（客户端安全层）。
+ * - 清理（Phase B）两段式确认 + 软删除；运行中会话所在工作副本禁止清理（客户端安全层）；
+ * - v0.25.0：顶部「批量清理」只列安全项（⑯）+ 视图内可清理提醒（⑱，24h 内可关闭）。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Card, GitTrashEntry, SessionRow } from '../types';
@@ -15,7 +16,7 @@ import { useI18n } from '../i18n';
 import type { I18nKey, Lang, Translate } from '../i18n';
 import { STATUS_TONE } from '../lib/status';
 import { copyText } from '../lib/clipboard';
-import { IconChevronDown, IconCopy, IconFolder } from './Icons';
+import { IconChevronDown, IconClose, IconCopy, IconFolder } from './Icons';
 import { shortenPath } from '../lib/forkGraph';
 import { formatDateTime } from '../lib/time';
 import {
@@ -43,6 +44,9 @@ import type {
   WorktreeCleanupCheck,
   WorktreeStatusBadge,
 } from '../lib/useWorkspaces';
+import { collectBatchCleanupCandidates, shouldShowCleanupNudge } from '../lib/worktreeBatchCleanup';
+import { CleanupBatchDialog } from './CleanupBatchDialog';
+import type { BatchCleanupOutcome, BatchCleanupOutcomeItem } from './CleanupBatchDialog';
 import { CleanupWorktreeDialog } from './CleanupWorktreeDialog';
 import type { CleanupConfirmOptions, CleanupOutcome, CleanupTarget } from './CleanupWorktreeDialog';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -78,9 +82,14 @@ const COLLAPSED_REPOS_STORAGE_KEY = 'dsh-kanban.workspaces.collapsed';
 const UNASSIGNED_COLLAPSED_STORAGE_KEY = 'dsh-kanban.workspaces.unassigned-collapsed';
 const TRASH_COLLAPSED_STORAGE_KEY = 'dsh-kanban.workspaces.trash-collapsed';
 const SCOPE_STORAGE_KEY = 'dsh-kanban.workspaces.scope';
+/** v0.25.0 ⑱：关闭「可安全清理」提醒的时间（毫秒时间戳；24h 后再次出现）。 */
+const CLEANUP_NUDGE_DISMISSED_STORAGE_KEY = 'dsh-kanban.workspaces.cleanup-nudge-dismissed-at';
 
 /** 服务端每仓库最多返回 12 个工作副本；被截断时给出提示（契约 §12 v0.20）。 */
 const WORKTREE_DISPLAY_LIMIT = 12;
+
+/** 回收站保留天数（服务端契约固定 7 天，批量清理的提示文案用）。 */
+const CLEANUP_TRASH_RETENTION_DAYS = 7;
 
 /** 缺省会话列表（保持引用稳定，避免分组 memo 失效）。 */
 const NO_SESSIONS: SessionRow[] = [];
@@ -169,6 +178,26 @@ function storeWorkspaceScope(scope: WorkspaceCardScope): void {
     localStorage.setItem(SCOPE_STORAGE_KEY, scope);
   } catch {
     // 忽略
+  }
+}
+
+/** v0.25.0 ⑱：读取上次关闭「可清理」提醒的时间；没关过 / 存储不可用返回 null。 */
+function readCleanupNudgeDismissedAt(): number | null {
+  try {
+    const raw = localStorage.getItem(CLEANUP_NUDGE_DISMISSED_STORAGE_KEY);
+    const parsed = raw === null ? NaN : Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeCleanupNudgeDismissedAt(at: number | null): void {
+  try {
+    if (at === null) localStorage.removeItem(CLEANUP_NUDGE_DISMISSED_STORAGE_KEY);
+    else localStorage.setItem(CLEANUP_NUDGE_DISMISSED_STORAGE_KEY, String(at));
+  } catch {
+    // 隐私模式/配额满：忽略，本次会话内仍可关闭
   }
 }
 
@@ -827,6 +856,10 @@ export function WorkspaceView({
   const [trashAction, setTrashAction] = useState<TrashActionState | null>(null);
   const [trashBusy, setTrashBusy] = useState(false);
   const [trashError, setTrashError] = useState<string | null>(null);
+  /** v0.25.0 ⑯：批量清理对话框（打开时快照安全候选）。 */
+  const [batchCleanupOpen, setBatchCleanupOpen] = useState(false);
+  /** v0.25.0 ⑱：上次关闭「可清理」提醒的时间（null = 从未关闭）。 */
+  const [cleanupNudgeDismissedAt, setCleanupNudgeDismissedAt] = useState<number | null>(readCleanupNudgeDismissedAt);
 
   const toggleRepo = useCallback((root: string) => {
     setCollapsedRepos((prev) => {
@@ -906,6 +939,20 @@ export function WorkspaceView({
     return map;
   }, [allGroups.repos]);
 
+  /**
+   * v0.25.0 ⑯/⑱：可安全清理的工作副本（用全部仓库判断，不受「只看当前筛选」影响；
+   * 与单条清理同一套安全判定 `evaluateWorktreeCleanup`，运行中会话 cwd 由客户端兜底）。
+   */
+  const batchCandidates = useMemo(
+    () => collectBatchCleanupCandidates(sortRepoGroups(allGroups.repos), { sessionCwds: runningSessionCwds }),
+    [allGroups.repos, runningSessionCwds],
+  );
+  // 不缓存：视图每 15s 随 App 时钟重渲染，关闭满 24h 后提醒能自然再次出现（⑱「定期」）
+  const cleanupNudgeVisible = workspaces.loaded && shouldShowCleanupNudge({
+    count: batchCandidates.length,
+    dismissedAt: cleanupNudgeDismissedAt,
+  });
+
   const handleCleanupConfirm = useCallback(
     async (options: CleanupConfirmOptions): Promise<CleanupOutcome> => {
       if (!cleanupTarget) return { ok: false };
@@ -917,13 +964,17 @@ export function WorkspaceView({
           deleteBranch: options.deleteBranch,
           confirmLoss: options.confirmLoss,
         });
+        // v0.25.0 ③：服务端给 cwd 落在该工作副本里的卡片写了时间线留痕
+        const affectedCount = result.affectedCards?.length ?? 0;
         const message =
-          result.branchDeleted && result.branchName
-            ? t('workspace.cleanupDoneBranch', {
-                branch: result.branchName,
-                days: result.trashRetentionDays,
-              })
-            : t('workspace.cleanupDone', { days: result.trashRetentionDays });
+          affectedCount > 0
+            ? t('workspace.cleanupDoneCards', { days: result.trashRetentionDays, count: affectedCount })
+            : result.branchDeleted && result.branchName
+              ? t('workspace.cleanupDoneBranch', {
+                  branch: result.branchName,
+                  days: result.trashRetentionDays,
+                })
+              : t('workspace.cleanupDone', { days: result.trashRetentionDays });
         setCleanupTarget(null);
         onNotify?.(message, 'success');
         workspaces.reload();
@@ -939,6 +990,62 @@ export function WorkspaceView({
     },
     [cleanupTarget, onNotify, refreshTrash, t, workspaces],
   );
+
+  /**
+   * v0.25.0 ⑯：批量清理 = 逐项调用单条清理接口（服务端会再校验一次），
+   * 因此每个工作副本都走同一套安全规则，并各自带 ③ 的卡片时间线留痕。
+   * 单项失败不中断后续项，逐项结果回给对话框展示。
+   */
+  const handleBatchCleanupConfirm = useCallback(
+    async (options: { deleteBranch: boolean }): Promise<BatchCleanupOutcome> => {
+      const results: BatchCleanupOutcomeItem[] = [];
+      let cleanedCount = 0;
+      for (const candidate of batchCandidates) {
+        const label = formatWorktreeLabel(candidate.repo, candidate.worktree);
+        try {
+          await api.cleanupWorktree({
+            repoRoot: candidate.repo.root,
+            worktreePath: candidate.worktree.path,
+            deleteBranch: options.deleteBranch,
+            confirmLoss: false,
+          });
+          cleanedCount += 1;
+          results.push({ repoRoot: candidate.repo.root, worktreePath: candidate.worktree.path, label, ok: true });
+        } catch (error) {
+          results.push({
+            repoRoot: candidate.repo.root,
+            worktreePath: candidate.worktree.path,
+            label,
+            ok: false,
+            reason: cleanupErrorReason(error),
+            message: error instanceof Error ? error.message : undefined,
+          });
+        }
+      }
+      const failedCount = results.length - cleanedCount;
+      if (cleanedCount > 0) {
+        onNotify?.(
+          failedCount === 0
+            ? t('workspace.batchCleanupResultAllOk', { count: cleanedCount, days: CLEANUP_TRASH_RETENTION_DAYS })
+            : t('workspace.batchCleanupPartial', { done: cleanedCount, failed: failedCount }),
+          failedCount === 0 ? 'success' : 'info',
+        );
+        workspaces.reload();
+        void refreshTrash();
+      } else if (failedCount > 0) {
+        onNotify?.(t('workspace.batchCleanupPartial', { done: 0, failed: failedCount }), 'error');
+      }
+      return { cleanedCount, failedCount, results };
+    },
+    [batchCandidates, onNotify, refreshTrash, t, workspaces],
+  );
+
+  /** v0.25.0 ⑱：关闭视图内「可清理」提醒，24 小时内不再出现。 */
+  const dismissCleanupNudge = useCallback(() => {
+    const at = Date.now();
+    setCleanupNudgeDismissedAt(at);
+    storeCleanupNudgeDismissedAt(at);
+  }, []);
 
   const handleCopy = useCallback(
     async (text: string, kind: 'path' | 'branch'): Promise<void> => {
@@ -1065,7 +1172,41 @@ export function WorkspaceView({
             {t('workspace.scopeAll')}
           </button>
         </div>
+        {batchCandidates.length > 0 ? (
+          <button
+            type="button"
+            className="kb-btn kb-btn--sm kb-btn--outline kb-workspace__batch-btn"
+            onClick={() => setBatchCleanupOpen(true)}
+          >
+            {t('workspace.batchCleanup')}（{batchCandidates.length}）
+          </button>
+        ) : null}
       </header>
+      {cleanupNudgeVisible ? (
+        <div className="kb-workspace__cleanup-nudge" role="status">
+          <span className="kb-workspace__cleanup-nudge-text">
+            {t('workspace.cleanupNudgeBatch', { count: batchCandidates.length })}
+          </span>
+          <button
+            type="button"
+            className="kb-btn kb-btn--sm kb-btn--primary"
+            onClick={() => setBatchCleanupOpen(true)}
+          >
+            {t('workspace.cleanupNudgeBatchAction')}
+          </button>
+          <button
+            type="button"
+            className="kb-btn kb-btn--icon kb-btn--ghost"
+            aria-label={t('workspace.cleanupNudgeDismiss')}
+            title={t('workspace.cleanupNudgeDismiss')}
+            onClick={dismissCleanupNudge}
+          >
+            <span className="kb-icon">
+              <IconClose />
+            </span>
+          </button>
+        </div>
+      ) : null}
       {scopeCards.length === 0 ? <p className="kb-workspace__empty">{t('workspace.emptyFiltered')}</p> : null}
       {!displayRepos.length && scopeCards.length > 0 ? (
         <p className="kb-workspace__hint">{t('workspace.noReposHint')}</p>
@@ -1130,6 +1271,13 @@ export function WorkspaceView({
           target={cleanupTarget}
           onConfirm={handleCleanupConfirm}
           onClose={() => setCleanupTarget(null)}
+        />
+      ) : null}
+      {batchCleanupOpen ? (
+        <CleanupBatchDialog
+          candidates={batchCandidates}
+          onConfirm={handleBatchCleanupConfirm}
+          onClose={() => setBatchCleanupOpen(false)}
         />
       ) : null}
       {trashDialog}
