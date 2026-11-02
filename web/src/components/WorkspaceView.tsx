@@ -24,6 +24,7 @@ import {
   countBoundSessions,
   evaluateWorktreeCleanup,
   formatLastCommitRelative,
+  formatWorktreeLabel,
   groupCardsByWorktree,
   previewWorkspaceCards,
   pruneErrorReason,
@@ -76,15 +77,6 @@ const WORKTREE_DISPLAY_LIMIT = 12;
 
 /** 缺省会话列表（保持引用稳定，避免分组 memo 失效）。 */
 const NO_SESSIONS: SessionRow[] = [];
-
-/** 工作副本展示路径：主工作副本用仓库名；子工作副本用相对仓库根的路径；兜底取末两段。 */
-function worktreeLabel(repo: WorkspaceRepoGroup, worktree: WorkspaceWorktreeGroup): string {
-  const root = repo.root.replace(/\/+$/, '');
-  const path = worktree.path.replace(/\/+$/, '');
-  if (path === root) return repo.name;
-  if (path.startsWith(`${root}/`)) return path.slice(root.length + 1);
-  return shortenPath(worktree.path);
-}
 
 /** Phase A 状态徽标的色调：合并/改动给状态色，远端多数保持中性。 */
 function badgeClass(badge: WorktreeStatusBadge): string {
@@ -454,7 +446,7 @@ function WorktreeRow({
         <div className="kb-workspace__wt-meta">
           <span className="kb-workspace__path-line">
             <span className="kb-workspace__path" title={worktree.path}>
-              {worktreeLabel(repo, worktree)}
+              {formatWorktreeLabel(repo, worktree)}
             </span>
             <button
               type="button"

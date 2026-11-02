@@ -1,0 +1,545 @@
+/* lint-tokens-ignore: global-sheet */
+/* 「工作线」总览视图（v0.23.0，方案 2：按项目 / 仓库分组列工作线） */
+
+.kb-worklines {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px var(--kb-pad-x) 20px;
+}
+
+.kb-worklines__summary {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-worklines__hint {
+  flex: none;
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-worklines__empty {
+  flex: none;
+  margin: 0;
+  padding: 40px 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- 仓库块 */
+
+.kb-worklines__repo {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-card);
+  background: var(--kb-surface-card);
+  overflow: hidden;
+}
+
+.kb-worklines__repo--unassigned {
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-worklines__repo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+  padding: 9px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent);
+}
+
+/* 仓库小图标：纯 CSS（主体 + 上方小标签，与「工作区」视图的文件夹图标同形） */
+.kb-worklines__repo-icon {
+  position: relative;
+  flex: none;
+  align-self: center;
+  width: 14px;
+  height: 11px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: 2.5px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-worklines__repo-icon::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: -3px;
+  width: 7px;
+  height: 3px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.kb-worklines__repo-icon--muted {
+  border-color: var(--dsw-alias-label-caption);
+  opacity: 0.6;
+}
+
+.kb-worklines__repo-icon--muted::before {
+  border-color: var(--dsw-alias-label-caption);
+}
+
+.kb-worklines__repo-name {
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-worklines__repo-meta,
+.kb-worklines__repo-projects {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-worklines__truncated {
+  color: var(--dsw-alias-state-warn-label);
+  font: var(--dsw-font-xxxs-11);
+}
+
+/* ---------------------------------------------------------------- 工作线行 */
+
+.kb-worklines__rows {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kb-worklines__item {
+  min-width: 0;
+}
+
+.kb-worklines__item + .kb-worklines__item {
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+/* 整行 button：hover 整行底色，选中行左侧色条 + 淡底；键盘 Enter/Space 同效 */
+.kb-worklines__row {
+  display: grid;
+  grid-template-columns: 8px minmax(160px, 1.3fr) auto minmax(150px, 0.9fr) auto minmax(110px, 0.8fr);
+  grid-template-areas: 'dot main status relation remote location';
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-worklines__row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-worklines__row:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+}
+
+.kb-worklines__row--selected {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-tertiary) 60%, transparent);
+  box-shadow: inset 2px 0 0 var(--dsw-alias-state-business-primary);
+}
+
+.kb-worklines__row--selected:hover {
+  background: var(--dsw-alias-state-business-tertiary);
+}
+
+.kb-worklines__dot {
+  grid-area: dot;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-label-caption);
+}
+
+.kb-worklines__dot--active {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.kb-worklines__dot--merged {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.kb-worklines__dot--stalled {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.kb-worklines__dot--unknown {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--dsw-alias-label-caption);
+}
+
+.kb-worklines__main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kb-worklines__name-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-width: 0;
+}
+
+.kb-worklines__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-worklines__selected-tag {
+  flex: none;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+  font: var(--dsw-font-xxxs-strong-11);
+}
+
+.kb-worklines__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-worklines__running {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.kb-worklines__dirty {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.kb-worklines__last {
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- 状态 / 线上 */
+
+.kb-worklines__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.kb-worklines__badge--active {
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.kb-worklines__badge--merged {
+  background: var(--dsw-alias-state-success-tertiary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.kb-worklines__badge--stalled {
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.kb-worklines__badge--unknown {
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l2);
+}
+
+.kb-worklines__badge--ok {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.kb-worklines__badge--warn {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.kb-worklines__badge--muted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* 状态徽标摆第 3 列、线上徽标摆第 5 列（显式 grid-area，与 DOM 顺序解耦） */
+.kb-worklines__badge--status {
+  grid-area: status;
+}
+
+.kb-worklines__badge--remote {
+  grid-area: remote;
+}
+
+/* ---------------------------------------------------------------- 相对主线 */
+
+.kb-worklines__relation {
+  grid-area: relation;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kb-worklines__bar {
+  position: relative;
+  flex: none;
+  width: 72px;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);
+  overflow: hidden;
+}
+
+.kb-worklines__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--dsw-alias-label-caption);
+  transition: width var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-worklines__bar-fill--active {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.kb-worklines__bar-fill--merged {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.kb-worklines__bar-fill--stalled {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.kb-worklines__bar-fill--unknown {
+  background: transparent;
+}
+
+.kb-worklines__relation-text {
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- 工作副本位置 */
+
+.kb-worklines__location {
+  grid-area: location;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-caption);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- 未指定 */
+
+.kb-worklines__unassigned {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.kb-worklines__unassigned-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kb-worklines__unassigned-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-worklines__unassigned-card:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.kb-worklines__unassigned-card:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -2px;
+}
+
+.kb-worklines__unassigned-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-worklines__unassigned-reason {
+  flex: none;
+}
+
+/* ---------------------------------------------------------- 「只看工作线」提示条 */
+
+.kb-worklines-filter {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 8px var(--kb-pad-x) 0;
+  padding: 6px 8px 6px 12px;
+  border: 0.5px solid var(--dsw-alias-state-business-primary);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-worklines-filter__text {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.kb-worklines-filter .kb-btn {
+  flex: none;
+  margin-left: auto;
+}
+
+/* ---------------------------------------------------------------- 窄屏 */
+
+@media (max-width: 960px) {
+  .kb-worklines__row {
+    grid-template-columns: 8px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'dot main status'
+      'dot relation remote'
+      '. location location';
+    align-items: start;
+    gap: 4px 10px;
+    padding: 10px 12px;
+  }
+
+  .kb-worklines__dot {
+    margin-top: 5px;
+  }
+
+  .kb-worklines__relation {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
+  .kb-worklines__location {
+    padding-top: 2px;
+  }
+}
+
+@media (max-width: 719px) {
+  .kb-worklines {
+    padding: 10px 12px 16px;
+  }
+
+  .kb-worklines__repo-head {
+    gap: 2px 8px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .kb-worklines__row {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .kb-worklines-filter {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  .kb-worklines__unassigned {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .kb-worklines__bar {
+    width: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kb-worklines__row,
+  .kb-worklines__bar-fill,
+  .kb-worklines__unassigned-card {
+    transition: none;
+  }
+}

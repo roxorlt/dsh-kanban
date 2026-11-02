@@ -629,15 +629,29 @@
 | 真实数据验证 | 手动回填 13 张 backlog 卡（dsh-kanban→ws 9a9515a1…；rea L2→ws a0f27190…）后：活跃 28 张中 workspace 覆盖 4→17、cwd 18→24、backlog workspace/cwd 14/14；重启后启动回填会把剩余旧卡（含 done）自动补齐 |
 | 生效方式 | 含服务端改动，**需重启 DSH 后生效**；分支 `feat/binding-backfill`（基于 `66da715`），**已合入 main（merge `7c0da1d`）** |
 
+## 1.41 v0.23.0（「工作线」总览视图 方案 2 + 390 竖屏工具栏高度修复，2026-11-02）
+
+| 项 | 结果 |
+|---|---|
+| 范围 | 纯前端（无服务端改动）：新增工具栏第三个视图 Tab「工作线」（快捷键 `W`），按「项目 / 仓库」两层分组列工作线；点一条工作线 → 看板只看这条线卡片 + 提示条一键恢复；顺手修复 390 竖屏工具栏换行高度 |
+| 数据来源 | 全部复用已有只读接口：`POST /git/workspaces`（仓库 / 工作副本 / 相对主线 ahead·behind / upstream / dirty / 最近提交 / `mergedIntoBase`）+ 卡片 `cwd` 映射（`groupCardsByWorktree`，含 v0.21「按会话归属」兜底）；不新增 HTTP 接口、不新增卡片字段 |
+| 纯逻辑 | 新增 `web/src/lib/worklineOverview.ts`：`buildWorklineOverview`（仓库分组 + 未指定原因）、`buildWorklineRow`（状态四档 / 改动条 / 线上 / 位置 / 卡片数 / 最近改动）、`deriveWorklineStatus`（已并入主线 > 进行中 > 停滞 > 无法判断）、`worklineRelationText`、排序、`findWorklineRow` / `selectWorklineCard`（点行筛选）；`formatWorktreeLabel` 从 `WorkspaceView` 提到 `lib/useWorkspaces.ts` 共用 |
+| UI | 新增 `web/src/components/WorklineView.tsx` + `web/src/styles/worklines.css`（11 个 CSS 文件，令牌 lint 0/0）：组头（仓库名 / 缩短路径 / 工作线数 / 进行中卡片数 / 项目 / 截断提示）、工作线行（状态点 + 分支 + 次级信息 + 状态徽标 + 相对主线细条 + 线上徽标 + 工作副本位置）、未指定块；中英 i18n 各 +44 键（`worklines.*` 42 + 视图 Tab / 快捷键 2）；App/Toolbar 接入第四视图，看板/列表/工作区共用筛选提示条（`WorklineFilterBar`） |
+| 测试 | Web **34 文件 / 467 例**（v0.22.1 基线 33/438 + 29 例 `worklineOverview.test.ts`）；`tsc --noEmit` 0 error、`vite build` 通过（JS gzip ~147KB / CSS gzip ~19KB）、令牌 lint **11 个 CSS 0 error / 0 warning**；服务端无改动 **294/294** 回归通过 |
+| 浏览器验证（隔离 dev-server `:4631` + 演示仓库 + headless Chrome/Playwright） | 演示环境：`scripts/demo-git-repo.mjs` 造 2 仓库（repo / other）+ 6 个工作副本，含已并入主线（main）、进行中（feat/graph，2 张卡）、停滞（feat/long，0 卡）、无法判断（`chore/stale` 已删目录，prunable）、线上分叉（main：7 处没推送 · 落后 1）、无远端（feat/long、feat/other）、非 git 目录与无 cwd 卡片。**26 项断言全过**：摘要「2 个仓库 · 6 条工作线 · 2 条在进行」；分组与排序（repo → other → 未指定，行按 进行中 → 停滞 → 已并入 → 无法判断）；四档状态与文案、多/少组合、线上徽标、工作副本相对路径、卡片数与最近改动；点 feat/graph → 看板只剩 2 张卡片 + 提示条「只看工作线 feat/graph · 2 张卡片」、选中行高亮 `aria-pressed=true`、回到工作线视图保留选中；「显示全部卡片」恢复 7 张；快捷键 W/B；1440×900 亮/暗、390×844 无横向溢出且可点；console error 0 / pageerror 0 / 4xx 0 |
+| 截图 | `docs/assets/screens/workline-overview-light.png`（1440 亮）、`workline-overview-dark.png`（1440 暗）、`workline-overview-390.png`（390 亮）、`workline-filtered-board.png`（点行后看板只看这条线 + 提示条）、`workline-overview-selected.png`（回到工作线视图的选中行） |
+| 顺手修复 | `≤719px` 工具栏换行（搜索框独占一行 + 筛选/选择第二行）时 `.kb-toolbar` 仍固定 48px，第二行压在「工作区 / 工作线」视图内容上（v0.16 竖屏截图即存在）→ 改 `height:auto; min-height:48px`；视图 Tab 补 `aria-label`/`title`（窄屏只显示图标时仍可读） |
+| 生效方式 | 纯前端改动，**合入 main 后刷新看板即生效、无需重启 DSH**；`web/dist` 已重新构建；分支 `feat/workline-overview`（基于 `4de34cb`），**待合入 main** |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
 
 ```
 $ npm test
-# tests 259
-# pass 259 / # fail 0
-# duration_ms ~17s
+# tests 294
+# pass 294 / # fail 0
+# duration_ms ~14s
 ```
 
 覆盖：`store`（原子写 / 串行队列 / revision / 损坏备份重建 / schema 迁移）、`domain`（状态列映射 / 规范化 / 种子 / 写原语 / 审批决策事件收集 / 会话运行失败与恢复回写）、`git`（卡片 Git 上下文：普通仓库 / detached / 分叉 + linked worktree / upstream 领先落后 / 主分支探测 / 工作树截断 / 提交上限 / 全部不可用原因 / `?cwd=` 候选采用与忽略）、`session-sync`（turn 失败判定口径 / 主会话过滤 / 同轮去重 / 监听器接线与容错）、`decisions`（追加格式 / 派生状态 / 筛选分页 / 坏行容忍 / 回填 / store 接线与日志失败中止）、`session-archive`（能力探测 / 预检 / 批量 / HTTP 降级 / 活动写入）、`routes`（CRUD / move / 乐观锁 409 / 审批 resolve / comments / session link / 同源 403 / SSE 首帧 / 静态资源防穿越与 SPA fallback / 决策日志与会话归档接口 / 卡片 Git 上下文接口）、`tools`（11 个工具 schema 与 execute）、`index`（插件注册、决策日志回填、会话运行失败监听接线）。
@@ -648,14 +662,14 @@ $ npm test
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
 > vite build     # dist: JS gzip ~137KB / CSS gzip ~18KB
-$ npm --prefix web run test    # vitest 31 文件 / 412 测试（v0.21.0：rebindDir 13 / worktreeCleanupNudge 9 / 会话归属 15；另含 sessionSuggest 20 例）
+$ npm --prefix web run test    # vitest 34 文件 / 467 测试（v0.23.0：worklineOverview 29 例；另含 rebindDir 13 / worktreeCleanupNudge 9 / 会话归属 15 / sessionSuggest 20）
 $ npm --prefix web run lint:tokens
-# 10 个 CSS 文件：0 error / 0 warning
+# 11 个 CSS 文件：0 error / 0 warning
 ```
 
 ### 2.3 令牌规范
 
-`dsh-ui-spec` 的 `lint-tokens.mjs` 对 10 个 CSS 文件 0 error / 0 warning；`design/lint` 抽出的 mockup 组件样式同样 0/0。
+`dsh-ui-spec` 的 `lint-tokens.mjs` 对 11 个 CSS 文件 0 error / 0 warning；`design/lint` 抽出的 mockup 组件样式同样 0/0。
 
 ## 3. 端到端验证
 

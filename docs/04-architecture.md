@@ -237,7 +237,7 @@ sequenceDiagram
 | `web/src/lib/worklineSummary.ts` | 「工作线」结论纯函数：`buildWorklineStatus`（位置 / 与主线 / 与线上）供详情与徽标共用 + `buildWorklineSummary`（含图计数）（v0.14.1/v0.15） |
 | `web/src/lib/useWorklineStatuses.ts` | 看板批量拉取工作线摘要：cwd 去重、400ms 防抖、≤32/批、15s 缓存、20s 可见刷新、失败静默未知（v0.15） |
 | `web/src/components/WorklineBadge.tsx` | 卡片/列表行「工作线」徽标：彩点 + 分支 + 关系/线上短语，仅非主线 feature 显示（v0.15） |
-| `web/src/lib/useWorkspaces.ts` | 「工作区」视图数据：cwd 去重批量拉取、15s 缓存、20s 可见刷新；`groupCardsByWorktree` 按服务端 `dirs[]` 精确归组；v0.21.0 增 `findWorktreeForCwd`、会话 cwd 兜底归组（`sessionAttributed`）、清理判定过滤终态卡片（v0.16/v0.21.0） |
+| `web/src/lib/useWorkspaces.ts` | 「工作区」视图数据：cwd 去重批量拉取、15s 缓存、20s 可见刷新；`groupCardsByWorktree` 按服务端 `dirs[]` 精确归组；v0.21.0 增 `findWorktreeForCwd`、会话 cwd 兜底归组（`sessionAttributed`）、清理判定过滤终态卡片；v0.23.0 增 `formatWorktreeLabel`（工作区 / 工作线视图共用的工作副本展示名）（v0.16/v0.21.0/v0.23.0） |
 | `web/src/components/WorkspaceView.tsx` | 「工作区」视图：按仓库分块、工作副本行（分支/Phase A 合并/远端/改动状态/清理按钮/路径/卡片 mini 列表/会话数）、未指定组；v0.21.0 新 props `sessions` / `onRebindCard`，「按会话归属」标签与「未指定」块重新绑定入口（v0.16/v0.17/v0.21.0） |
 | `web/src/components/CleanupWorktreeDialog.tsx` | 工作副本清理两段式确认（普通确认 + 脏/未合并危险确认），软删除说明与删分支选项（v0.17） |
 | `web/src/components/ForkGraph.tsx` | Fork 风格多泳道提交图渲染；v0.16 增加 hover 高亮同色泳道（行/图例双向联动）（v0.14/v0.16） |
@@ -246,6 +246,8 @@ sequenceDiagram
 | `web/src/lib/rebindDir.ts` | 「重新绑定工作目录」纯函数：`buildRebindCandidates`（会话目录 → 主工作副本 → linked worktree，排除 prunable / 按 path 去重）、`cardCwdState`（`ok`/`missing`/`invalid`）、`formatRebindComment`（时间线留痕文案）（v0.21.0） |
 | `web/src/components/RebindDirDialog.tsx` | 「重新绑定工作目录」对话框：候选列表 + 搜索过滤 + 当前项标记禁用 + 提交中 / 空候选 / 无匹配 / 错误（`role=alert`）态（v0.21.0） |
 | `web/src/lib/worktreeCleanupNudge.ts` | 完成卡片时的可清理提示判定（纯函数 `buildCleanupNudge`）：卡片 `done` + 非主副本 / 未锁定 / 未失效 + 已并入主线且干净、无未完成卡片与运行中会话才提示（v0.21.0） |
+| `web/src/lib/worklineOverview.ts` | 「工作线」总览纯逻辑（v0.23.0 方案 2）：`buildWorklineOverview` 按仓库 / 项目两层分组（复用 `groupCardsByWorktree`，含按会话归属）、`buildWorklineRow` 行数据（状态四档 / 相对主线 / 线上 / 位置 / 卡片数 / 最近改动）、排序、未指定原因、`findWorklineRow` / `selectWorklineCards` / `toWorklineSelection`（点行筛卡片） |
+| `web/src/components/WorklineView.tsx` | 「工作线」总览视图 + 「只看工作线」筛选提示条（`WorklineFilterBar`）：仓库块 / 工作线行 / 未指定块 / 空与不可用态；行是原生 button，点行回调 App 切看板并筛卡片（v0.23.0） |
 | `web/src/components/Toast.tsx` | 反色 toast 区；v0.21.0 支持行内动作按钮（`ToastAction`，带按钮的 toast 停留 10s） |
 | `skills/manage-kanban/` | 教 agent 使用看板的工作流技能 |
 | `scripts/dev-server.mjs` | 不依赖 DSH 的联调服务器 |

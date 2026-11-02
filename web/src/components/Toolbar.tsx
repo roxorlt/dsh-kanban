@@ -19,9 +19,10 @@ import {
   IconPlus,
   IconSearch,
   IconSun,
+  IconWorkline,
 } from './Icons';
 
-export type ViewMode = 'board' | 'list' | 'workspaces';
+export type ViewMode = 'board' | 'list' | 'workspaces' | 'worklines';
 export type SyncState = 'connected' | 'connecting' | 'reconnecting' | 'standalone';
 
 interface ToolbarProps {
@@ -105,6 +106,7 @@ export function Toolbar({
   const views: { id: ViewMode; icon: ReactNode; key: I18nKey }[] = [
     { id: 'board', icon: <IconBoard />, key: 'app.viewBoard' },
     { id: 'list', icon: <IconList />, key: 'app.viewList' },
+    { id: 'worklines', icon: <IconWorkline />, key: 'app.viewWorklines' },
     { id: 'workspaces', icon: <IconFolder />, key: 'app.viewWorkspaces' },
   ];
   const syncLabel =
@@ -152,6 +154,8 @@ export function Toolbar({
               type="button"
               role="tab"
               aria-selected={view === entry.id}
+              aria-label={t(entry.key)}
+              title={t(entry.key)}
               className={`kb-seg-btn${view === entry.id ? ' kb-seg-btn--active' : ''}`}
               onClick={() => onViewChange(entry.id)}
             >

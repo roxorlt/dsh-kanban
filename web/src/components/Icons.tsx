@@ -281,6 +281,15 @@ export const IconFolder = (props: IconProps) => (
   </Svg>
 );
 
+/** 工作线（分支分叉）图标：主干上的点 + 分出来的一支 + 分支点。 */
+export const IconWorkline = (props: IconProps) => (
+  <Svg {...props}>
+    <circle cx="4.2" cy="12.2" r="1.6" />
+    <circle cx="11.8" cy="3.8" r="1.6" />
+    <path d="M4.2 10.6V5.6a1.8 1.8 0 0 1 1.8-1.8h4.2" />
+  </Svg>
+);
+
 export const IconSend = (props: IconProps) => (
   <Svg {...props}>
     <path d="M13.8 2.8 8.4 13.3 6.6 9.4 2.7 7.6l11.1-4.8Z" />
