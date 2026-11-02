@@ -641,7 +641,7 @@
 | 浏览器验证（隔离 dev-server `:4631` + 演示仓库 + headless Chrome/Playwright） | 演示环境：`scripts/demo-git-repo.mjs` 造 2 仓库（repo / other）+ 6 个工作副本，含已并入主线（main）、进行中（feat/graph，2 张卡）、停滞（feat/long，0 卡）、无法判断（`chore/stale` 已删目录，prunable）、线上分叉（main：7 处没推送 · 落后 1）、无远端（feat/long、feat/other）、非 git 目录与无 cwd 卡片。**26 项断言全过**：摘要「2 个仓库 · 6 条工作线 · 2 条在进行」；分组与排序（repo → other → 未指定，行按 进行中 → 停滞 → 已并入 → 无法判断）；四档状态与文案、多/少组合、线上徽标、工作副本相对路径、卡片数与最近改动；点 feat/graph → 看板只剩 2 张卡片 + 提示条「只看工作线 feat/graph · 2 张卡片」、选中行高亮 `aria-pressed=true`、回到工作线视图保留选中；「显示全部卡片」恢复 7 张；快捷键 W/B；1440×900 亮/暗、390×844 无横向溢出且可点；console error 0 / pageerror 0 / 4xx 0 |
 | 截图 | `docs/assets/screens/workline-overview-light.png`（1440 亮）、`workline-overview-dark.png`（1440 暗）、`workline-overview-390.png`（390 亮）、`workline-filtered-board.png`（点行后看板只看这条线 + 提示条）、`workline-overview-selected.png`（回到工作线视图的选中行） |
 | 顺手修复 | `≤719px` 工具栏换行（搜索框独占一行 + 筛选/选择第二行）时 `.kb-toolbar` 仍固定 48px，第二行压在「工作区 / 工作线」视图内容上（v0.16 竖屏截图即存在）→ 改 `height:auto; min-height:48px`；视图 Tab 补 `aria-label`/`title`（窄屏只显示图标时仍可读） |
-| 生效方式 | 纯前端改动，**合入 main 后刷新看板即生效、无需重启 DSH**；`web/dist` 已重新构建；分支 `feat/workline-overview`（基于 `4de34cb`），**待合入 main** |
+| 生效方式 | 纯前端改动，**合入 main 后刷新看板即生效、无需重启 DSH**；`web/dist` 已重新构建；分支 `feat/workline-overview`（基于 `4de34cb`），**已合入 main（merge `9648a14`）** |
 
 ## 2. 自动化测试
 

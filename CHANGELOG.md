@@ -17,7 +17,7 @@
 - 验证：隔离 dev-server + 演示仓库（2 仓库 / 6 工作副本，含 prunable、未推送、无远端、分叉、未提交改动、非 git 目录与无 cwd 卡片）+ headless Chrome（Playwright；1440×900 / 390×844、亮/暗）**26 项断言全过**、console error 0 / 4xx 0；截图 `docs/assets/screens/workline-overview-light.png`、`workline-overview-dark.png`、`workline-overview-390.png`、`workline-filtered-board.png`、`workline-overview-selected.png`（docs/06 §1.41）。
 - 生效方式：**纯前端改动**，合入 main 后刷新看板即生效，无需重启 DSH；`web/dist` 已重新构建。
 - 已知限制：① 行 = 工作副本，没有工作副本的纯本地分支不单独成行（只在已检出副本上体现）；② 每仓库最多返回 12 个工作副本（v0.20 上限），超出的副本不展示、其卡片按前缀归到主工作副本（与「工作区」视图一致，组头有「另有 N 个未展示」提示）；③「未指定」块只读，补齐 / 改绑执行目录仍在详情抽屉与「工作区」视图；④ 主工作副本上只有未跟踪文件（例如 `.worktrees/`）也算「有未保存改动」，因此可能显示为进行中；⑤ 视图不提供清理 / 删除分支等写操作，避免误操作（写操作仍在「工作区」视图）。
-- 分支：`feat/workline-overview`（基于 `4de34cb`），**待合入 main**。
+- 分支：`feat/workline-overview`（基于 `4de34cb`），**已合入 main（merge `9648a14`）**。
 
 ## v0.22.1 — 2026-10-30
 
