@@ -14,6 +14,7 @@ import type { ListGroupBy } from '../lib/listGroups';
 import type { CardActionHandlers, CardViewShared } from './types';
 import type { WorklineStatus } from '../lib/worklineSummary';
 import type { WorklineStatusMap } from '../lib/useWorklineStatuses';
+import { EmptyState } from './feedback';
 import { WorklineBadge } from './WorklineBadge';
 import { CardRelationBadges } from './CardRelations';
 import { ArchiveBox } from './ArchiveBox';
@@ -91,6 +92,11 @@ export function ListView({
   const { t } = useI18n();
   const [doneVisible, setDoneVisible] = useState(DONE_LIST_LIMIT);
   const groups = useMemo(() => groupCardsForList(cards, groupBy, cardOrder), [cards, groupBy, cardOrder]);
+  /**
+   * A-12：全局无结果（筛选/搜索后所有分组都空、也没有宿主待确认项）时，只在列表顶部出现
+   * 一个全局空态 + 一个清空入口；分组头保留，组内退化成一行「无匹配卡片」提示。
+   */
+  const noResults = filtering && cards.length === 0 && nativeInbox.entries.length === 0;
 
   const groupLabel = (group: (typeof groups)[number]): string => {
     if (group.label.startsWith('column.')) return t(group.label as I18nKey);
@@ -116,6 +122,17 @@ export function ListView({
         </div>
         <span className="kb-list__count">{t('app.cardCount', { count: cards.length })}</span>
       </div>
+
+      {noResults ? (
+        <div className="kb-global-empty">
+          <EmptyState
+            title={t('empty.filtered')}
+            hint={t('empty.filteredHint')}
+            actionLabel={t('app.clearFilters')}
+            onAction={onClearFilters}
+          />
+        </div>
+      ) : null}
 
       {groupBy !== 'status' && nativeInbox.entries.length ? (
         <div className="kb-list__inbox">
@@ -165,15 +182,12 @@ export function ListView({
                   </div>
                 ) : null}
                 {group.count === 0 ? (
-                  <div className="kb-list__empty">
-                    {filtering ? (
-                      <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={onClearFilters}>
-                        {t('empty.filtered')} · {t('app.clearFilters')}
-                      </button>
-                    ) : (
-                      t('column.empty')
-                    )}
-                  </div>
+                  filtering ? (
+                    // A-12：局部空态只留一行紧凑提示、不带 CTA；清空入口只在全局空态出现一次。
+                    <div className="kb-list__filter-hint">{t('empty.noMatchShort')}</div>
+                  ) : (
+                    <div className="kb-list__empty">{t('column.empty')}</div>
+                  )
                 ) : (
                   <>
                     <ul className="kb-list__items">
@@ -278,6 +292,7 @@ function ListRow({
         selectionMode ? ' kb-list__item--selectable' : ''
       }${selectionSelected ? ' kb-list__item--selected' : ''}${highlighted ? ' kb-list__item--highlight' : ''}`}
       data-card-id={card.id}
+      data-status={card.status}
       tabIndex={0}
       role="group"
       aria-label={t('a11y.cardLabel', { title: card.title, status: t(statusKey) })}
@@ -333,17 +348,29 @@ function ListRow({
             />
           </label>
         ) : null}
-        <button
-          type="button"
-          className="kb-list__title"
-          aria-expanded={expanded}
-          aria-controls={`kb-list-exp-${card.id}`}
-          aria-label={`${t(expanded ? 'list.collapseRow' : 'list.expandRow')}：${card.title}`}
-          onClick={() => (selectionMode ? onToggleSelection(card.id) : actions.onToggleExpanded(card.id))}
-        >
-          <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
-          <span className="kb-list__title-text">{card.title}</span>
-        </button>
+        <div className="kb-list__main">
+          <button
+            type="button"
+            className="kb-list__title"
+            aria-expanded={expanded}
+            aria-controls={`kb-list-exp-${card.id}`}
+            aria-label={`${t(expanded ? 'list.collapseRow' : 'list.expandRow')}：${card.title}`}
+            onClick={() => (selectionMode ? onToggleSelection(card.id) : actions.onToggleExpanded(card.id))}
+          >
+            <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
+            <span className="kb-list__title-text">{card.title}</span>
+          </button>
+          {/* A-15：状态只在「标题左侧 dot + 本行状态词」出现一次；项目/标签留在 summary 行，
+              时间/搜索/工具留在右侧 meta；不要把这套信息搬进标题行，行高不增加。 */}
+          <div className="kb-list__summary-line">
+            <span className="kb-list__summary">{card.summary || t('card.summaryFallback')}</span>
+            <span className="kb-list__status-line">
+              <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
+              {t(statusKey)}
+              {card.project ? <span className="kb-list__project"> · {card.project}</span> : null}
+            </span>
+          </div>
+        </div>
         <span className="kb-list__row-meta">
           {elapsed > 0 ? (
             <span title={t('card.elapsed')}>
@@ -413,15 +440,6 @@ function ListRow({
               />
             </>
           ) : null}
-        </span>
-      </div>
-
-      <div className="kb-list__summary-line">
-        <span className="kb-list__summary">{card.summary || t('card.summaryFallback')}</span>
-        <span className="kb-list__status-line">
-          <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
-          {t(statusKey)}
-          {card.project ? <span className="kb-list__project"> · {card.project}</span> : null}
         </span>
       </div>
 

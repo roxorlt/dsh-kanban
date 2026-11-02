@@ -19,7 +19,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px 12px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
   font-variant-numeric: tabular-nums;
 }
@@ -45,7 +45,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   white-space: nowrap;
   cursor: pointer;
@@ -73,7 +73,7 @@
 .kb-workspace__hint {
   flex: none;
   margin: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -81,7 +81,7 @@
   flex: none;
   margin: 0;
   padding: 40px 12px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xs-13);
   text-align: center;
 }
@@ -156,7 +156,7 @@
 .kb-workspace__repo-collapsed-hint {
   margin: 0;
   padding: 8px 12px 10px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -173,7 +173,7 @@
 .kb-workspace__repo-path {
   min-width: 0;
   overflow: hidden;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font-family: var(--ds-font-family-code);
   font-size: 11px;
   line-height: 16px;
@@ -184,7 +184,7 @@
 .kb-workspace__repo-meta {
   flex: none;
   margin-left: auto;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
@@ -267,14 +267,14 @@
 
 .kb-workspace__relation {
   flex: none;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
 
 .kb-workspace__tag--dirty {
   background: var(--dsw-alias-state-warn-tertiary);
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 .kb-workspace__wt-meta {
@@ -283,14 +283,14 @@
   align-items: center;
   gap: 4px 10px;
   min-width: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
 .kb-workspace__path {
   min-width: 0;
   overflow: hidden;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font-family: var(--ds-font-family-code);
   font-size: 11px;
   line-height: 16px;
@@ -329,7 +329,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--kb-status-running-text);
   font: var(--dsw-font-xxxs-11);
   line-height: 16px;
   cursor: pointer;
@@ -387,7 +387,7 @@
 .kb-workspace__no-cards {
   flex: 0 1 44%;
   margin: 0;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -424,13 +424,13 @@
   flex: none;
   height: 20px;
   padding: 0 6px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   white-space: nowrap;
 }
 
 .kb-workspace__rebind:hover {
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--kb-status-running-text);
 }
 
 /* 「按会话归属」小标签：卡片 cwd 在主副本、按绑定会话执行目录归到 linked 工作副本 */
@@ -438,7 +438,7 @@
   flex: none;
   height: 16px;
   padding: 0 5px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
 }
 
 /* ------------------------------------------------- 清理按钮 / 对话框 */
@@ -459,14 +459,14 @@
 
 .kb-workspace__cleanup-safe {
   flex: none;
-  color: var(--dsw-alias-state-success-primary);
+  color: var(--kb-status-done-text);
   font: var(--dsw-font-xxxs-11);
   white-space: nowrap;
 }
 
 .kb-workspace__cleanup-blocked {
   max-width: 140px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   text-align: right;
 }
@@ -474,12 +474,12 @@
 /* Phase A 状态徽标色调 */
 .kb-workspace__tag--success {
   background: var(--dsw-alias-state-success-tertiary);
-  color: var(--dsw-alias-state-success-primary);
+  color: var(--kb-status-done-text);
 }
 
 .kb-workspace__tag--warn {
   background: var(--dsw-alias-state-warn-tertiary);
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 /* 清理确认对话框（Phase B，两段式） */
@@ -507,7 +507,7 @@
 .kb-workspace__cleanup-meta dt {
   flex: none;
   width: 42px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -535,7 +535,7 @@
 
 .kb-workspace__cleanup-warn {
   margin: 0;
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -544,7 +544,7 @@
   padding: 6px 8px;
   border-radius: var(--kb-r-ctl);
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -553,7 +553,7 @@
   align-items: center;
   gap: 6px;
   margin: 0;
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
   font: var(--dsw-font-xxs-strong-12);
 }
 
@@ -573,7 +573,7 @@
 }
 
 .kb-workspace__cleanup-warnings li::marker {
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
 }
 
 /* 第二层危险确认的确认按钮（红色填充） */
@@ -603,7 +603,7 @@
   border: 0;
   border-top: 0.5px solid var(--dsw-alias-border-l1);
   background: color-mix(in srgb, var(--dsw-alias-label-primary) 2%, transparent);
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   text-align: left;
   cursor: pointer;
@@ -625,7 +625,7 @@
 
 .kb-workspace__last-commit {
   flex: none;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -678,14 +678,14 @@
   align-items: center;
   gap: 4px 8px;
   min-width: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
 .kb-workspace__trash-branch {
   min-width: 0;
   overflow: hidden;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font-family: var(--ds-font-family-code);
   font-size: 11px;
   line-height: 16px;
@@ -701,7 +701,7 @@
 }
 
 .kb-workspace__trash-purge {
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
 }
 
 .kb-workspace__trash-purge:hover {
@@ -711,7 +711,7 @@
 .kb-workspace__trash-error {
   margin: 0;
   padding: 6px 12px 8px;
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -738,7 +738,7 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   line-height: 16px;
   cursor: pointer;
@@ -773,12 +773,12 @@
 
 .kb-workspace__tag--danger {
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
 }
 
 .kb-workspace__truncated {
   flex: none;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
@@ -786,12 +786,12 @@
 .kb-workspace__truncated-foot {
   margin: 0;
   padding: 4px 12px 8px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
 .kb-workspace__prune-btn {
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 /* ------------------------------------------------- v0.25.0 ⑯/⑱ 批量清理 + 可清理提醒 */

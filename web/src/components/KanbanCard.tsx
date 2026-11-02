@@ -4,7 +4,7 @@ import type { Approval, Card, ColumnId, SessionRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { COLUMN_OF_STATUS, COLUMNS, STATUS_OF_COLUMN, STATUS_TONE, isWarningStatus } from '../lib/status';
-import { elapsedMs, formatDateTime, formatDuration } from '../lib/time';
+import { elapsedMs, formatDateTime, formatDuration, formatRelative } from '../lib/time';
 import { CARD_TIMELINE_PREVIEW, CARD_TIMELINE_STEP, visibleActivities } from '../lib/activities';
 import type { ActivityFeed } from '../lib/activities';
 import type { CardRelationIndex } from '../lib/cardRelations';
@@ -117,10 +117,13 @@ export function KanbanCard({
   const tone = STATUS_TONE[card.status];
   const statusKey = `status.${card.status}` as I18nKey;
   const warning = isWarningStatus(card.status);
+  const isSubStatus = card.status === 'blocked' || card.status === 'failed' || card.status === 'canceled';
   const pendingApproval = card.approvals.find((approval) => approval.status === 'pending');
-  const resolvedApproval = pendingApproval
-    ? undefined
-    : [...card.approvals].reverse().find((approval) => approval.status !== 'pending');
+  // A-04：一张卡最多展开一个审批（pending 的那条），其余压成一行摘要，点开详情查看
+  const otherApprovals = useMemo(
+    () => card.approvals.filter((approval) => approval.id !== pendingApproval?.id).slice(-2),
+    [card.approvals, pendingApproval?.id],
+  );
   const elapsed = elapsedMs(card, now);
   const primarySession = card.sessionIds[0]
     ? sessions.find((session) => session.id === card.sessionIds[0])
@@ -268,7 +271,7 @@ export function KanbanCard({
       <div className="kb-card-head">
         <span className={`kb-dot kb-dot--${tone} kb-card-head__dot`} aria-hidden="true" />
         {selectionMode ? (
-          <span className="kb-card-select" onClick={(event) => event.stopPropagation()}>
+          <label className="kb-card-select" onClick={(event) => event.stopPropagation()}>
             <input
               type="checkbox"
               checked={selectionSelected}
@@ -277,7 +280,7 @@ export function KanbanCard({
               })}
               onChange={() => onToggleSelection(card.id)}
             />
-          </span>
+          </label>
         ) : null}
         <h3 className="kb-card-title">{card.title}</h3>
         {!selectionMode ? (
@@ -305,7 +308,9 @@ export function KanbanCard({
         ) : null}
       </div>
 
-      {card.summary ? <p className="kb-card-summary">{card.summary}</p> : null}
+      {card.summary && (expanded || card.status !== 'running' || !card.currentAction) ? (
+        <p className="kb-card-summary">{card.summary}</p>
+      ) : null}
 
       <WorklineBadge cwd={card.cwd} status={worklineStatus} />
 
@@ -371,13 +376,21 @@ export function KanbanCard({
       ) : null}
 
       <div className="kb-card-foot">
-        <span className={`kb-foot-status kb-foot-status--${tone}`}>
-          <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
-          <span className="kb-foot-status__text">
-            {t(statusKey)}
-            {elapsed > 0 ? <span className="kb-foot-elapsed"> · {formatDuration(elapsed, lang)}</span> : null}
+        {isSubStatus ? (
+          <span className={`kb-foot-status kb-foot-status--${tone}`}>
+            <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
+            <span className="kb-foot-status__text">
+              {t(statusKey)}
+              {elapsed > 0 ? <span className="kb-foot-elapsed"> · {formatDuration(elapsed, lang)}</span> : null}
+            </span>
           </span>
-        </span>
+        ) : elapsed > 0 ? (
+          <span className="kb-foot-status kb-foot-status--tertiary">
+            <span className="kb-foot-status__text">
+              <span className="kb-foot-elapsed">{formatDuration(elapsed, lang)}</span>
+            </span>
+          </span>
+        ) : null}
         {card.status === 'running' && !card.sessionIds.length ? (
           <span className="kb-foot-warn" title={t('drawer.runningNoSessionWarn')}>
             {t('card.noSessionWarn')}
@@ -396,19 +409,25 @@ export function KanbanCard({
           </button>
         ) : null}
         <span className="kb-card-foot__metrics">
-          <span className="kb-metric" title={t('card.tools')}>
-            <span className="kb-icon" aria-hidden="true">
-              <IconWrench />
+          {card.metadata.toolCalls > 0 ? (
+            <span className="kb-metric" title={t('card.tools')}>
+              <span className="kb-icon" aria-hidden="true">
+                <IconWrench />
+              </span>
+              {card.metadata.toolCalls}
             </span>
-            {card.metadata.toolCalls}
-          </span>
-          <span className="kb-metric" title={t('card.searches')}>
-            <span className="kb-icon" aria-hidden="true">
-              <IconSearch />
+          ) : null}
+          {card.metadata.searches > 0 ? (
+            <span className="kb-metric" title={t('card.searches')}>
+              <span className="kb-icon" aria-hidden="true">
+                <IconSearch />
+              </span>
+              {card.metadata.searches}
             </span>
-            {card.metadata.searches}
-          </span>
-          <span className="kb-divider-v" aria-hidden="true" />
+          ) : null}
+          {card.metadata.toolCalls > 0 || card.metadata.searches > 0 ? (
+            <span className="kb-divider-v" aria-hidden="true" />
+          ) : null}
           <button
             type="button"
             className={`kb-metric kb-metric-link${primarySession?.running ? ' kb-metric--live' : ''}`}
@@ -433,8 +452,31 @@ export function KanbanCard({
           }
           onValidationError={(message) => onNotify(message, 'error')}
         />
-      ) : resolvedApproval ? (
-        <ApprovalPanel approval={resolvedApproval} busy={false} now={now} onResolve={() => undefined} />
+      ) : null}
+
+      {/* A-04：其余审批只占一行（标题 + 结果 + 时间），点开详情看完整选项与回答 */}
+      {!selectionMode && otherApprovals.length ? (
+        <ul className="kb-decision-summaries" aria-label={t('drawer.approvals')}>
+          {otherApprovals.map((approval) => {
+            const summaryStatusKey = `approval.status.${approval.status}` as I18nKey;
+            const summaryTone =
+              approval.status === 'approved' ? 'success' : approval.status === 'rejected' ? 'error' : 'tertiary';
+            return (
+              <li key={approval.id}>
+                <button type="button" className="kb-decision-summary" onClick={() => onOpenDetail(card.id)}>
+                  <span className={`kb-dot kb-dot--${summaryTone}`} aria-hidden="true" />
+                  <span className="kb-decision-summary__title">{approval.title}</span>
+                  <span className="kb-decision-summary__status">{t(summaryStatusKey)}</span>
+                  {approval.resolvedAt ? (
+                    <span className="kb-decision-summary__time">
+                      {formatRelative(approval.resolvedAt, now, lang)}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       ) : null}
 
       {expanded && !selectionMode ? (
@@ -493,48 +535,6 @@ export function KanbanCard({
               {replyError}
             </p>
           ) : null}
-
-          <div className="kb-card-actions">
-            {canStart ? (
-              <button type="button" className="kb-btn kb-btn--sm kb-btn--primary kb-card-start" onClick={() => onStartCard(card)}>
-                <span className="kb-icon" aria-hidden="true">
-                  <IconSparkle />
-                </span>
-                {t('card.start')}
-              </button>
-            ) : null}
-            <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => onOpenDetail(card.id)}>
-              {t('card.openDetail')}
-              <span className="kb-icon" aria-hidden="true">
-                <IconChevronRight />
-              </span>
-            </button>
-            <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => onEdit(card)}>
-              <span className="kb-icon" aria-hidden="true">
-                <IconEdit />
-              </span>
-              {t('card.edit')}
-            </button>
-            <MenuButton
-              label={t('a11y.moveMenu')}
-              trigger={
-                <>
-                  {t('card.moveTo')}
-                  <span className="kb-icon" aria-hidden="true">
-                    <IconChevronDown />
-                  </span>
-                </>
-              }
-              triggerClassName="kb-btn kb-btn--sm kb-btn--ghost kb-card-move"
-              items={moveItems}
-              onSelect={(id) => {
-                if (id.startsWith('move:')) {
-                  const target = id.slice('move:'.length) as ColumnId;
-                  if (COLUMNS.includes(target)) onMove(card.id, target);
-                }
-              }}
-            />
-          </div>
         </div>
       ) : null}
     </article>

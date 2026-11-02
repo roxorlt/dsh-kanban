@@ -19,7 +19,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px 12px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
   font-variant-numeric: tabular-nums;
 }
@@ -27,7 +27,7 @@
 .kb-worklines__hint {
   flex: none;
   margin: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -35,7 +35,7 @@
   flex: none;
   margin: 0;
   padding: 40px 12px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xs-13);
   text-align: center;
 }
@@ -113,13 +113,13 @@
 
 .kb-worklines__repo-meta,
 .kb-worklines__repo-projects {
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
 
 .kb-worklines__truncated {
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -237,7 +237,7 @@
 .kb-worklines__selected-tag {
   flex: none;
   background: var(--dsw-alias-state-business-tertiary);
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--kb-status-running-text);
   font: var(--dsw-font-xxxs-strong-11);
 }
 
@@ -247,17 +247,17 @@
   align-items: center;
   gap: 2px 8px;
   min-width: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
 
 .kb-worklines__running {
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--kb-status-running-text);
 }
 
 .kb-worklines__dirty {
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 .kb-worklines__last {
@@ -281,31 +281,31 @@
 
 .kb-worklines__badge--active {
   background: var(--dsw-alias-state-business-tertiary);
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--kb-status-running-text);
 }
 
 .kb-worklines__badge--merged {
   background: var(--dsw-alias-state-success-tertiary);
-  color: var(--dsw-alias-state-success-primary);
+  color: var(--kb-status-done-text);
 }
 
 .kb-worklines__badge--stalled {
   background: var(--dsw-alias-state-warn-tertiary);
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 .kb-worklines__badge--unknown {
   background: transparent;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   box-shadow: inset 0 0 0 0.5px var(--dsw-alias-border-l2);
 }
 
 .kb-worklines__badge--ok {
-  color: var(--dsw-alias-state-success-primary);
+  color: var(--kb-status-done-text);
 }
 
 .kb-worklines__badge--warn {
-  color: var(--dsw-alias-state-warn-label);
+  color: var(--kb-status-needs-text);
 }
 
 .kb-worklines__badge--muted {
@@ -367,7 +367,7 @@
 
 .kb-worklines__relation-text {
   min-width: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   font-variant-numeric: tabular-nums;
 }
@@ -378,7 +378,7 @@
   grid-area: location;
   min-width: 0;
   overflow: hidden;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font-family: var(--ds-font-family-code);
   font-size: 11px;
   line-height: 16px;
@@ -460,7 +460,7 @@
   border: 0.5px solid var(--dsw-alias-state-business-primary);
   border-radius: var(--kb-r-ctl);
   background: var(--dsw-alias-state-business-tertiary);
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--kb-status-running-text);
   font: var(--dsw-font-xxs-strong-12);
 }
 

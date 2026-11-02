@@ -1,5 +1,23 @@
 # Changelog
 
+## 未发布 — 视觉后续 V2–V6 收口（DESIGN.md + 批次1–3 + 验收矩阵，2026-11-02）
+
+> 工作副本变更记录（**未 git commit**；同一工作区还含并行动效任务与会话绑定任务的未提交改动，提交/发版时按文件拆分后套用正式版本号）。
+
+### 新增：`DESIGN.md` 视觉唯一事实源
+
+- 用 `design-md` 把 `docs/03-design-system.md` + DSH `--dsw-*` 令牌（`web/src/styles/tokens.css`）+ 动效预算（细则以 `docs/11-motion.md` 为唯一事实源）+ `docs/10` §4「不要改」清单固化为仓库根目录 `DESIGN.md`（374 行）：令牌体系（颜色/字体层级/间距/圆角/描边/浮层/动效）、对比度硬规则、组件规则（列/卡/列表/抽屉/审批/批量条/工具栏/空态/加载/错误）、D-01…D-14「不该改」清单、验收矩阵与变更流程。`docs/03` 做 8 处最小回写并声明「与 DESIGN.md 冲突以其为准」。卡片 `card-4cc19d2b`。
+
+### 修复：视觉审计 A-01…A-15 全部收口（15/15 验收通过）
+
+- **批次1（移动端可用性与状态可感知）**：**A-08** `useRealtime` 暴露 `connecting / connected / degraded / offline` + 断线可见状态（断网 5ms 出现「连接中断，正在重试…」、4s 升级「已断开 · 点击重试」、恢复 1ms 清除、`aria-live` 播报、页面隐藏不误报、可点重试立即重连）；**A-09** 错误页用户化（「无法连接看板服务 / 请检查网络后重试」，英文原始错误与 `node scripts/dev-server.mjs --port 4599` 移入「诊断信息」折叠，hint 3.71→5.8:1，重试 96×44）；**A-05** 390px 主要操作有效热区 14/14 组 ≥44×44（主题/筛选/选择/卡片菜单/抽屉编辑与关闭/审批/composer 发送/批量条/卡片与列表复选框/视图 tab/列切换/列头新建/行标题）；**A-01/A-10** 复核（v0.23.0 已修：工具栏高度自适应 390/720 均 `scrollHeight===clientHeight`；四个视图 tab `aria-label` 非空唯一）；**A-11** 批量条已选数 3.6→16.04:1、hint 3.15→4.92:1、禁用归档加 1px 可辨边界（4.92:1）、390 按钮 44。
+- **批次2（浅色可读性与视觉层级）**：**A-02** 新增 `--kb-status-{running,needs,done,failed}-text`（`light-dark()`：浅色 `color-mix` 向 `label-primary` 收敛 84/68/60/88%，暗色沿用语义色），浅色 待你确认/已完成/审批风险 2.79/2.28/2.58 → **5.8/5.8/21**，暗色 5.62/6.89/5.53 不回退，彩色 dot/icon 全部保留；**A-03** 11–12px 可读元数据统一到 `label-secondary` 级（`caption/tertiary` 只留装饰/禁用），`docs/10` 附录 A.1 18 行亮/暗全部 ≥4.5:1（最低批量 hint 4.92）；**A-04** 审批从「大面积 warn 底色 + 卡中卡」改为卡内分区（warn 不透明覆盖 0.664→0、选项独立卡底 0、卡内展开审批 ≤1，审批标题 13px ≤ 卡标题 14px），字段与提交语义不变；**A-06** 四级字号：页标题 16/22/600、卡片 14/20/500、列头/分区 12/16/600+0.02em、meta 11–12；**A-07** 1440 列表行高 44→62、内容主栏 1180、标题→meta 12px，390 仍堆叠单列且字段不丢。
+- **批次3（状态细节与一致性）**：**A-12** 全局空态去重（1440 board 空态 4/CTA 5 → 1/2、list 3/4 → 1/2；390 均 1/1；列头/分组头保留，列内退化为一行紧凑提示）；**A-13** 首屏 loading 顶栏计数改占位条（不再显示「共 0 张」）+ 筛选/选择/新建禁用 + 骨架只出现在列内；**A-14** 无 reject option 时拒绝按钮加可见说明「此审批未提供拒绝选项…」+ `aria-describedby`（390 不截断）；**A-15** 列表行状态文字只保留一处（项目/meta/操作按钮不变，行高 62）。
+- **验收工具（新增）**：`scripts/visual-audit.mjs`（零依赖：Node 22 内置 `WebSocket` + Chrome DevTools Protocol）按 `docs/10` 附录 A/B 实测 A-01…A-15，输出 JSON + markdown 矩阵（含 before→after）+ 截图矩阵；`--label / --only / --base / --note` 可复跑，可纳入后续视觉回归。
+- 验收：**15 通过 / 0 未通过 / 0 跳过**（1440×900 / 1024×768 / 720×900 / 390×844 × 亮/暗 × board/list/worklines/workspaces + 抽屉/审批/选择/空态/loading/错误/断网）；craft 综合 2.8→4.5/5；5 项非阻塞退回项（390 页标题截断、tab 有效热区 43×43、`tokens.css` 3 个宿主令牌未镜像、`--kb-radius-lg` 无全局定义、未跑真实 SR/axe 与真实宿主 iframe 复验）见 `docs/12-visual-acceptance.md` §5.2。
+- 测试：服务端 **315/315**、Web **36 文件 / 477 例**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS **0 error / 0 warning**；控制台 `console error 0 / 未捕获异常 0 / 4xx 0`。
+- 证据：`docs/12-visual-acceptance.md`（验收矩阵 + before→after + design-review/craft 评审 + 退回项 + 复跑方法）、`docs/06` §1.43、`docs/assets/screens/visual-v2/{baseline,final}/`（各 25 张）、`.tmp/visual/final.json`。
+
 ## v0.25.0 — 2026-11-02
 
 ### 清理闭环：③ 清理留痕 + ⑯ 批量清理（仅安全项）+ ⑱ 工作区视图内可清理提醒
@@ -12,7 +30,7 @@
 - 测试：服务端 **310/310**（v0.24.0 基线 308 + 2 例 `test/git-cleanup.test.mjs`：清理成功后留痕含已完成卡片 / 不含归档卡 / revision 增加；清理被拒绝时不留痕、revision 不变）；Web **36 文件 / 485 例**（+`worktreeBatchCleanup.test.ts` 12 例：安全候选与全部排除项 / 运行中会话 cwd / 分组顺序 / 提醒 24h TTL / 失败文案 / `affectedCards` 归一化；另更新 `useWorkspaces.test.ts` 的 `normalizeCleanupResult` 期望）；`tsc --noEmit` 0 error、`vite build` 通过（JS gzip ~149KB / CSS gzip ~19KB）、令牌 lint **11 个 CSS 0 error / 0 warning**。
 - 生效方式：含服务端改动，**合入 main 后需重启 DSH 生效**（`/health` version 0.25.0）；客户端部分刷新看板即可；`web/dist` 已重新构建。
 - 已知限制：① 批量清理是逐项调用、非原子——中途失败时已清理的项不回滚（目录都在回收站，可恢复）；② 批量候选来自最近一次工作区探测（≤20s），「运行中会话 cwd」是 v0.18 起的客户端安全层（服务端不知道会话 cwd），存在极短竞态；③ 批量只处理安全项，脏 / 未合并仍需走单条清理的第二层危险确认；④ 清理留痕只写未归档卡片，归档卡不写；⑤ 磁盘占用（⑰）、只拉可见仓库降轮询（⑲）、Windows/权限（㉑）仍未做。
-- 分支：`feat/workspace-cleanup-closure`（基于 `65cbf6c`）。
+- 分支：`feat/workspace-cleanup-closure`（基于 `65cbf6c`），**已合入 main（merge `49400ca`，`--no-ff`）**；合入时主工作区并行未提交改动（视觉 V2–V6 / 会话与卡片联动 / 动效批次）经 stash→merge→apply 原样保留，合并后整树服务端 **317/317**、Web **37 文件 / 489 例** 全绿、令牌 lint 11 CSS 0/0、`vite build` 通过。
 
 ## v0.24.0 — 2026-11-02
 

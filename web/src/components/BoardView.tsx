@@ -13,6 +13,7 @@ import { KanbanCard } from './KanbanCard';
 import { NativeInbox } from './NativeInbox';
 import type { NativeInboxProps } from './NativeInbox';
 import type { CardActionHandlers, CardViewShared, Placement } from './types';
+import { EmptyState } from './feedback';
 import { IconArchive, IconCheckCircle, IconChevronRight, IconCircle, IconHand, IconPlus, IconSparkle } from './Icons';
 
 interface BoardViewProps {
@@ -49,13 +50,6 @@ const COLUMN_TONE: Record<ColumnId, string> = {
   running: 'business',
   needs_you: 'warn',
   done: 'success',
-};
-
-const COLUMN_EN: Record<ColumnId, string> = {
-  backlog: 'BACKLOG',
-  running: 'RUNNING',
-  needs_you: 'NEEDS YOU',
-  done: 'DONE',
 };
 
 function columnIcon(column: ColumnId) {
@@ -98,6 +92,11 @@ export function BoardView({
   const dropHandled = useRef(false);
   const boardRef = useBoardWheelScroll();
   const counts = countByColumn(cards);
+  /**
+   * A-12：全局无结果（筛选/搜索后所有列都空、也没有宿主待确认项）时，只在顶部出现一个
+   * 全局空态 + 一个清空入口；列壳保留，列内退化成一行「无匹配卡片」提示。
+   */
+  const noResults = filtering && cards.length === 0 && nativeInbox.entries.length === 0;
 
   const toggleCollapsed = (column: ColumnId) => {
     setCollapsed((current) => {
@@ -175,13 +174,12 @@ export function BoardView({
           <span className={`kb-col-icon kb-col-icon--${COLUMN_TONE[column]}`} aria-hidden="true">
             {columnIcon(column)}
           </span>
-          <h2 className="kb-column-title">
-            {t(`column.${column}` as I18nKey)}
-            <span className="kb-col-en" aria-hidden="true">
-              {COLUMN_EN[column]}
-            </span>
-          </h2>
-          <span className="kb-count-pill" aria-label={t('column.cardCount', { count: counts[column] })}>
+          <h2 className="kb-column-title">{t(`column.${column}` as I18nKey)}</h2>
+          <span
+            className="kb-count-pill"
+            aria-label={t('column.cardCount', { count: counts[column] })}
+            title={isDone ? t('board.autoArchiveHint') : undefined}
+          >
             {counts[column]}
           </span>
           <span className="kb-column-head__actions">
@@ -233,29 +231,24 @@ export function BoardView({
           <div className="kb-column__body" role="group" aria-label={t('column.cardCount', { count: allColumnCards.length })}>
             {column === 'needs_you' ? <NativeInbox {...nativeInbox} /> : null}
             {allColumnCards.length === 0 ? (
-              <div className="kb-column__empty">
-                <span className="kb-empty-icon" aria-hidden="true">
-                  {filtering ? <IconCircle /> : <IconPlus />}
-                </span>
-                <span className="kb-column__empty-title">
-                  {filtering ? t('empty.filtered') : t('empty.columnTitle')}
-                </span>
-                <span className="kb-column__empty-desc">
-                  {filtering ? t('empty.filteredHint') : t('empty.columnHint')}
-                </span>
-                {filtering ? (
-                  <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={onClearFilters}>
-                    {t('app.clearFilters')}
-                  </button>
-                ) : (
+              filtering ? (
+                // A-12：过滤无匹配时列内只留一行紧凑提示；「清空筛选」只在全局空态出现一次。
+                <div className="kb-column__filter-hint">{t('empty.noMatchShort')}</div>
+              ) : (
+                <div className="kb-column__empty">
+                  <span className="kb-empty-icon" aria-hidden="true">
+                    <IconPlus />
+                  </span>
+                  <span className="kb-column__empty-title">{t('empty.columnTitle')}</span>
+                  <span className="kb-column__empty-desc">{t('empty.columnHint')}</span>
                   <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => onCreateInColumn(column)}>
                     <span className="kb-icon" aria-hidden="true">
                       <IconPlus />
                     </span>
                     {t('app.newCard')}
                   </button>
-                )}
-              </div>
+                </div>
+              )
             ) : (
               <div className="kb-column__cards" role="list" aria-label={t('column.cardCount', { count: allColumnCards.length })}>
                 {isDone && isOver && !overCardId && !isSelfDrag ? (
@@ -327,10 +320,7 @@ export function BoardView({
                 </span>
               </button>
             ) : null}
-            {column === 'done' && !selectionMode ? (
-              <p className="kb-column__hint">{t('board.autoArchiveHint')}</p>
-            ) : null}
-            {/* 列体空白区的落点提示：已完成列内拖回空白区 = 放回原位，不画落点线；
+            {/* 列体空白区的落点提示：已完成列内拖回空白区 = 放回原位，不请求后端；
                 跨列拖进已完成列插到列头，提示线画在首张卡片前；其他列画在末尾。 */}
             {isOver && !overCardId && !isDone ? <div className="kb-drop-line" aria-hidden="true" /> : null}
           </div>
@@ -342,37 +332,58 @@ export function BoardView({
   if (mobile) {
     const current = COLUMNS.includes(activeColumn) ? activeColumn : 'running';
     return (
-      <div
-        ref={boardRef}
-        className={`kb-board kb-board--mobile${selectionMode ? ' kb-board--selection' : ''}`}
-        role="region" aria-label={t('a11y.boardRegion', { name: board.name })}>
-        <div className="kb-column-switch" role="tablist" aria-label={t('app.viewBoard')}>
-          {COLUMNS.map((column) => (
-            <button
-              key={column}
-              type="button"
-              role="tab"
-              aria-selected={current === column}
-              className={`kb-column-switch__item${current === column ? ' kb-column-switch__item--active' : ''}`}
-              onClick={() => onActiveColumnChange(column)}
-            >
-              <span className={`kb-dot kb-dot--${COLUMN_TONE[column]}`} aria-hidden="true" />
-              <span>{t(`column.${column}` as I18nKey)}</span>
-              <span className="kb-pill kb-pill--count">{counts[column]}</span>
-            </button>
-          ))}
+      <>
+        {noResults ? <GlobalEmptyResult onClearFilters={onClearFilters} /> : null}
+        <div
+          ref={boardRef}
+          className={`kb-board kb-board--mobile${selectionMode ? ' kb-board--selection' : ''}`}
+          role="region" aria-label={t('a11y.boardRegion', { name: board.name })}>
+          <div className="kb-column-switch" role="tablist" aria-label={t('app.viewBoard')}>
+            {COLUMNS.map((column) => (
+              <button
+                key={column}
+                type="button"
+                role="tab"
+                aria-selected={current === column}
+                className={`kb-column-switch__item${current === column ? ' kb-column-switch__item--active' : ''}`}
+                onClick={() => onActiveColumnChange(column)}
+              >
+                <span className={`kb-dot kb-dot--${COLUMN_TONE[column]}`} aria-hidden="true" />
+                <span>{t(`column.${column}` as I18nKey)}</span>
+                <span className="kb-pill kb-pill--count">{counts[column]}</span>
+              </button>
+            ))}
+          </div>
+          <div className="kb-board__mobile-column">{renderColumn(current)}</div>
         </div>
-        <div className="kb-board__mobile-column">{renderColumn(current)}</div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div
-      ref={boardRef}
-      className={`kb-board${selectionMode ? ' kb-board--selection' : ''}`}
-      role="region" aria-label={t('a11y.boardRegion', { name: board.name })}>
-      {COLUMNS.map(renderColumn)}
+    <>
+      {noResults ? <GlobalEmptyResult onClearFilters={onClearFilters} /> : null}
+      <div
+        ref={boardRef}
+        className={`kb-board${selectionMode ? ' kb-board--selection' : ''}`}
+        role="region" aria-label={t('a11y.boardRegion', { name: board.name })}>
+        {COLUMNS.map(renderColumn)}
+      </div>
+    </>
+  );
+}
+
+/** A-12 全局空态：一句标题 + 一句 hint + 唯一「清空筛选」入口；列壳/分组壳仍保留。 */
+function GlobalEmptyResult({ onClearFilters }: { onClearFilters: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="kb-global-empty">
+      <EmptyState
+        title={t('empty.filtered')}
+        hint={t('empty.filteredHint')}
+        actionLabel={t('app.clearFilters')}
+        onAction={onClearFilters}
+      />
     </div>
   );
 }

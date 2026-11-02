@@ -656,7 +656,23 @@
 | 截图 | `docs/assets/screens/workspace-reveal-finder.png`（真实宿主工作区视图 + 中英文「在 Finder 中打开」）、`workspace-reveal-hidden.png`（独立预览无桥：无按钮、复制路径仍在）、`finder-reveal-window.png`（点击后 Finder 定位到 dsh kanban 目录） |
 | 生效方式 | **纯客户端改动**：DSH 的 `client-hmr` 会检测 `lib/client.js` 变化并重载插件（已实测 bundle rev 自动更新），刷新看板即加载新 UI；不涉及服务端，不需要重启 DSH。分支 `feat/finder-reveal`，**已合入 main（merge `03767c0`）** |
 
-## 1.43 v0.25.0（清理闭环：③ 清理留痕 + ⑯ 批量清理 + ⑱ 视图内可清理提醒，2026-11-02）
+## 1.43 视觉后续 V2–V6 收口（DESIGN.md + 批次1–3 + 验收矩阵，2026-11-02，工作副本快照）
+
+| 项 | 结果 |
+|---|---|
+| 范围 | 按 `docs/10-visual-audit.md` 的 A-01…A-15 与三批计划收口视觉问题：批次1（A-01/A-05/A-10/A-08/A-09/A-11）、批次2（A-02/A-03/A-04/A-06/A-07）、批次3（A-12/A-13/A-14/A-15）；不改数据契约、不新增产品功能、不引入外部字体/渐变、安全区与「不要改」14 条全部保留 |
+| 设计事实源 | 新增仓库根目录 **`DESIGN.md`**（v1.1，374 行）：令牌体系（含 `--kb-status-*-text` / `--kb-link-text` / `--kb-disabled-*` 语义层与对比度硬规则）、四级字体层级、组件规则、动效预算摘要（细则以 `docs/11-motion.md` 为准）、验收矩阵、D-01…D-14「不该改」清单、变更流程；`docs/03-design-system.md` 做 8 处最小回写并指向 DESIGN.md（冲突以其为准） |
+| 批次1（移动端与状态） | A-01 工具栏高度自适应（实测 390/720 board+list 106/106、47/47，无相交/无横滚）；A-05 390 主要操作热区 14/14 组 ≥44×44；A-10 四个视图 tab aria-label 非空且唯一；**A-08 新增 SSE 连接状态**（`useRealtime` 暴露 connecting/connected/degraded/offline + 断网 5ms 出现「连接中断」、4s 升「已断开·点击重试」、恢复 1ms 清除、`aria-live` 播报、隐藏页不误报）；**A-09 错误页用户化**（无英文原文/dev 命令，错误码收进「诊断信息」折叠，hint 5.8:1，重试 96×44）；A-11 批量条已选数 3.6→16.04、hint 3.15→4.92、禁用归档加 1px 可辨边界、390 按钮 44 |
+| 批次2（可读性与层级） | A-02 浅色状态文字 2.79/2.28/2.58→5.8/5.8/21，暗色不回退（10.42/10.42/5.62）；A-03 附录 A.1 18 行亮/暗全部 ≥4.5（最低 4.92）；A-04 审批改卡内分区，warn 不透明底色覆盖 0.664→0、选项去「卡中卡」、卡内展开审批 ≤1、标题 13px ≤ 卡标题 14px；A-06 四级字号 16/22/600 → 14/20/500 → 12/16/600+0.02em → meta 11–12；A-07 列表行高 44→62、内容主栏 1180、标题→meta 12px，390 仍堆叠且字段不丢 |
+| 批次3（状态细节） | A-12 全局空态去重（1440 board 4/5→1/2、list 3/4→1/2；390 均 1/1，列头/分组头保留）；A-13 首屏 loading 顶栏计数占位（不再显示 0）+ 筛选/选择/新建禁用 + 列内骨架；A-14 无 reject option 时拒绝按钮加可见说明「此审批未提供拒绝选项…」+ `aria-describedby`（390 不截断）；A-15 列表行状态文字 ×1、项目/meta/操作保留、行高不变 |
+| 验收工具 | 新增 **`scripts/visual-audit.mjs`**（零依赖：Node 22 内置 `WebSocket` + Chrome CDP；`--label/--only/--base/--note`），对构建产物实测 A-01…A-15 并输出 JSON + markdown 矩阵 + 截图矩阵，可纳入后续视觉回归 |
+| 验收结果 | **15 通过 / 0 未通过 / 0 跳过**（1440×900、1024×768、720×900、390×844 × 亮/暗 × board/list/worklines/workspaces + 抽屉/审批/选择/空态/loading/错误/断网场景）；craft 综合 2.8→**4.5/5**；5 项非阻塞退回项（390 页标题截断、tab 有效热区 43×43、tokens.css 3 个宿主令牌未镜像、`--kb-radius-lg` 无全局定义、未跑真实 SR/axe 与真实宿主 iframe 复验）见 `docs/12-visual-acceptance.md` §5.2 |
+| 测试 | 服务端 **315/315**、Web **36 文件 / 477 例**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS **0 error / 0 warning**；控制台 `console error 0 / 未捕获异常 0 / 4xx 0`（board/list/worklines/workspaces + 抽屉） |
+| 截图 | `docs/assets/screens/visual-v2/final/`（25 张：1440/1024/720/390 × 亮/暗 × 各视图 + 抽屉/审批/选择/composer/空态/loading/错误/断网/工作线/工作区）；修复前同场景在 `.../baseline/`（25 张） |
+| 报告 | [`docs/12-visual-acceptance.md`](12-visual-acceptance.md)（矩阵 + before→after + design-review/craft 评审 + 退回项 + 复跑方法）；机器可读 `.tmp/visual/final.json` |
+| 提交状态 | **未 git commit**：工作区同时含并行动效任务与会话绑定任务的未提交改动，提交/发版需按文件拆分；本记录为工作副本快照（commit `65cbf6c` + 43 files changed） |
+
+## 1.44 v0.25.0（清理闭环：③ 清理留痕 + ⑯ 批量清理 + ⑱ 视图内可清理提醒，2026-11-02）
 
 | 项 | 结果 |
 |---|---|
@@ -665,9 +681,9 @@
 | 前端 ⑯ | 新增 `web/src/lib/worktreeBatchCleanup.ts`（`collectBatchCleanupCandidates` 复用 `evaluateWorktreeCleanup` 的安全判定：非主工作副本 / 未锁定 / 目录未失效 / 已并入主线 / 干净 / 无未完成卡片 / 无运行中会话 cwd；`groupBatchCleanupCandidates` 分组；失败码→文案）+ `web/src/components/CleanupBatchDialog.tsx`（按仓库分组的候选预览、可选删除已合并分支、逐项结果）；WorkspaceView 顶部「批量清理（N）」入口，确认后**逐项**调用 `POST /git/worktrees/cleanup`（服务端逐项再校验，不提供任何带丢失风险的批量入口），单项失败不中断后续项 |
 | 前端 ⑱ | 工作区顶部内联提醒「有 N 个工作副本可安全清理」+「批量清理」+ 关闭按钮；关闭时间写 localStorage，`CLEANUP_NUDGE_DISMISS_TTL_MS`（24h）后重新出现；不弹窗、不打断，候选基于全部仓库、不受「只看当前筛选」影响 |
 | 契约/文档 | `docs/contracts/02-http-api.md` §13（③ 留痕语义与 `affectedCards`/`revision` 兼容、⑯ 批量=逐项调用单接口的编排约定）；`docs/contracts/01-data-model.md` §3 时间线节点增 `worktree_cleaned`；CHANGELOG / README / 根与 `web` 的 `package.json` 升到 v0.25.0 |
-| 测试 | 服务端 **310/310**（v0.24.0 基线 308 + 2 例 `test/git-cleanup.test.mjs`：清理成功后留痕含已完成卡片 / 不含归档卡 / revision 增加；清理被拒绝时不留痕、revision 不变）；Web **36 文件 / 485 例**（+1 文件 12 例 `worktreeBatchCleanup.test.ts`：安全候选与全部排除项 / 运行中会话 cwd / 分组顺序 / 提醒 24h TTL / 失败文案 / `affectedCards` 归一化；另更新 `useWorkspaces.test.ts` 的 `normalizeCleanupResult` 期望）；`tsc --noEmit` 0 error、`vite build` 通过（JS gzip ~149KB / CSS gzip ~19KB）、令牌 lint **11 个 CSS 0 error / 0 warning** |
+| 测试 | 本分支：服务端 **310/310**（v0.24.0 基线 308 + 2 例 `test/git-cleanup.test.mjs`：清理成功后留痕含已完成卡片 / 不含归档卡 / revision 增加；清理被拒绝时不留痕、revision 不变）；Web **36 文件 / 485 例**（+1 文件 12 例 `worktreeBatchCleanup.test.ts`：安全候选与全部排除项 / 运行中会话 cwd / 分组顺序 / 提醒 24h TTL / 失败文案 / `affectedCards` 归一化；另更新 `useWorkspaces.test.ts` 的 `normalizeCleanupResult` 期望）。**合入 main 后整树（含并行未提交改动）**：服务端 **317/317**、Web **37 文件 / 489 例**、`tsc --noEmit` 0 error、`vite build` 通过（JS gzip ~151KB / CSS gzip ~20KB）、令牌 lint **11 个 CSS 0 error / 0 warning** |
 | 验收口径 | 用户确认「精简验收」：单测 + 构建 + CHANGELOG/README，本轮**不做**隔离 dev-server 截图与真实宿主复验；含服务端改动，合并后需重启 DSH 才生效（客户端部分刷新看板即可） |
-| 生效方式 | 服务端 + 客户端：合入 main 后需重启 DSH（`/health` version 0.25.0），`web/dist` 已重新构建；分支 `feat/workspace-cleanup-closure`（基于 `65cbf6c`） |
+| 生效方式 | 服务端 + 客户端：**已合入 main（merge `49400ca`，`--no-ff`）**，重启 DSH 后生效（`/health` version 0.25.0），`web/dist` 已从合并后源码重新构建；分支 `feat/workspace-cleanup-closure`（基于 `65cbf6c`）。合入时主工作区并行未提交改动（视觉 V2–V6 / 会话与卡片联动 / 动效批次）经 stash→merge→apply 原样保留：53 个改动文件中 43 个逐字节一致，8 个重叠文件为双方合并结果（routes.js / api.ts / i18n.tsx / workspaces.css / CHANGELOG / README / docs/06），2 个 dist 资源由合并后源码重建 |
 
 ## 2. 自动化测试
 
@@ -675,8 +691,8 @@
 
 ```
 $ npm test
-# tests 310
-# pass 310 / # fail 0
+# tests 317
+# pass 317 / # fail 0
 # duration_ms ~13s
 ```
 
@@ -688,7 +704,7 @@ $ npm test
 $ npm --prefix web run build
 > tsc --noEmit   # 0 error
 > vite build     # dist: JS gzip ~147KB / CSS gzip ~19KB
-$ npm --prefix web run test    # vitest 36 文件 / 485 测试（v0.25.0：worktreeBatchCleanup 12 例；v0.24.0：revealPath 6 例；v0.23.0：worklineOverview 29 例；另含 rebindDir 13 / worktreeCleanupNudge 9 / 会话归属 15 / sessionSuggest 20）
+$ npm --prefix web run test    # vitest 37 文件 / 489 测试（v0.25.0：worktreeBatchCleanup 12 例；并行动效未提交：usePresence 4 例；v0.24.0：revealPath 6 例；v0.23.0：worklineOverview 29 例；另含 rebindDir 13 / worktreeCleanupNudge 9 / 会话归属 15 / sessionSuggest 20）
 $ npm --prefix web run lint:tokens
 # 11 个 CSS 文件：0 error / 0 warning
 ```

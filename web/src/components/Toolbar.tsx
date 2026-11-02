@@ -10,7 +10,9 @@ import {
   IconAuto,
   IconBoard,
   IconCheck,
+  IconChevronDown,
   IconClose,
+  IconFilter,
   IconFolder,
   IconGlobe,
   IconHelp,
@@ -23,7 +25,7 @@ import {
 } from './Icons';
 
 export type ViewMode = 'board' | 'list' | 'workspaces' | 'worklines';
-export type SyncState = 'connected' | 'connecting' | 'reconnecting' | 'standalone';
+export type SyncState = 'connected' | 'connecting' | 'reconnecting' | 'offline' | 'standalone';
 
 interface ToolbarProps {
   boardName: string;
@@ -48,6 +50,8 @@ interface ToolbarProps {
   onShowHelp: () => void;
   selectionMode: boolean;
   onToggleSelection: () => void;
+  /** 首屏数据尚未到达：顶栏计数改占位条、依赖数据的操作禁用（docs/10 A-13）。 */
+  loading: boolean;
 }
 
 function Chip({ label, onRemove, removeLabel }: { label: string; onRemove: () => void; removeLabel: string }) {
@@ -86,6 +90,7 @@ export function Toolbar({
   onShowHelp,
   selectionMode,
   onToggleSelection,
+  loading,
 }: ToolbarProps) {
   const { t } = useI18n();
   const activeFilters = hasActiveFilters(filters);
@@ -116,38 +121,66 @@ export function Toolbar({
         ? t('app.syncConnecting')
         : syncState === 'reconnecting'
           ? t('app.syncReconnecting')
-          : t('app.syncConnected');
+          : syncState === 'offline'
+            ? t('app.syncOffline')
+            : t('app.syncConnected');
   const syncTone =
     syncState === 'connected'
       ? 'success'
       : syncState === 'reconnecting'
         ? 'warn'
-        : syncState === 'connecting'
-          ? 'business'
-          : 'tertiary';
+        : syncState === 'offline'
+          ? 'error'
+          : syncState === 'connecting'
+            ? 'business'
+            : 'tertiary';
+  /** 连接中断/已断开时，状态点变成可点重试入口（docs/10 A-08）。 */
+  const syncRetryable = syncState === 'reconnecting' || syncState === 'offline';
+  /** 首屏 loading：顶栏计数用占位条，禁用依赖数据的操作（docs/10 A-13）。 */
+  const loadingHint = t('app.loadingHint');
 
   return (
     <>
       <header className="kb-topbar">
         <div className="kb-crumbs">
         <h1 className="kb-crumb-current">{boardName}</h1>
-        <span className="kb-crumb-tag" title={t('app.boardCardCountTooltip', { count: totalCards })}>
-          {t('app.cardCountTotal', { count: totalCards })}
+        <span
+          className={`kb-crumb-tag${loading ? ' kb-crumb-tag--loading' : ''}`}
+          title={loading ? loadingHint : t('app.boardCardCountTooltip', { count: totalCards })}
+        >
+          {loading ? (
+            <span className="kb-crumb-placeholder" aria-hidden="true" />
+          ) : (
+            t('app.cardCountTotal', { count: totalCards })
+          )}
         </span>
         <span className="kb-crumb-counts">
-          <span className="kb-crumb-count kb-crumb-count--needs">
-            <span className="kb-dot kb-dot--warn" aria-hidden="true" />
-            {t('app.needsYouCount', { count: needsYouCount })}
-          </span>
-          <span className="kb-crumb-count kb-crumb-count--running">
-            <span className="kb-dot kb-dot--business" aria-hidden="true" />
-            {t('app.sessionsRunning', { count: sessionsRunning })}
-          </span>
+          {loading ? (
+            <>
+              <span className="kb-crumb-count" aria-hidden="true">
+                <span className="kb-crumb-placeholder" />
+              </span>
+              <span className="kb-crumb-count" aria-hidden="true">
+                <span className="kb-crumb-placeholder" />
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="kb-crumb-count kb-crumb-count--needs">
+                <span className="kb-dot kb-dot--warn" aria-hidden="true" />
+                {t('app.needsYouCount', { count: needsYouCount })}
+              </span>
+              <span className="kb-crumb-count kb-crumb-count--running">
+                <span className="kb-dot kb-dot--business" aria-hidden="true" />
+                {t('app.sessionsRunning', { count: sessionsRunning })}
+              </span>
+            </>
+          )}
         </span>
       </div>
 
         <div className="kb-topbar-actions">
-        <div className="kb-seg kb-viewseg" role="tablist" aria-label={t('app.viewBoard')}>
+        <div className="kb-seg kb-viewseg" role="tablist" aria-label={t('app.viewTabs')}>
           {views.map((entry) => (
             <button
               key={entry.id}
@@ -207,8 +240,15 @@ export function Toolbar({
           <span className="kb-lang-label">{lang === 'zh' ? '中' : 'EN'}</span>
         </button>
 
-        {view === 'list' ? (
-          <button type="button" className="kb-btn kb-btn--primary kb-new-btn" onClick={onNewCard}>
+        {view === 'list' || loading ? (
+          <button
+            type="button"
+            className="kb-btn kb-btn--primary kb-new-btn"
+            onClick={onNewCard}
+            disabled={loading}
+            aria-disabled={loading || undefined}
+            title={loading ? loadingHint : undefined}
+          >
             <span className="kb-icon" aria-hidden="true">
               <IconPlus />
             </span>
@@ -254,7 +294,25 @@ export function Toolbar({
           )}
         </label>
 
-        <FilterMenu filters={filters} projects={projects} onChange={onFiltersChange} />
+        {loading ? (
+          <button
+            type="button"
+            className="kb-btn kb-btn--outline kb-btn--sm kb-filter-btn"
+            disabled
+            aria-disabled="true"
+            title={loadingHint}
+          >
+            <span className="kb-icon" aria-hidden="true">
+              <IconFilter />
+            </span>
+            {t('app.toolbarFilters')}
+            <span className="kb-icon kb-filter-caret" aria-hidden="true">
+              <IconChevronDown />
+            </span>
+          </button>
+        ) : (
+          <FilterMenu filters={filters} projects={projects} onChange={onFiltersChange} />
+        )}
 
         <div className="kb-filter-chips" aria-label={t('app.filterTitle')}>
           {filters.project ? (
@@ -281,6 +339,9 @@ export function Toolbar({
           className={`kb-btn kb-btn--sm ${selectionMode ? 'kb-btn--primary' : 'kb-btn--outline'} kb-select-btn`}
           aria-pressed={selectionMode}
           onClick={onToggleSelection}
+          disabled={loading}
+          aria-disabled={loading || undefined}
+          title={loading ? loadingHint : undefined}
         >
           <span className="kb-icon" aria-hidden="true">
             <IconCheck />
@@ -291,8 +352,25 @@ export function Toolbar({
 
         <div className="kb-toolbar-spacer" />
 
-        <span className="kb-agent-live" title={syncLabel}>
-          <span className={`kb-dot kb-dot--${syncTone}`} aria-hidden="true" />
+        {syncRetryable ? (
+          <button
+            type="button"
+            className="kb-agent-live kb-agent-live--action"
+            title={`${syncLabel} · ${t('app.syncRetryAction')}`}
+            aria-label={`${syncLabel} · ${t('app.syncRetryAction')}`}
+            onClick={onRetry}
+          >
+            <span className={`kb-dot kb-dot--${syncTone}`} aria-hidden="true" />
+            {syncLabel}
+          </button>
+        ) : (
+          <span className="kb-agent-live" title={syncLabel}>
+            <span className={`kb-dot kb-dot--${syncTone}`} aria-hidden="true" />
+            {syncLabel}
+          </span>
+        )}
+        {/* aria-live：只在状态文案变化时播报一次，退避重试期间文案不变，不会反复播报 */}
+        <span className="kb-sr-only" role="status" aria-live="polite" aria-atomic="true">
           {syncLabel}
         </span>
       </div>
@@ -300,7 +378,7 @@ export function Toolbar({
 
       {syncError ? (
         <div className="kb-errorbar" role="alert">
-          <span className="kb-errorbar__message">{t('app.inlineSyncError', { message: syncError })}</span>
+          <span className="kb-errorbar__message">{syncError}</span>
           <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={onRetry}>
             {t('app.retry')}
           </button>

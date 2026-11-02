@@ -25,7 +25,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
 }
 
@@ -51,23 +51,24 @@
 }
 
 .kb-crumb-count--running {
-  color: var(--kb-status-running);
+  color: var(--kb-status-running-text);
 }
 
 .kb-crumb {
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xs-13);
   white-space: nowrap;
 }
 
 .kb-crumb-sep {
   display: inline-flex;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-tertiary);
 }
 
+/* A-06 一级（页面标题）：16/22/600，仍用 DSH 字体栈 */
 .kb-crumb-current {
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-xs-strong-13);
+  font: 600 16px/22px var(--dsw-font-family);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -130,13 +131,14 @@
 .kb-batchbar__count {
   flex: none;
   font: var(--dsw-font-xxs-strong-12);
-  color: var(--dsw-alias-state-business-primary);
+  /* A-11：已选计数是批量操作的主状态，用 label-primary 保证淡蓝底上 ≥4.5:1 */
+  color: var(--dsw-alias-label-primary);
   font-variant-numeric: tabular-nums;
 }
 
 .kb-batchbar__hint {
   flex: none;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   white-space: nowrap;
 }
@@ -146,11 +148,19 @@
 }
 
 .kb-batchbar__danger {
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
 }
 
 .kb-batchbar__danger:not(:disabled):hover {
   border-color: var(--dsw-alias-state-error-primary);
+}
+
+/* A-11：禁用「归档」不只淡化文字 —— 给可辨边界（对淡蓝底 3.15:1）与浅底 */
+.kb-batchbar .kb-batchbar__danger:disabled {
+  border-color: var(--kb-disabled-border);
+  background: var(--kb-disabled-fill);
+  color: var(--dsw-alias-label-secondary);
+  cursor: not-allowed;
 }
 
 .kb-lang-btn {
@@ -323,7 +333,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
   white-space: nowrap;
 }
@@ -336,7 +346,7 @@
   padding: 7px 10px;
   border-radius: var(--kb-r-ctl);
   background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--kb-status-failed-text);
   font: var(--dsw-font-xxs-12);
 }
 
@@ -393,7 +403,7 @@
 .kb-filter-group__label {
   display: block;
   padding: 4px 8px 2px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-strong-11);
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -401,7 +411,7 @@
 
 .kb-filter-group__empty {
   padding: 4px 8px 6px;
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -440,7 +450,7 @@
   height: 28px;
   padding: 0 var(--kb-pad-x);
   border-top: 0.5px solid var(--dsw-alias-border-l1);
-  color: var(--dsw-alias-label-tertiary);
+  color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxxs-11);
 }
 
@@ -458,10 +468,52 @@
 }
 
 .kb-statusbar__mock {
-  color: var(--dsw-alias-label-caption);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .kb-statusbar .kb-kbd {
   height: 16px;
   min-width: 16px;
+}
+
+/* ------------------------------------------------- A-05 触控热区（≤719px）
+   竖屏主要操作的有效热区 ≥44×44：视觉尺寸尽量保持，用真实盒尺寸或 ::before 扩展。
+   responsive.css 归批次1（impl-mobile），这里只写本文件控件自己的竖屏规则。 */
+@media (max-width: 719px) {
+  /* A-06：页标题在竖屏也保持 16/22/600（responsive.css 里的 14/500 是批次1的降级，
+     这里用更高优先级拉回统一层级；工具栏高度段落不在此文件，不受影响） */
+  .kb-app-scope .kb-crumb-current {
+    font: 600 16px/22px var(--dsw-font-family);
+  }
+
+  /* 主题：图标 + 隐藏文字，扩到 44×44 */
+  .kb-app-scope .kb-theme-btn {
+    min-width: 44px;
+    height: 44px;
+    padding: 0 10px;
+  }
+
+  /* 筛选：工具栏控件，真实高度 44（工具栏高度已由批次1改为自适应） */
+  .kb-app-scope .kb-toolbar > .kb-filter-btn {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  /* 选择：进入批量选择的主要入口 */
+  .kb-app-scope .kb-select-btn {
+    height: 44px;
+    min-height: 44px;
+    padding: 0 12px;
+  }
+
+  /* 批量条按钮：A-11 要求 ≥36，A-05 要求主要操作 ≥44 */
+  .kb-app-scope .kb-batchbar .kb-btn {
+    min-height: 44px;
+  }
+
+  /* 快捷键帮助按钮（顶栏） */
+  .kb-app-scope .kb-help-btn {
+    min-width: 44px;
+    height: 44px;
+  }
 }

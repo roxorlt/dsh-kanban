@@ -115,6 +115,13 @@
     padding: 0 10px;
   }
 
+  /* A-05：竖屏视图 tab 是主要操作，视觉 44×44（icon-only 时 min-width 兜住横向热区） */
+  .kb-viewseg .kb-seg-btn {
+    min-width: 44px;
+    height: 44px;
+    padding: 0 6px;
+  }
+
   .kb-seg-label {
     display: none;
   }
@@ -193,7 +200,7 @@
     gap: 5px;
     flex: 1 1 0;
     min-width: 0;
-    height: 40px;
+    height: 44px;
     padding: 0 6px;
     border: 0;
     border-radius: var(--kb-r-ctl);
@@ -254,8 +261,8 @@
   }
 
   .kb-column-head__actions .kb-icon-btn {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
 
   .kb-column-head {
@@ -496,7 +503,7 @@
   }
 
   .kb-batchbar .kb-btn {
-    height: 28px;
+    min-height: 36px;
   }
 
   .kb-crumbs {
@@ -561,4 +568,54 @@
     max-height: none;
     overflow-y: visible;
   }
+}
+
+/* ------------------------------------------------------- 同步断线 / 重试入口（docs/10 A-08）
+   连接中断或已断开时，工具栏右侧 .kb-agent-live 从静态标签变成可点「重试」chip；
+   桌面与窄屏通用，视觉尺寸仍按 11px 元信息，只补可点击反馈与热区。 */
+.kb-agent-live--action {
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border: 0;
+  border-radius: var(--kb-r-ctl);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.kb-agent-live--action:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-agent-live--action:active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+@media (max-width: 719px) {
+  .kb-agent-live--action {
+    min-height: 36px;
+  }
+}
+
+/* ------------------------------------------------ 首屏 loading 计数占位（docs/10 A-13）
+   数据到达前顶栏不显示「共 0 张 / 0 / 0」，改用与 skeleton 同底色的静态占位条；
+   列内骨架仍由 SkeletonBoard 承担，这里只占计数位置、不影响顶栏操作区。 */
+.kb-crumb-placeholder {
+  display: inline-block;
+  width: 56px;
+  height: 11px;
+  border-radius: 4px;
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+.kb-crumb-tag--loading {
+  padding: 3px 0;
+  background: transparent;
+}
+
+.kb-crumb-tag--loading .kb-crumb-placeholder {
+  width: 64px;
 }
