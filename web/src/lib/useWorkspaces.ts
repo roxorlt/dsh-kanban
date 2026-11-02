@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
+import { shortenPath } from './forkGraph';
 import { isTerminalCardStatus } from './sessionArchive';
 import { formatRelative } from './time';
 import type { Lang } from './time';
@@ -175,6 +176,21 @@ export interface GroupCardsByWorktreeOptions {
 /** 去掉末尾 `/`，用于最长前缀匹配（避免 `/repo/` 与 `/repo` 匹配不上）。 */
 function trimTrailingSlash(path: string): string {
   return path.replace(/\/+$/, '');
+}
+
+/**
+ * 工作副本展示名（「工作区」与「工作线」视图共用）：
+ * 主工作副本用仓库名；子工作副本用相对仓库根的路径；兜底取缩短路径。
+ */
+export function formatWorktreeLabel(
+  repo: { root: string; name: string },
+  worktree: { path: string },
+): string {
+  const root = trimTrailingSlash(repo.root);
+  const path = trimTrailingSlash(worktree.path);
+  if (path === root) return repo.name;
+  if (path.startsWith(`${root}/`)) return path.slice(root.length + 1);
+  return shortenPath(worktree.path);
 }
 
 /** cwd 是否等于该工作副本路径或位于其下。 */

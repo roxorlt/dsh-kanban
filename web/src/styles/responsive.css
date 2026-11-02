@@ -136,6 +136,9 @@
   }
 
   .kb-toolbar {
+    /* 竖屏搜索框独占一行、筛选/选择换到第二行：高度必须自适应，否则第二行会压在视图内容上 */
+    height: auto;
+    min-height: 48px;
     flex-wrap: wrap;
     padding: 8px 12px;
     gap: 6px;

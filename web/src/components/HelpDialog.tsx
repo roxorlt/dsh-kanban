@@ -10,6 +10,7 @@ const SHORTCUTS: { keys: string[]; labelKey: I18nKey }[] = [
   { keys: ['N'], labelKey: 'shortcut.new' },
   { keys: ['B'], labelKey: 'shortcut.board' },
   { keys: ['L'], labelKey: 'shortcut.list' },
+  { keys: ['W'], labelKey: 'shortcut.worklines' },
   { keys: ['⌘', 'K'], labelKey: 'shortcut.search' },
   { keys: ['Esc'], labelKey: 'shortcut.close' },
   { keys: ['?'], labelKey: 'shortcut.help' },

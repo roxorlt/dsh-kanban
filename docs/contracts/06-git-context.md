@@ -261,6 +261,8 @@ GET /api/kanban/cards/:cardId/git[?cwd=<绝对路径>]
 
 ## 5. 前端渲染约定（供实现参照，非接口契约）
 
+v0.23.0 起另有**看板级「工作线」总览视图**（工具栏第三个 Tab）：第一层按仓库 / 项目、第二层每条工作线一行（= 一个工作副本 + 它检出的分支）。数据**完全复用本契约 §4.7 的 `POST /git/workspaces`**（`worktrees[]` 的 `aheadOfBase` / `behindOfBase` / `mergedIntoBase` / `upstream` / `dirty` / `lastCommitAt` / `prunable`）与卡片 `cwd` 映射，不新增接口与卡片字段；行状态口径与工作区视图同源（`mergedIntoBase===true` → 已并入主线；否则未完成卡片或未保存改动 → 进行中；否则停滞；`prunable`/算不出 → 无法判断），详见 docs/03 §7.28 与 docs/06 §1.41。
+
 v0.14.1 起详情抽屉**默认先说人话**：一眼看懂结论，提交图折叠为进阶视图（数据接口不变）。
 
 - **区块结构**（自上而下）：

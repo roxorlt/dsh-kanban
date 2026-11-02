@@ -67,6 +67,8 @@ import type { ListGroupBy } from './lib/listGroups';
 import { applyPage, EMPTY_FEED } from './lib/activities';
 import { useWorklineStatuses } from './lib/useWorklineStatuses';
 import { collectRunningSessionCwds, useWorkspaces } from './lib/useWorkspaces';
+import { buildWorklineOverview, findWorklineRow } from './lib/worklineOverview';
+import type { WorklineSelection } from './lib/worklineOverview';
 import { buildCleanupNudge } from './lib/worktreeCleanupNudge';
 import { buildRebindCandidates, cardCwdState, formatRebindComment } from './lib/rebindDir';
 import type { ActivityFeed } from './lib/activities';
@@ -83,6 +85,7 @@ import { DetailDrawer } from './components/DetailDrawer';
 import { EmptyState, ErrorState, SkeletonBoard } from './components/feedback';
 import { HelpDialog } from './components/HelpDialog';
 import { ListView } from './components/ListView';
+import { WorklineFilterBar, WorklineView } from './components/WorklineView';
 import { WorkspaceView } from './components/WorkspaceView';
 import { ToastRegion, useToasts } from './components/Toast';
 import type { ToastAction } from './components/Toast';
@@ -180,9 +183,10 @@ interface StopAndArchiveTarget extends SessionArchiveTarget {
 function readStoredView(): ViewMode {
   try {
     const stored = localStorage.getItem(VIEW_STORAGE_KEY);
-    // 兼容旧值：只认这三个视图，其它（含 null）回落到看板
+    // 兼容旧值：只认这四个视图，其它（含 null）回落到看板
     if (stored === 'list') return 'list';
     if (stored === 'workspaces') return 'workspaces';
+    if (stored === 'worklines') return 'worklines';
     return 'board';
   } catch {
     return 'board';
@@ -423,6 +427,8 @@ export function App() {
   // ------------------------------------------------------------------ 视图状态
   const [view, setViewState] = useState<ViewMode>(readStoredView);
   const [filters, setFilters] = useState<CardFilters>(EMPTY_FILTERS);
+  // v0.23.0「工作线」视图：点一条工作线后，看板只看这条线的卡片（提示条可清空）
+  const [worklineFilter, setWorklineFilter] = useState<WorklineSelection | null>(null);
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [formState, setFormState] = useState<FormState | null>(null);
@@ -458,12 +464,30 @@ export function App() {
   const handleViewChange = useCallback((next: ViewMode) => {
     setViewState(next);
     storeView(next);
-    // 工作区视图只读：进入时退出选择模式，避免批量操作条悬空
-    if (next === 'workspaces') {
+    // 只读视图（工作区 / 工作线）：进入时退出选择模式，避免批量操作条悬空
+    if (next === 'workspaces' || next === 'worklines') {
       setSelectionMode(false);
       setSelectedIds(EMPTY_SELECTION);
       setActiveCardId(null);
     }
+  }, []);
+
+  /** 点一条工作线：切到看板并只看这条线的卡片（同一行再点一次不清空，用提示条「显示全部」清空）。 */
+  const handleSelectWorkline = useCallback(
+    (selection: WorklineSelection) => {
+      setWorklineFilter(selection);
+      handleViewChange('board');
+    },
+    [handleViewChange],
+  );
+
+  const clearWorklineFilter = useCallback(() => setWorklineFilter(null), []);
+
+  /** 看板 / 列表的「有筛选」状态：搜索 / 项目 + 工作线筛选都算（清空时一起清）。 */
+  const hasAnyFilter = hasActiveFilters(filters) || worklineFilter !== null;
+  const clearAllFilters = useCallback(() => {
+    setFilters({ query: '', project: null });
+    setWorklineFilter(null);
   }, []);
 
   useEffect(() => {
@@ -484,18 +508,39 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [highlightCardId]);
 
-  const filteredCards = useMemo(() => filterCards(snapshot.cards, filters), [snapshot.cards, filters]);
-
   // v0.22 父子卡 / 依赖索引：用全量卡片算，筛选不改变子卡计数（旧数据无关系字段时为空索引）
   const cardRelations = useMemo(() => buildCardRelationIndex(snapshot.cards), [snapshot.cards]);
-  // 未归档的全部卡片：工作区「显示全部」范围 + 清理占用判定用
+  // 未归档的全部卡片：工作区「显示全部」范围 + 工作线总览 + 清理占用判定用
   const unarchivedCards = useMemo(() => snapshot.cards.filter((card) => !card.archived), [snapshot.cards]);
   // 运行中会话的 cwd：客户端清理安全层（服务端不知道会话 cwd）
   const runningSessionCwds = useMemo(() => collectRunningSessionCwds(sessions), [sessions]);
-  // 卡片「工作线」徽标：按 cwd 去重批量探测（轻量摘要，不看 graph）
-  const worklineStatuses = useWorklineStatuses(filteredCards);
   // 「工作区」视图：按仓库/工作副本聚合（探测全部未归档卡片的 cwd，范围切换时数据才完整）
   const workspaceState = useWorkspaces(unarchivedCards);
+  // v0.23.0「工作线」总览：与「工作区」视图同一份仓库/工作副本数据 + 卡片归属（含按会话归属兜底）
+  const worklineOverview = useMemo(
+    () =>
+      buildWorklineOverview(unarchivedCards, workspaceState.repos, {
+        sessions,
+        unavailable: workspaceState.unavailable,
+      }),
+    [unarchivedCards, workspaceState.repos, workspaceState.unavailable, sessions],
+  );
+  // 当前只看的工作线行（数据刷新后该工作副本可能不在了 → 空卡片列表 + 提示条仍显示）
+  const worklineRow = useMemo(
+    () => findWorklineRow(worklineOverview, worklineFilter),
+    [worklineOverview, worklineFilter],
+  );
+  const worklineCardIds = useMemo(
+    () => (worklineRow ? new Set(worklineRow.cards.map((card) => card.id)) : null),
+    [worklineRow],
+  );
+  const filteredCards = useMemo(() => {
+    const base = filterCards(snapshot.cards, filters);
+    if (!worklineCardIds) return base;
+    return base.filter((card) => worklineCardIds.has(card.id));
+  }, [snapshot.cards, filters, worklineCardIds]);
+  // 卡片「工作线」徽标：按 cwd 去重批量探测（轻量摘要，不看 graph）
+  const worklineStatuses = useWorklineStatuses(filteredCards);
   const groups = useMemo(
     () => (snapshot.board ? groupCardsByColumn(filteredCards, snapshot.board.cardOrder) : EMPTY_GROUPS),
     [filteredCards, snapshot.board],
@@ -1950,6 +1995,9 @@ export function App() {
       } else if (key.toLowerCase() === 'l') {
         event.preventDefault();
         handleViewChange('list');
+      } else if (key.toLowerCase() === 'w') {
+        event.preventDefault();
+        handleViewChange('worklines');
       } else if (key.toLowerCase() === 't') {
         event.preventDefault();
         void cycleTheme();
@@ -1984,6 +2032,19 @@ export function App() {
     if (!snapshot.board) {
       return <EmptyState title={t('empty.board')} hint={t('empty.boardHint')} />;
     }
+    if (view === 'worklines') {
+      return (
+        <WorklineView
+          overview={worklineOverview}
+          disabled={workspaceState.disabled}
+          loaded={workspaceState.loaded}
+          selected={worklineFilter}
+          now={now}
+          onSelectWorkline={handleSelectWorkline}
+          onOpenCard={actions.onOpenDetail}
+        />
+      );
+    }
     if (view === 'workspaces') {
       return (
         <WorkspaceView
@@ -2011,8 +2072,8 @@ export function App() {
           shared={shared}
           actions={actions}
           worklineStatuses={worklineStatuses}
-          filtering={hasActiveFilters(filters)}
-          onClearFilters={() => setFilters({ query: '', project: null })}
+          filtering={hasAnyFilter}
+          onClearFilters={clearAllFilters}
           selectionMode={selectionMode}
           selectedIds={selectedIds}
           onToggleSelection={handleToggleSelect}
@@ -2040,8 +2101,8 @@ export function App() {
         }}
         onMoveWithPlacement={(cardId, column, placement) => void handleMove(cardId, column, placement)}
         onViewAllDone={handleViewAllDone}
-        filtering={hasActiveFilters(filters)}
-        onClearFilters={() => setFilters({ query: '', project: null })}
+        filtering={hasAnyFilter}
+        onClearFilters={clearAllFilters}
         selectionMode={selectionMode}
         selectedIds={selectedIds}
         onToggleSelection={handleToggleSelect}
@@ -2098,7 +2159,17 @@ export function App() {
             onCancel={exitSelectionMode}
           />
         ) : null}
-        <main className={`kb-main${loading ? ' kb-main--loading' : ''}`}>{main}</main>
+        <main className={`kb-main${loading ? ' kb-main--loading' : ''}`}>
+          {/* v0.23.0：从「工作线」视图点一条线后，看板/列表/工作区只看这条线的卡片 */}
+          {worklineFilter && view !== 'worklines' ? (
+            <WorklineFilterBar
+              selection={worklineFilter}
+              cardCount={filteredCards.length}
+              onClear={clearWorklineFilter}
+            />
+          ) : null}
+          {main}
+        </main>
         {unsentDecision ? (
           <div className="kb-unsent-banner" role="status" aria-live="polite">
             <span className="kb-unsent-banner__text">
@@ -2136,6 +2207,9 @@ export function App() {
           </span>
           <span>
             <span className="kb-kbd">L</span> {t('shortcut.list')}
+          </span>
+          <span>
+            <span className="kb-kbd">W</span> {t('shortcut.worklines')}
           </span>
           <span>
             <span className="kb-kbd">⌘K</span> {t('shortcut.search')}
