@@ -654,7 +654,7 @@
 | 测试 | 服务端 **308/308**（v0.23.0 基线 294 + 14 例 `test/client-reveal.test.mjs`：能力探测 / 缓存 / 调用参数 `{path, action:'reveal'}` / Windows 盘符 / 旧宿主降级 / 非桌面 / 非法路径 6 组 / 宿主拒绝与抛错映射 / 异源消息 / `UNKNOWN_METHOD`）；Web **35 文件 / 473 例**（+1 文件 6 例 `revealPath.test.ts`）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS 0/0 |
 | 真实 DSH 验收（宿主 `0.2.1-rc.3`，未重启；`client-hmr` 自动重载客户端 bundle rev `9fff0c220f58`） | headless Chromium + 真实 GUI（`http://127.0.0.1:58638/`）打开看板 → 工作区视图：两条工作副本行各出现「在 Finder 中打开」（`aria-label` 断言），`host.capabilities` → `{revealPath:true}`；点 `dsh kanban` 行的按钮 → 桥响应 `{ok:true}`，**macOS 窗口列表新增标题为「dsh kanban」的 Finder 窗口**（点击前 Finder 窗口 = 3×`rea L2`，点击后 = `dsh kanban` + 3×`rea L2`），`window.__DSH_KANBAN__.errors` 无新增；绕过前端直接以绝对路径 `/etc/hosts` 调桥被宿主拒绝 `REVEAL_FAILED / Path has no verified Host path`（第二道边界）。无桥场景：同源直接打开 `/dsh-kanban/`（`window.parent === window`，独立预览）→ 2 个工作副本行、`revealCount=0`、复制路径按钮仍在（功能不受影响） |
 | 截图 | `docs/assets/screens/workspace-reveal-finder.png`（真实宿主工作区视图 + 中英文「在 Finder 中打开」）、`workspace-reveal-hidden.png`（独立预览无桥：无按钮、复制路径仍在）、`finder-reveal-window.png`（点击后 Finder 定位到 dsh kanban 目录） |
-| 生效方式 | **纯客户端改动**：DSH 的 `client-hmr` 会检测 `lib/client.js` 变化并重载插件（已实测 bundle rev 自动更新），刷新看板即加载新 UI；不涉及服务端，不需要重启 DSH。分支 `feat/finder-reveal` |
+| 生效方式 | **纯客户端改动**：DSH 的 `client-hmr` 会检测 `lib/client.js` 变化并重载插件（已实测 bundle rev 自动更新），刷新看板即加载新 UI；不涉及服务端，不需要重启 DSH。分支 `feat/finder-reveal`，**已合入 main（merge `03767c0`）** |
 
 ## 2. 自动化测试
 

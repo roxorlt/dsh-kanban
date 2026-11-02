@@ -13,7 +13,7 @@
 - 真实 DSH 验收（宿主 `0.2.1-rc.3`，未重启；`client-hmr` 自动重载客户端 bundle）：真实 GUI + headless Chromium 打开看板 → 工作区视图两条工作副本行都出现按钮，`host.capabilities` → `{revealPath:true}`；点 `dsh kanban` 行的按钮 → 桥响应 `{ok:true}`，**macOS 窗口列表新增标题为「dsh kanban」的 Finder 窗口**，`window.__DSH_KANBAN__.errors` 无新增；绕过前端直接以 `/etc/hosts` 调桥被宿主拒绝 `Path has no verified Host path`；同源直接打开 `/dsh-kanban/`（独立预览，无父页面）时 2 个工作副本行 **0 个按钮**、复制路径仍在。截图 `docs/assets/screens/workspace-reveal-finder.png`、`workspace-reveal-hidden.png`、`finder-reveal-window.png`（docs/06 §1.42）。
 - 生效方式：**纯客户端改动**，合入 main 后 DSH 的 `client-hmr` 会自动重载客户端 bundle（实测 rev 由 `9cf82bc58ea8` → `9fff0c220f58`），刷新看板即生效，**无需重启 DSH**；`web/dist` 已重新构建。
 - 已知限制：① 只在「工作区」视图的工作副本行提供（「工作线」总览的行是整体可点的筛选按钮，不嵌套按钮）；② 依赖宿主桌面能力，SSH / 无桌面后端时 `canOpenWorkspacePath=false`、入口隐藏；③ 目录已被手动删除（prunable）时点击会得到宿主失败提示，不会静默成功。
-- 分支：`feat/finder-reveal`（基于 `df82d31`）。
+- 分支：`feat/finder-reveal`（基于 `df82d31`），**已合入 main（merge `03767c0`）**。
 
 ## v0.23.0 — 2026-11-02
 
