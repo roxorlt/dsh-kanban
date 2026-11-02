@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.25.0 — 2026-11-02
+
+### 清理闭环：③ 清理留痕 + ⑯ 批量清理（仅安全项）+ ⑱ 工作区视图内可清理提醒
+
+- 背景：卡片 `card-facbab5d` 的「工作区体验改进 21 项建议」逐项盘点后，v0.16–v0.24 已落地 14 项；本轮按用户确认的「清理闭环」批次补齐剩余 P0/P2 三项，⑬「一卡多仓库归属」按用户决定**永久移除**，⑰ 磁盘占用 / ⑲ 只拉可见仓库降轮询 / ㉑ Windows 权限继续待排期。验收按用户选择的**精简口径**（单测 + 构建 + CHANGELOG/README，不做隔离演示截图与真实宿主复验）。
+- **③ 清理成功后给相关卡片/时间线留痕（服务端）**：`POST /git/worktrees/cleanup` 在清理前采集「未归档且 `cwd` 落在目标工作副本内」的卡片（含 `done`/`canceled` 终态卡，归档卡不算），清理成功后在同一笔 `store.update` 里给每张卡写一条 `progress` 节点（`data.kind='worktree_cleaned'`，带 `repoRoot`/`worktreePath`/`trashedTo`/`trashRetentionDays`/`branchName`/`branchDeleted`）并前移 `updatedAt`/`version`，时间线可直接看到「目录已移入回收站、可重新绑定工作目录」；**不改卡片 `cwd`**（仍走 v0.21 的重新绑定流程）。留痕写失败只记服务端日志、不回滚已完成的清理。响应新增 `cleanup.affectedCards: [{id,title}]`，`revision` 为留痕后的最新值（无相关卡片时与请求前一致，旧客户端无感）。
+- **⑯ 批量清理（预览 + 仅安全项，纯客户端编排、不新增 HTTP 接口）**：工作区顶部新增「批量清理（N）」，只列**安全项**——非主工作副本、未锁定、目录未失效、已并入主线、干净（无未保存改动/未跟踪文件）、无未完成卡片、cwd 无运行中会话，判定与单条清理同源（`evaluateWorktreeCleanup`）。确认后逐项调用现有单条清理接口（`confirmLoss:false`，服务端逐项再校验），**不提供任何带丢失风险的批量入口**；单项失败不中断后续项，对话框按仓库分组预览并展示逐项结果（成功 / 失败原因）。可选「同时删除已并入主线的本地分支」。
+- **⑱ 工作区视图内可清理提醒（定期、不打扰）**：有安全可清理项时顶部出现内联提醒「有 N 个工作副本可安全清理」+「批量清理」+ 关闭按钮；关闭时间写 localStorage，24 小时（`CLEANUP_NUDGE_DISMISS_TTL_MS`）后再次出现；不弹窗、不打断，候选基于全部仓库、不受「只看当前筛选」影响。
+- 契约/文档：`docs/contracts/02-http-api.md` §13 增「③ 时间线留痕」「⑯ 批量清理编排约定」与 `affectedCards`/`revision` 兼容说明；`docs/contracts/01-data-model.md` §3 时间线节点增 `worktree_cleaned`；README 状态与已知限制同步；根与 `web` 的 `package.json` 升到 0.25.0。
+- 测试：服务端 **310/310**（v0.24.0 基线 308 + 2 例 `test/git-cleanup.test.mjs`：清理成功后留痕含已完成卡片 / 不含归档卡 / revision 增加；清理被拒绝时不留痕、revision 不变）；Web **36 文件 / 485 例**（+`worktreeBatchCleanup.test.ts` 12 例：安全候选与全部排除项 / 运行中会话 cwd / 分组顺序 / 提醒 24h TTL / 失败文案 / `affectedCards` 归一化；另更新 `useWorkspaces.test.ts` 的 `normalizeCleanupResult` 期望）；`tsc --noEmit` 0 error、`vite build` 通过（JS gzip ~149KB / CSS gzip ~19KB）、令牌 lint **11 个 CSS 0 error / 0 warning**。
+- 生效方式：含服务端改动，**合入 main 后需重启 DSH 生效**（`/health` version 0.25.0）；客户端部分刷新看板即可；`web/dist` 已重新构建。
+- 已知限制：① 批量清理是逐项调用、非原子——中途失败时已清理的项不回滚（目录都在回收站，可恢复）；② 批量候选来自最近一次工作区探测（≤20s），「运行中会话 cwd」是 v0.18 起的客户端安全层（服务端不知道会话 cwd），存在极短竞态；③ 批量只处理安全项，脏 / 未合并仍需走单条清理的第二层危险确认；④ 清理留痕只写未归档卡片，归档卡不写；⑤ 磁盘占用（⑰）、只拉可见仓库降轮询（⑲）、Windows/权限（㉑）仍未做。
+- 分支：`feat/workspace-cleanup-closure`（基于 `65cbf6c`）。
+
 ## v0.24.0 — 2026-11-02
 
 ### 新增：工作副本「在 Finder 中打开」（DSH 客户端桥 `host.capabilities` / `host.revealPath`）

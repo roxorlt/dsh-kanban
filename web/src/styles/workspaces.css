@@ -794,6 +794,133 @@
   color: var(--dsw-alias-state-warn-label);
 }
 
+/* ------------------------------------------------- v0.25.0 ⑯/⑱ 批量清理 + 可清理提醒 */
+
+.kb-workspace__batch-btn {
+  flex: none;
+}
+
+.kb-workspace__cleanup-nudge {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 10px;
+  border-radius: var(--kb-r-ctl);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-workspace__cleanup-nudge-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 批量清理对话框：按仓库分组的候选 / 逐项结果 */
+.kb-workspace__batch-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.kb-workspace__batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.kb-workspace__batch-repo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kb-workspace__batch-repo-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+}
+
+.kb-workspace__batch-repo-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-caption);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-workspace__batch-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0 0 0 10px;
+  list-style: none;
+}
+
+.kb-workspace__batch-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 3px 8px;
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kb-workspace__batch-item--failed {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
+}
+
+.kb-workspace__batch-branch {
+  flex: none;
+  max-width: 55%;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-workspace__batch-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-workspace__batch-status {
+  flex: none;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-workspace__batch-item--failed .kb-workspace__batch-status {
+  color: var(--dsw-alias-state-error-primary);
+}
+
 /* ---------------------------------------------------------------- 竖屏 */
 
 @media (max-width: 719px) {
@@ -881,5 +1008,19 @@
   .kb-crumb-counts {
     flex-wrap: wrap;
     row-gap: 2px;
+  }
+
+  /* v0.25.0 ⑯/⑱：窄屏提醒条与批量结果行允许换行 */
+  .kb-workspace__cleanup-nudge {
+    padding: 6px 8px;
+  }
+
+  .kb-workspace__batch-list {
+    max-height: 46vh;
+  }
+
+  .kb-workspace__batch-item {
+    flex-wrap: wrap;
+    row-gap: 1px;
   }
 }

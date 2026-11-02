@@ -306,7 +306,9 @@ node scripts/dev-server.mjs --port 4599 --data /tmp/kanban-dev.json
   - 未并入主线且 `confirmLoss !== true` → 409 `WORKTREE_UNMERGED`（带 `ahead`）；
   - `deleteBranch` 且分支是主分支 → 400 `BRANCH_MAIN`；分支被其它工作副本占用 → 409 `BRANCH_IN_USE`。
 - 行为：把目录 `rename` 到 `~/.dsh-kanban/trash/<时间戳>-<仓库名>-<工作副本名>`（同一磁盘；跨磁盘失败返回 500 `TRASH_MOVE_FAILED`，不做强删），并在回收站目录写入 `manifest.json`（v0.18 起：`{version:1, trashedAt, repoRoot, worktreePath, branch, sha, branchDeleted}`，供恢复使用；旧条目无 manifest 时列表标记不可恢复）；在仓库内 `git worktree prune` 清理元数据；`deleteBranch` 时：已合并用 `git branch -d`，未合并（已 `confirmLoss`）用 `git branch -D`；顺手清理 trash 中超 7 天的条目（尽力而为）。
-- 200：`{ok, revision, cleanup: { repoRoot, worktreePath, trashedTo, branchName, branchDeleted, trashRetentionDays: 7}}`。
+- **③ 时间线留痕（v0.25.0）**：清理前先采集「未归档且 `cwd` 落在该工作副本内」的卡片（含 `done`/`canceled` 终态卡，已归档卡不算），清理成功后在同一笔存储事务里给这些卡片各写一条 `progress` 节点（`data.kind='worktree_cleaned'`，带 `repoRoot` / `worktreePath` / `trashedTo` / `trashRetentionDays` / `branchName` / `branchDeleted`），并把卡片 `updatedAt`/`version` 前移。**不改卡片 `cwd`**——目录已失效，由前端提示「重新绑定目录」（v0.21.0 #16）。留痕写入失败只记服务端日志，不回滚已完成的清理。
+- 200：`{ok, revision, cleanup: { repoRoot, worktreePath, trashedTo, branchName, branchDeleted, trashRetentionDays: 7, affectedCards: [{id,title}] }}`。`revision` 为本次请求后的最新 revision（有留痕时 +1，无相关卡片时与请求前一致）；`affectedCards` 是实际写入留痕的卡片（旧客户端忽略该字段即可）。
+- **⑯ 批量清理（v0.25.0，纯客户端编排，不新增接口）**：前端从 `/git/workspaces` 的结果里挑出**安全项**（非主工作副本、未锁定、目录未失效、`mergedIntoBase===true`、`modifiedCount/untrackedCount===0`、无未完成卡片、cwd 无运行中会话——与单条清理同一套判定），预览后对每一项**逐项**调用本接口（`confirmLoss:false`）；服务端逐项重新校验，因此批量同样受全部安全约束，不提供任何「带丢失风险」的批量入口。逐项成功/失败互不影响；每项成功各自触发上面的 ③ 留痕与缓存失效。
 - 只读边界：本接口是 v0.13 以来第一个写 git 状态的接口，只做「移入回收站 + prune + 可选删本地分支」，不做 push/fetch/reset。
 - 审计：服务端 `console.info` 记录操作者/目标（后续可接决策日志）；前端在成功后 toast 并触发工作区数据刷新。
 

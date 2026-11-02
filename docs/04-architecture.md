@@ -222,7 +222,7 @@ sequenceDiagram
 | `lib/workspace-backfill.js` | 启动时工作区回填：把「有 cwd、缺 workspaceId」的未归档卡片按宿主 `workspaceRegistry.resolveByPath` 精确补齐（幂等/静默/可关；v0.22.1） |
 | `lib/session-sync.js` | 会话运行失败同步：监听宿主 `session/event` 的 `turn/end`，失败/恢复回写卡片（v0.11） |
 | `lib/git.js` | 卡片 Git 上下文：详情完整上下文、批量摘要、工作区聚合；v0.17 增工作副本清理判定字段与 `cleanupWorktree`（回收站 + prune + 可选删分支） |
-| `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`）、决策日志、会话归档与卡片 Git 上下文接口；v0.21.0 起工作副本清理占用只数**未完成**卡片（`done`/`canceled` 终态不占用，探测允许集合不变） |
+| `lib/routes.js` | REST API、SSE、同源校验、静态资源（`/dsh-kanban/*`）、决策日志、会话归档与卡片 Git 上下文接口；v0.21.0 起工作副本清理占用只数**未完成**卡片（`done`/`canceled` 终态不占用，探测允许集合不变）；v0.25.0 清理成功后给 `cwd` 落在被清理工作副本内的未归档卡片写时间线留痕（响应 `cleanup.affectedCards`，revision 随之 +1） |
 | `lib/tools.js` | 14 个 `kanban_*` agent 工具（v0.22 增 review_board / merge_cards / archive_cards；create/update 支持父子卡与依赖） |
 | `web/src/lib/cardRelations.ts` | 父子卡/依赖索引与描述、409 `openChildren` 解析（脏数据容错）（v0.22） |
 | `web/src/components/CardRelations.tsx` | 卡片关系徽标（子卡 done/total、属于父卡）+ 详情抽屉「关系」区块（v0.22） |
@@ -238,8 +238,10 @@ sequenceDiagram
 | `web/src/lib/useWorklineStatuses.ts` | 看板批量拉取工作线摘要：cwd 去重、400ms 防抖、≤32/批、15s 缓存、20s 可见刷新、失败静默未知（v0.15） |
 | `web/src/components/WorklineBadge.tsx` | 卡片/列表行「工作线」徽标：彩点 + 分支 + 关系/线上短语，仅非主线 feature 显示（v0.15） |
 | `web/src/lib/useWorkspaces.ts` | 「工作区」视图数据：cwd 去重批量拉取、15s 缓存、20s 可见刷新；`groupCardsByWorktree` 按服务端 `dirs[]` 精确归组；v0.21.0 增 `findWorktreeForCwd`、会话 cwd 兜底归组（`sessionAttributed`）、清理判定过滤终态卡片；v0.23.0 增 `formatWorktreeLabel`（工作区 / 工作线视图共用的工作副本展示名）（v0.16/v0.21.0/v0.23.0） |
-| `web/src/components/WorkspaceView.tsx` | 「工作区」视图：按仓库分块、工作副本行（分支/Phase A 合并/远端/改动状态/清理按钮/路径/卡片 mini 列表/会话数）、未指定组；v0.21.0 新 props `sessions` / `onRebindCard`，「按会话归属」标签与「未指定」块重新绑定入口；v0.24.0 新 props `revealPathAvailable` / `onRevealPath`，「在 Finder 中打开」按钮（无桥能力时不渲染）（v0.16/v0.17/v0.21.0/v0.24.0） |
+| `web/src/components/WorkspaceView.tsx` | 「工作区」视图：按仓库分块、工作副本行（分支/Phase A 合并/远端/改动状态/清理按钮/路径/卡片 mini 列表/会话数）、未指定组；v0.21.0 新 props `sessions` / `onRebindCard`，「按会话归属」标签与「未指定」块重新绑定入口；v0.24.0 新 props `revealPathAvailable` / `onRevealPath`，「在 Finder 中打开」按钮（无桥能力时不渲染）；v0.25.0 顶部「批量清理（N）」入口 + 可关闭的「可安全清理」内联提醒（24h 重现）（v0.16/v0.17/v0.21.0/v0.24.0/v0.25.0） |
 | `web/src/lib/revealPath.ts` | 「在 Finder 中打开」允许路径集合（v0.24.0）：`collectRevealablePaths` 从服务端 `/git/workspaces` 工作区地图取仓库根 + 工作副本路径，`isRevealablePath` 做精确匹配（不做前缀，任意路径 / 子目录不通过），与桥的绝对路径边界构成两道权限边界 |
+| `web/src/lib/worktreeBatchCleanup.ts` | 批量清理纯逻辑（v0.25.0 ⑯/⑱）：`collectBatchCleanupCandidates` 复用 `evaluateWorktreeCleanup` 只挑安全项（非主 / 未锁定 / 未失效 / 已并入 / 干净 / 无未完成卡片 / 无运行中会话 cwd）、`groupBatchCleanupCandidates` 按仓库分组、`shouldShowCleanupNudge`（24h TTL）、`batchCleanupFailureKey`（错误码 → 人话文案） |
+| `web/src/components/CleanupBatchDialog.tsx` | 批量清理对话框（v0.25.0 ⑯）：安全项按仓库分组预览 + 可选删除已合并分支 + 逐项结果（成功 / 失败原因）；不提供危险批量入口 |
 | `web/src/components/CleanupWorktreeDialog.tsx` | 工作副本清理两段式确认（普通确认 + 脏/未合并危险确认），软删除说明与删分支选项（v0.17） |
 | `web/src/components/ForkGraph.tsx` | Fork 风格多泳道提交图渲染；v0.16 增加 hover 高亮同色泳道（行/图例双向联动）（v0.14/v0.16） |
 | `web/src/components/GitBranchSection.tsx` | 详情抽屉「工作线」区块：人话总结 + 关键事实表 +「提交图」折叠区（ForkGraph + 多工作树列表，默认收起）（v0.13→v0.14→v0.14.1） |
