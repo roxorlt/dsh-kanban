@@ -323,18 +323,25 @@ export function ApprovalPanel({
           </button>
           <button
             type="button"
-            className="kb-btn kb-btn--primary kb-btn--sm"
+            className={`kb-btn kb-btn--primary kb-btn--sm kb-decision-submit${busy ? ' kb-decision-submit--busy' : ''}`}
             disabled={busy || !singleSelection.length}
             onClick={submitSingle}
           >
-            <span className="kb-icon" aria-hidden="true">
-              <IconCheck />
+            {/* 处理中：图标位换成 spinner，按钮内容整体降透明度（docs/11-motion.md §6.3） */}
+            <span className="kb-decision-submit__inner">
+              {busy ? (
+                <span className="kb-spinner" aria-hidden="true" />
+              ) : (
+                <span className="kb-icon" aria-hidden="true">
+                  <IconCheck />
+                </span>
+              )}
+              {busy
+                ? t('approval.resolving')
+                : multiSelectSingle
+                  ? t('approval.submit')
+                  : t('approval.approve')}
             </span>
-            {busy
-              ? t('approval.resolving')
-              : multiSelectSingle
-                ? t('approval.submit')
-                : t('approval.approve')}
           </button>
         </div>
       </section>
@@ -610,11 +617,23 @@ export function ApprovalPanel({
       )}
 
       <div className="kb-decision-actions">
-        <button type="button" className="kb-btn kb-btn--primary kb-btn--sm" disabled={busy} onClick={submitMulti}>
-          <span className="kb-icon" aria-hidden="true">
-            <IconCheck />
+        <button
+          type="button"
+          className={`kb-btn kb-btn--primary kb-btn--sm kb-decision-submit${busy ? ' kb-decision-submit--busy' : ''}`}
+          disabled={busy}
+          onClick={submitMulti}
+        >
+          {/* 处理中：图标位换成 spinner，按钮内容整体降透明度（docs/11-motion.md §6.3） */}
+          <span className="kb-decision-submit__inner">
+            {busy ? (
+              <span className="kb-spinner" aria-hidden="true" />
+            ) : (
+              <span className="kb-icon" aria-hidden="true">
+                <IconCheck />
+              </span>
+            )}
+            {busy ? t('approval.resolving') : t('approval.submitAll')}
           </span>
-          {busy ? t('approval.resolving') : t('approval.submitAll')}
         </button>
       </div>
     </section>

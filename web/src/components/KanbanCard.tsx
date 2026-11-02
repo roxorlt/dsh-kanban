@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { Approval, Card, ColumnId, SessionRow } from '../types';
 import { useI18n } from '../i18n';
@@ -9,7 +9,9 @@ import { CARD_TIMELINE_PREVIEW, CARD_TIMELINE_STEP, visibleActivities } from '..
 import type { ActivityFeed } from '../lib/activities';
 import type { CardRelationIndex } from '../lib/cardRelations';
 import type { WorklineStatus } from '../lib/worklineSummary';
+import { usePresence } from '../lib/usePresence';
 import { ApprovalPanel } from './ApprovalPanel';
+import { ApprovalSlot } from './ApprovalSlot';
 import { canStartCard } from '../lib/startCard';
 import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 import { MenuButton } from './MenuButton';
@@ -74,6 +76,45 @@ interface KanbanCardProps {
   onSessionClick: (card: Card) => void;
   onDragStart: (cardId: string) => void;
   onDragEnd: () => void;
+  /**
+   * 拖拽落位反馈（docs/11-motion.md §6.6）：
+   * 'start' = 起始帧（次帧由 BoardView 移除），'settle' = 落定过渡中；undefined = 不播。
+   */
+  dropPhase?: 'start' | 'settle';
+}
+
+/** 展开区离场等待时长（ms）：与 styles/base.css 的 --kb-dur-exit 同源（docs/11-motion.md §3.1/§6.1）。 */
+const CARD_EXPAND_EXIT_MS = 140;
+
+/**
+ * 展开/收起的挂载外壳，看板卡片与列表行共用（同一套语感、避免两处时长漂移）。
+ * 高度过渡本体在 CSS：.kb-card-expand / .kb-list__expand 的 grid-template-rows 0fr↔1fr。
+ *
+ * - usePresence：收起后保留挂载 140ms，CSS 才拿得到离场帧，随后卸载（docs/11-motion.md §5）；
+ * - revealed：刚挂载的展开区先按收起态（0fr）渲染，次帧再置 true 才触发入场过渡；
+ *   首屏已展开的卡片（初始 expanded=true）直接为 true —— 按规范，初次挂载不播动画。
+ */
+export function useExpandedPresence(expanded: boolean): {
+  /** 是否渲染展开区（展开中或离场等待中）。 */
+  render: boolean;
+  /** 是否处在离场过渡中（挂 *--leaving）。 */
+  leaving: boolean;
+  /** 是否已进入「展开」态（挂 *--open）；false 时保持 0fr 作为入场起点。 */
+  revealed: boolean;
+} {
+  const { mounted, leaving } = usePresence(expanded, CARD_EXPAND_EXIT_MS);
+  const [revealed, setRevealed] = useState(expanded);
+  useEffect(() => {
+    if (expanded && !revealed) {
+      // 次帧再置「展开」：必须让收起态先被绘制一帧，CSS 过渡才有起点（不能直接动画到 auto）。
+      const frame = requestAnimationFrame(() => setRevealed(true));
+      return () => cancelAnimationFrame(frame);
+    }
+    // 完全卸载后复位，下次展开重新从 0fr 播放入场。
+    if (!expanded && !mounted) setRevealed(false);
+    return undefined;
+  }, [expanded, mounted, revealed]);
+  return { render: expanded || mounted, leaving, revealed };
 }
 
 /** 折叠卡：标题/摘要/当前动作/属性行/页脚/审批/素材；展开卡追加分页时间线与内联回复。 */
@@ -107,12 +148,14 @@ export function KanbanCard({
   onSessionClick,
   onDragStart,
   onDragEnd,
+  dropPhase,
 }: KanbanCardProps) {
   const { t, lang } = useI18n();
   const [replyText, setReplyText] = useState('');
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(CARD_TIMELINE_PREVIEW);
+  const expand = useExpandedPresence(expanded);
 
   const tone = STATUS_TONE[card.status];
   const statusKey = `status.${card.status}` as I18nKey;
@@ -238,7 +281,9 @@ export function KanbanCard({
         warning ? ' kb-card--warning' : ''
       }${dragging ? ' kb-card--dragging' : ''}${selectionMode ? ' kb-card--selectable' : ''}${
         selectionSelected ? ' kb-card--picked' : ''
-      }${highlighted ? ' kb-card--highlight' : ''}`}
+      }${highlighted ? ' kb-card--highlight' : ''}${
+        dropPhase === 'start' ? ' kb-card--dropped-start' : ''
+      }${dropPhase === 'settle' ? ' kb-card--dropped' : ''}`}
       data-status={card.status}
       data-card-id={card.id}
       tabIndex={0}
@@ -423,117 +468,129 @@ export function KanbanCard({
         </span>
       </div>
 
-      {!selectionMode && pendingApproval ? (
-        <ApprovalPanel
-          approval={pendingApproval}
-          busy={resolvingApprovalId === pendingApproval.id}
+      {/* 交互式审批用 ApprovalSlot 包一层（docs/11-motion.md §6.3）：提交成功后审批变 null，
+          由它保留 140ms 淡出再卸载；因此这里不能再让 pendingApproval 直接条件包住，
+          否则审批消失的瞬间组件就被卸载，离场帧丢失。只读历史视图保持原样。 */}
+      {!selectionMode ? (
+        <ApprovalSlot
+          approval={pendingApproval ?? null}
+          busy={pendingApproval ? resolvingApprovalId === pendingApproval.id : false}
           now={now}
           onResolve={(approval, submission, comment, decision) =>
             onResolveApproval(card, approval, submission, comment, decision)
           }
           onValidationError={(message) => onNotify(message, 'error')}
         />
-      ) : resolvedApproval ? (
+      ) : null}
+      {!selectionMode && !pendingApproval && resolvedApproval ? (
         <ApprovalPanel approval={resolvedApproval} busy={false} now={now} onResolve={() => undefined} />
       ) : null}
 
-      {expanded && !selectionMode ? (
-        <div className="kb-card-expanded" id={`kb-exp-${card.id}`}>
-          <div className="kb-exp-head">
-            <span>{t('card.importantNodes')}</span>
-            {card.agent?.name ? <span className="kb-exp-agent">{card.agent.name}</span> : null}
-            <button type="button" className="kb-link-btn" onClick={() => onOpenDetail(card.id)}>
-              {t('card.openDetail')}
-              <span className="kb-icon" aria-hidden="true">
-                <IconChevronRight />
-              </span>
-            </button>
-          </div>
-          <div className="kb-card-timeline-scroll">
-            <Timeline activities={timelineItems} now={now} variant="compact" />
-            <TimelineLoadMore hasMore={canLoadEarlier} loading={Boolean(feed?.loading) && loadedCount > 0} onClick={loadEarlier} />
-          </div>
-
-          {card.status === 'failed' ? (
-            <button type="button" className="kb-btn kb-btn--outline kb-btn--sm kb-card-retry" onClick={() => onRetry(card)}>
-              <span className="kb-icon" aria-hidden="true">
-                <IconRedo />
-              </span>
-              {t('card.retry')}
-            </button>
-          ) : null}
-
-          <form className="kb-card-reply" onSubmit={(event) => void submitReply(event)}>
-            <label className="kb-sr-only" htmlFor={`kb-reply-${card.id}`}>
-              {t('card.reply')}
-            </label>
-            <input
-              id={`kb-reply-${card.id}`}
-              className="kb-input kb-card-reply__input"
-              type="text"
-              autoComplete="off"
-              placeholder={t('card.replyPlaceholder')}
-              value={replyText}
-              disabled={replySending}
-              onChange={(event) => setReplyText(event.target.value)}
-            />
-            <button
-              type="submit"
-              className="kb-icon-btn kb-card-reply__send"
-              disabled={!replyText.trim() || replySending}
-              aria-label={t('composer.send')}
-            >
-              <span className="kb-icon" aria-hidden="true">
-                <IconSend />
-              </span>
-            </button>
-          </form>
-          {replyError ? (
-            <p className="kb-card-reply__error" role="alert">
-              {replyError}
-            </p>
-          ) : null}
-
-          <div className="kb-card-actions">
-            {canStart ? (
-              <button type="button" className="kb-btn kb-btn--sm kb-btn--primary kb-card-start" onClick={() => onStartCard(card)}>
-                <span className="kb-icon" aria-hidden="true">
-                  <IconSparkle />
-                </span>
-                {t('card.start')}
-              </button>
-            ) : null}
-            <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => onOpenDetail(card.id)}>
-              {t('card.openDetail')}
-              <span className="kb-icon" aria-hidden="true">
-                <IconChevronRight />
-              </span>
-            </button>
-            <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => onEdit(card)}>
-              <span className="kb-icon" aria-hidden="true">
-                <IconEdit />
-              </span>
-              {t('card.edit')}
-            </button>
-            <MenuButton
-              label={t('a11y.moveMenu')}
-              trigger={
-                <>
-                  {t('card.moveTo')}
+      {expand.render && !selectionMode ? (
+        <div
+          className={`kb-card-expand${expand.revealed ? ' kb-card-expand--open' : ''}${
+            expand.leaving ? ' kb-card-expand--leaving' : ''
+          }`}
+        >
+          <div className="kb-card-expand__clip">
+            <div className="kb-card-expanded" id={`kb-exp-${card.id}`}>
+              <div className="kb-exp-head">
+                <span>{t('card.importantNodes')}</span>
+                {card.agent?.name ? <span className="kb-exp-agent">{card.agent.name}</span> : null}
+                <button type="button" className="kb-link-btn" onClick={() => onOpenDetail(card.id)}>
+                  {t('card.openDetail')}
                   <span className="kb-icon" aria-hidden="true">
-                    <IconChevronDown />
+                    <IconChevronRight />
                   </span>
-                </>
-              }
-              triggerClassName="kb-btn kb-btn--sm kb-btn--ghost kb-card-move"
-              items={moveItems}
-              onSelect={(id) => {
-                if (id.startsWith('move:')) {
-                  const target = id.slice('move:'.length) as ColumnId;
-                  if (COLUMNS.includes(target)) onMove(card.id, target);
-                }
-              }}
-            />
+                </button>
+              </div>
+              <div className="kb-card-timeline-scroll">
+                <Timeline activities={timelineItems} now={now} variant="compact" />
+                <TimelineLoadMore hasMore={canLoadEarlier} loading={Boolean(feed?.loading) && loadedCount > 0} onClick={loadEarlier} />
+              </div>
+
+              {card.status === 'failed' ? (
+                <button type="button" className="kb-btn kb-btn--outline kb-btn--sm kb-card-retry" onClick={() => onRetry(card)}>
+                  <span className="kb-icon" aria-hidden="true">
+                    <IconRedo />
+                  </span>
+                  {t('card.retry')}
+                </button>
+              ) : null}
+
+              <form className="kb-card-reply" onSubmit={(event) => void submitReply(event)}>
+                <label className="kb-sr-only" htmlFor={`kb-reply-${card.id}`}>
+                  {t('card.reply')}
+                </label>
+                <input
+                  id={`kb-reply-${card.id}`}
+                  className="kb-input kb-card-reply__input"
+                  type="text"
+                  autoComplete="off"
+                  placeholder={t('card.replyPlaceholder')}
+                  value={replyText}
+                  disabled={replySending}
+                  onChange={(event) => setReplyText(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="kb-icon-btn kb-card-reply__send"
+                  disabled={!replyText.trim() || replySending}
+                  aria-label={t('composer.send')}
+                >
+                  <span className="kb-icon" aria-hidden="true">
+                    <IconSend />
+                  </span>
+                </button>
+              </form>
+              {replyError ? (
+                <p className="kb-card-reply__error" role="alert">
+                  {replyError}
+                </p>
+              ) : null}
+
+              <div className="kb-card-actions">
+                {canStart ? (
+                  <button type="button" className="kb-btn kb-btn--sm kb-btn--primary kb-card-start" onClick={() => onStartCard(card)}>
+                    <span className="kb-icon" aria-hidden="true">
+                      <IconSparkle />
+                    </span>
+                    {t('card.start')}
+                  </button>
+                ) : null}
+                <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => onOpenDetail(card.id)}>
+                  {t('card.openDetail')}
+                  <span className="kb-icon" aria-hidden="true">
+                    <IconChevronRight />
+                  </span>
+                </button>
+                <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => onEdit(card)}>
+                  <span className="kb-icon" aria-hidden="true">
+                    <IconEdit />
+                  </span>
+                  {t('card.edit')}
+                </button>
+                <MenuButton
+                  label={t('a11y.moveMenu')}
+                  trigger={
+                    <>
+                      {t('card.moveTo')}
+                      <span className="kb-icon" aria-hidden="true">
+                        <IconChevronDown />
+                      </span>
+                    </>
+                  }
+                  triggerClassName="kb-btn kb-btn--sm kb-btn--ghost kb-card-move"
+                  items={moveItems}
+                  onSelect={(id) => {
+                    if (id.startsWith('move:')) {
+                      const target = id.slice('move:'.length) as ColumnId;
+                      if (COLUMNS.includes(target)) onMove(card.id, target);
+                    }
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

@@ -1,4 +1,17 @@
-# Changelog
+## 未发布（`feat/motion-batch`）— 2026-11-02
+
+### 动效第一批：tokens 审计 + 六项实现 + 独立审查（卡片 `card-4b0eacff`）
+
+- 背景：动效 backlog 合并批次（原 M1/M2/M3）；先把「该不该动」定下来，再实现，最后用 `review-animations` 独立审查。规范与预算是唯一事实源：[`docs/11-motion.md`](docs/11-motion.md)（`docs/03` §4.4 改为摘要 + 指向本文）。
+- **动效 tokens（`styles/base.css`）**：时长 `--kb-dur-press/fast/base/slow = 120/180/220ms` + 退出快一档 `--kb-dur-exit/exit-slow = 140/180ms`；曲线 `--kb-ease-out`(0.22,1,0.36,1)、`--kb-ease-in-out`(0.77,0,0.175,1)、`--kb-ease-drawer`(0.32,0.72,0,1)。**tokens 从 `.kb-app-scope` 上移到 `:root`**：Toast/Menu/Modal 都 portal 到 `document.body`，作用域外拿不到变量会让整条 `transition` 失效（审查命中的既有缺陷，修改后菜单/Modal 的既有进场才真正生效）。
+- **退出动画原语** `web/src/lib/usePresence.ts`：`usePresence` / `usePresenceValue`（携带离场数据快照）/ `presenceExitMs` 纯函数；React 卸载前先挂 `leaving` 类，用 CSS 过渡不用 keyframes（可打断）。
+- **六项实现**：① 卡片展开/收起＝手风琴 `grid-template-rows 0fr↔1fr`（进 180 / 出 140，420px 封顶，看板与列表同一套 hook）；② 详情抽屉＝`@starting-style` 进场 220ms `ease-drawer` + 离场 180ms（遮罩 140ms），离场第一帧解除焦点圈定/归还焦点，关闭幂等；③ 审批提交＝按压 `scale(.97)` 120ms + `.kb-spinner`「处理中…」+ `ApprovalSlot` 整块淡出 140ms；④ 批量条＝淡入 180ms、离场 140ms，离场期间沿用离场前「已选 N 张」快照（不再闪 0 张）；⑤「返回看板」气泡加 `@starting-style` 进场（宿主 `--ds-*` 令牌 + 兜底），来源卡片高亮复核通过；⑥ 拖拽＝拖起 opacity 120ms、落位 settle 180ms、跨列目标列 tint 220ms，**明确不做 FLIP**（首版因掉帧放弃，2000 卡目标下不成立）。
+- **reduced-motion 两级**：位移/缩放/高度类即时；纯透明度类（抽屉遮罩/Toast/批量条/审批区块）保留 120ms 淡变且锁 `opacity`、leaving 态 `transform: none`；返回看板的平滑滚动在 RM 下降级为 `auto`。
+- **审查（`review-animations`，结论 Approve 修复后）**：21 条 findings；修掉 2 个 Block（Toast 过渡作用域失效、批量条离场闪「已选 0 张」）+ P1 抽屉全屏 `backdrop-filter` 动画期掉帧（改「动画期关、静止后开」，软件渲染下动画窗口 p95 41.7→25.1ms、>20ms 帧 4）+ RM 下浮层瞬移 + 1 处死 `@starting-style`；另修 `usePresenceValue` 在调用方传内联对象时的无限更新。记录见 `docs/11-motion.md` §8.1。
+- 测试：服务端 **308/308**；Web **36 文件 / 477 例**（+`usePresence.test.ts` 4 例）；`tsc --noEmit` 0；`vite build` 通过；`lint:tokens` 11 CSS 0/0。
+- 浏览器实测：Playwright Chromium 1440×900 + mock 数据；卡片展开 44 帧 max 16.7ms / >20ms 帧 0，批量条 41 帧 max 9.3 / 0，抽屉开 p95 25.1（含 blur 静置 4 帧）、关 p95 16.6，RM 实测遮罩 120ms / 抽屉即时。**本机为 SwiftShader 软件渲染（无 GPU），帧数只作下限参考，GPU 真机未验证**；宿主页气泡进场与 2000 卡规模标注未实测/架构性保证。
+- 生效方式：**纯前端**，合入 main 后刷新看板即生效（`web/dist` 已重建）；`lib/client.js` 改动由 DSH `client-hmr` 自动重载。
+- 分支 `feat/motion-batch`（基线 `65cbf6c`），**尚未合入 main**：与并行进行的「视觉后续」会话在 `App.tsx` / `styles/*.css` / `ListView.tsx` 等文件上重叠，合入前需先对齐主工作区未提交改动。
 
 ## v0.24.0 — 2026-11-02
 

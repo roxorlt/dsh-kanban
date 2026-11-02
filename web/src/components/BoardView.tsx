@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import type { Board, Card, ColumnId } from '../types';
 import { useI18n } from '../i18n';
@@ -58,6 +58,11 @@ const COLUMN_EN: Record<ColumnId, string> = {
   done: 'DONE',
 };
 
+/** 落位 settle 类清除时长（ms）：180ms 过渡 + 一帧余量（docs/11-motion.md §6.6）。 */
+const DROP_SETTLE_MS = 200;
+/** 目标列接收提示清除时长（ms）：220ms 背景过渡 + 余量（docs/11-motion.md §6.6）。 */
+const COLUMN_RECEIVED_MS = 240;
+
 function columnIcon(column: ColumnId) {
   if (column === 'running') return <IconSparkle />;
   if (column === 'needs_you') return <IconHand />;
@@ -95,9 +100,43 @@ export function BoardView({
   const [overColumn, setOverColumn] = useState<ColumnId | null>(null);
   const [overCardId, setOverCardId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<ColumnId>>(() => new Set());
+  // 落位反馈（docs/11-motion.md §6.6）：droppedId 保留 ~200ms 让卡片播完 settle；
+  // droppedStartId 只活一帧 —— 同列重排是同一个 DOM 节点，必须靠「次帧移除起始态」触发过渡。
+  const [droppedId, setDroppedId] = useState<string | null>(null);
+  const [droppedStartId, setDroppedStartId] = useState<string | null>(null);
+  const [receivedColumn, setReceivedColumn] = useState<ColumnId | null>(null);
+  const settleTimer = useRef<number | null>(null);
+  const receivedTimer = useRef<number | null>(null);
   const dropHandled = useRef(false);
   const boardRef = useBoardWheelScroll();
   const counts = countByColumn(cards);
+
+  const clearDropTimers = () => {
+    if (settleTimer.current !== null) {
+      window.clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+    }
+    if (receivedTimer.current !== null) {
+      window.clearTimeout(receivedTimer.current);
+      receivedTimer.current = null;
+    }
+  };
+
+  // 次帧移除起始态：同列重排不会新建 DOM 节点，@starting-style 不生效（docs/11-motion.md §6.6）。
+  useEffect(() => {
+    if (!droppedStartId) return undefined;
+    const frame = requestAnimationFrame(() => setDroppedStartId(null));
+    return () => cancelAnimationFrame(frame);
+  }, [droppedStartId]);
+
+  // 卸载时清一次性定时器，避免对已卸载组件 setState。
+  useEffect(
+    () => () => {
+      if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
+      if (receivedTimer.current !== null) window.clearTimeout(receivedTimer.current);
+    },
+    [],
+  );
 
   const toggleCollapsed = (column: ColumnId) => {
     setCollapsed((current) => {
@@ -131,7 +170,27 @@ export function BoardView({
         column,
       });
       // placement 为 null = 放回原位：不请求后端，也不触发「移到某列」的 toast 与时间线。
-      if (placement) onMoveWithPlacement(cardId, column, placement);
+      if (placement) {
+        // 落位反馈：先清上一张卡的定时器，连续拖多张不叠类、不误播（docs/11-motion.md §6.6）。
+        clearDropTimers();
+        setDroppedId(cardId);
+        setDroppedStartId(cardId);
+        settleTimer.current = window.setTimeout(() => {
+          settleTimer.current = null;
+          setDroppedId(null);
+        }, DROP_SETTLE_MS);
+        if (sourceColumn !== column) {
+          // 只有跨列才让目标列闪一下「收到」；同列重排只播落位 settle。
+          setReceivedColumn(column);
+          receivedTimer.current = window.setTimeout(() => {
+            receivedTimer.current = null;
+            setReceivedColumn(null);
+          }, COLUMN_RECEIVED_MS);
+        } else {
+          setReceivedColumn(null);
+        }
+        onMoveWithPlacement(cardId, column, placement);
+      }
     }
     resetDrag();
   };
@@ -159,7 +218,9 @@ export function BoardView({
     return (
       <section
         key={column}
-        className={`kb-column${isOver ? ' kb-column--over' : ''}${isCollapsed ? ' kb-column--collapsed' : ''}`}
+        className={`kb-column${isOver ? ' kb-column--over' : ''}${
+          receivedColumn === column ? ' kb-column--received' : ''
+        }${isCollapsed ? ' kb-column--collapsed' : ''}`}
         data-column={column}
         aria-label={t('a11y.columnRegion', { column: t(`column.${column}` as I18nKey), count: counts[column] })}
         onDragOver={handleDragOverColumn(column)}
@@ -289,6 +350,9 @@ export function BoardView({
                     selectionMode={selectionMode}
                     selectionSelected={selectedIds.has(card.id)}
                     highlighted={highlightedCardId === card.id}
+                    dropPhase={
+                      droppedStartId === card.id ? 'start' : droppedId === card.id ? 'settle' : undefined
+                    }
                     onToggleSelection={onToggleSelection}
                     onToggleExpanded={actions.onToggleExpanded}
                     onOpenDetail={actions.onOpenDetail}

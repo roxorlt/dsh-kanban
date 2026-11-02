@@ -343,10 +343,16 @@
 
 .kb-worklines__bar-fill {
   display: block;
+  /* A-07（docs/11-motion.md §1.2 / §7.1）：进度只用 GPU 属性。
+     原来过渡 width 每帧触发 layout+paint；改成 scaleX + transform-origin:left，
+     只走合成层。--kb-worklines-progress 由 WorklineView 按 0–1 写入。 */
+  width: 100%;
   height: 100%;
   border-radius: 2px;
   background: var(--dsw-alias-label-caption);
-  transition: width var(--kb-dur-fast) var(--kb-ease-out);
+  transform: scaleX(var(--kb-worklines-progress, 0));
+  transform-origin: left;
+  transition: transform var(--kb-dur-fast) var(--kb-ease-out);
 }
 
 .kb-worklines__bar-fill--active {

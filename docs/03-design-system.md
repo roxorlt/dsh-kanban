@@ -250,7 +250,7 @@ flowchart LR
 ### 4.4 阴影与动效
 
 - 卡片不用阴影，只用发丝线 + 悬停底色；菜单/浮层 `elevation-panel`；抽屉/Modal/确认框 `elevation-prominent`；唯一的 `shadow-lv1` 用于分段控件选中指示。
-- 时长：hover/颜色 100ms；展开、Toast、抽屉淡入 200ms；抽屉/底部弹层滑入 300ms；`prefers-reduced-motion` 下全部压到 0.01ms，呼吸点静默。
+- 时长：hover/颜色 120ms；展开、Toast、批量条 180ms；抽屉/底部弹层滑入 220ms，离场统一快一档（140/180ms）；`prefers-reduced-motion` 下位移类即时、纯透明度类保留 120ms 淡变。**动效细则（该动/不该动、tokens、逐项规格、性能与审查门槛）以 [`docs/11-motion.md`](11-motion.md) 为唯一事实源**，本节只保留摘要。
 - 展开区内部滚动不触发页面滚动；抽屉/弹层打开时焦点圈定。
 
 

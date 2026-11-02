@@ -13,6 +13,7 @@
  * 卡片映射（`groupCardsByWorktree`，含 v0.21「按会话归属」兜底），**不新增卡片字段**。
  * 只读视图：不提供清理 / 改绑等写操作（那些在「工作区」视图与详情抽屉里）。
  */
+import type { CSSProperties } from 'react';
 import type { I18nKey, Lang } from '../i18n';
 import { useI18n } from '../i18n';
 import { shortenPath } from '../lib/forkGraph';
@@ -169,13 +170,17 @@ function WorklineRowView({
         <span className="kb-worklines__relation">
           {row.percent === null ? (
             <span className="kb-worklines__bar" aria-hidden="true">
-              <i className="kb-worklines__bar-fill kb-worklines__bar-fill--unknown" style={{ width: '0%' }} />
+              {/* 进度用 CSS 变量传 0–1，让填充块走 scaleX（GPU 属性）而不是过渡 width（A-07） */}
+              <i
+                className="kb-worklines__bar-fill kb-worklines__bar-fill--unknown"
+                style={{ '--kb-worklines-progress': 0 } as CSSProperties}
+              />
             </span>
           ) : (
             <span className="kb-worklines__bar" aria-hidden="true">
               <i
                 className={`kb-worklines__bar-fill kb-worklines__bar-fill--${row.status}`}
-                style={{ width: `${row.percent}%` }}
+                style={{ '--kb-worklines-progress': row.percent / 100 } as CSSProperties}
               />
             </span>
           )}

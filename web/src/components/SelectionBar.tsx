@@ -16,6 +16,11 @@ interface SelectionBarProps {
   onMove: (column: ColumnId) => void;
   onArchive: () => void;
   onCancel: () => void;
+  /**
+   * 退出离场中（App 用 usePresence(selectionMode, 140) 驱动，见 docs/11-motion.md §6.4）：
+   * 只挂 `.kb-batchbar--leaving` 跑 140ms 淡出；离场期间不吃指针事件。
+   */
+  closing?: boolean;
 }
 
 /** 批量选择操作条：已选 N 张 / 全选当前视图 / 清空 / 移动到 / 归档 / 取消。 */
@@ -29,6 +34,7 @@ export function SelectionBar({
   onMove,
   onArchive,
   onCancel,
+  closing = false,
 }: SelectionBarProps) {
   const { t } = useI18n();
   const moveItems: MenuEntry[] = COLUMNS.map((column) => ({
@@ -37,7 +43,11 @@ export function SelectionBar({
     icon: <IconMove />,
   }));
   return (
-    <div className="kb-batchbar" role="toolbar" aria-label={t('selection.mode')}>
+    <div
+      className={`kb-batchbar${closing ? ' kb-batchbar--leaving' : ''}`}
+      role="toolbar"
+      aria-label={t('selection.mode')}
+    >
       <span className="kb-batchbar__count" aria-live="polite">
         {t('selection.selected', { count })}
       </span>

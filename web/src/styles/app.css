@@ -125,6 +125,29 @@
   background: var(--dsw-alias-state-business-tertiary);
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xxs-12);
+  /* 批量条出现/退出（docs/11-motion.md §6.4）：只过渡 opacity/transform。
+     刻意不做高度动画 —— 批量条会把主区整体推下去，高度动画等于每帧 reflow。 */
+  transition:
+    opacity var(--kb-dur) var(--kb-ease-out),
+    transform var(--kb-dur) var(--kb-ease-out);
+}
+
+/* 进场起始帧：180ms 淡入 + 4px 下落；离场反向（由 App 驱动的 closing 类负责）。
+   reduced-motion 下 base.css 末尾的 B 级例外会把过渡锁成纯 opacity 120ms，
+   所以这里保留 transform 也不会在 RM 下真的位移。 */
+@starting-style {
+  .kb-batchbar {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* 离场比进场快一档（--kb-dur-exit）；离场期间吃掉指针事件，避免误点已淡出的按钮 */
+.kb-batchbar--leaving {
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition-duration: var(--kb-dur-exit);
 }
 
 .kb-batchbar__count {

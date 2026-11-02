@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { Approval, Card, SessionRow, WorkspaceRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
@@ -6,6 +7,7 @@ import { STATUS_TONE, isWarningStatus } from '../lib/status';
 import { elapsedMs, formatDateTime, formatDuration, formatRelative } from '../lib/time';
 import type { ActivityFeed } from '../lib/activities';
 import { ApprovalPanel } from './ApprovalPanel';
+import { ApprovalSlot } from './ApprovalSlot';
 import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 import { Composer } from './Composer';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -77,10 +79,27 @@ interface DetailDrawerProps {
   cwdState?: 'ok' | 'missing' | 'invalid';
   /** v0.21.0 #16：打开「重新绑定目录」弹窗 */
   onRebindDir?: (card: Card) => void;
+  /**
+   * 离场中（App 用 `usePresence` 驱动，见 docs/11-motion.md §6.2）：
+   * 挂 `.kb-drawer-overlay--leaving` 跑收回过渡，并在第一帧解除焦点圈定、归还焦点。
+   */
+  closing?: boolean;
 }
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** ApprovalSlot 的淡出时长：与 ApprovalSlot.tsx 的 APPROVAL_EXIT_MS / base.css 的 --kb-dur-exit 同源。 */
+const APPROVAL_SLOT_EXIT_MS = 140;
+/** 摘掉离场审批 id 的宽限：淡出时长 + 余量，避免和 ApprovalSlot 内部卸载抢跑。 */
+const APPROVAL_SLOT_PRUNE_MS = APPROVAL_SLOT_EXIT_MS + 40;
+/**
+ * 遮罩 backdrop-filter 的启用时点：抽屉进场 220ms（--kb-dur-slow）+ 一点余量。
+ * 全屏 backdrop-filter 在动画期间每帧重新合成，是本机实测里唯一的掉帧源
+ * （44 帧 9 帧 >20ms / max 49.6ms；动画期去掉后 60 帧仅 1 帧 >20ms，见 docs/11-motion.md §8）。
+ * 所以进场/离场动画期间不挂 blur，静止后再恢复 DSH 的 mask-blur。
+ */
+const DRAWER_BLUR_SETTLE_MS = 240;
 
 function artifactIcon(kind: string) {
   switch (kind) {
@@ -126,6 +145,7 @@ export function DetailDrawer({
   onUnarchiveSession,
   cwdState = 'ok',
   onRebindDir,
+  closing = false,
 }: DetailDrawerProps) {
   const { t, lang } = useI18n();
   // v0.22 关系索引：用全量卡片算父子/依赖，避免详情抽屉里再请求接口
@@ -133,6 +153,10 @@ export function DetailDrawer({
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  /** 打开期间被锁住的页面滚动；离场第一帧就要还回去（见下面的 closing effect） */
+  const scrollLock = useRef<{ root: HTMLElement; previous: string } | null>(null);
+  /** 遮罩 blur 只在进场动画播完后开启；离场立刻关掉（见 DRAWER_BLUR_SETTLE_MS） */
+  const [blurSettled, setBlurSettled] = useState(false);
   const [targetSessionId, setTargetSessionId] = useState<string | null>(() =>
     resolveReplyTarget(card.sessionIds, card.sessionIds[0] ?? null),
   );
@@ -175,32 +199,108 @@ export function DetailDrawer({
     setTargetSessionId((current) => resolveReplyTarget(card.sessionIds, current));
   }, [card.sessionIds]);
 
+  // —— 审批区块离场（docs/11-motion.md §6.3）——
+  // 提交成功后服务端刷新会把该审批从 pendingApprovals 里移除；若直接 map pendingApprovals，
+  // ApprovalSlot 会连同数据一起卸载，140ms 淡出根本没机会播。这里让 slot 列表比数据多活一拍：
+  // 先喂 approval=null 让它淡出，APPROVAL_SLOT_PRUNE_MS 后才摘 id；换卡时渲染期直接重置。
+  const [approvalSlotIds, setApprovalSlotIds] = useState<string[]>(() => pendingApprovals.map((item) => item.id));
+  const [approvalSlotCardId, setApprovalSlotCardId] = useState(card.id);
+  if (approvalSlotCardId !== card.id) {
+    setApprovalSlotCardId(card.id);
+    setApprovalSlotIds(pendingApprovals.map((approval) => approval.id));
+  } else {
+    // 新出现的审批 id 在渲染期并入（避免多一帧空白）；state 里只多留正在离场的旧 id
+    const missingApprovalIds = pendingApprovals
+      .map((approval) => approval.id)
+      .filter((id) => !approvalSlotIds.includes(id));
+    if (missingApprovalIds.length) setApprovalSlotIds([...approvalSlotIds, ...missingApprovalIds]);
+  }
+  const pendingApprovalKey = pendingApprovals.map((approval) => approval.id).join('|');
   useEffect(() => {
-    previouslyFocused.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const root = document.documentElement;
-    const previousOverflow = root.style.overflow;
-    root.style.overflow = 'hidden';
-    const first = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
-    (first ?? panelRef.current)?.focus();
-    return () => {
-      root.style.overflow = previousOverflow;
-      previouslyFocused.current?.focus();
-    };
-  }, []);
+    const live = new Set(pendingApprovals.map((approval) => approval.id));
+    const timer = window.setTimeout(() => {
+      setApprovalSlotIds((current) => {
+        const next = current.filter((id) => live.has(id));
+        return next.length === current.length ? current : next;
+      });
+    }, APPROVAL_SLOT_PRUNE_MS);
+    return () => window.clearTimeout(timer);
+    // pendingApprovals 每次渲染都是新数组，不能直接做依赖；pendingApprovalKey 是 id 的稳定串
+  }, [pendingApprovalKey]);
 
   const requestClose = () => {
+    // 幂等：离场期间 Esc / 遮罩 / 关闭按钮再触发都直接忽略，避免重复 onClose 或误开草稿确认框
+    if (closing) return;
     if (composerDirty) setDiscardOpen(true);
     else onClose();
   };
   const requestCloseRef = useRef(requestClose);
   requestCloseRef.current = requestClose;
+  const closingRef = useRef(closing);
+  closingRef.current = closing;
 
   // Esc 由 App 的浮层栈统一处理（抽屉属于最上层时关闭）
   useEffect(() => pushOverlay(() => requestCloseRef.current()), []);
 
+  // —— 焦点圈定 / 页面滚动锁定 / 离场即时释放（docs/11-motion.md §6.2）——
+  // 离场由 App 的 usePresence 驱动：closing 的第一帧就解开圈定并归还焦点。
+  // 不能等 180ms 后卸载——那期间焦点会留在已关闭的对话框里，页面滚动也一直被锁着。
+  useEffect(() => {
+    const root = document.documentElement;
+    if (closing) {
+      if (scrollLock.current) {
+        scrollLock.current.root.style.overflow = scrollLock.current.previous;
+        scrollLock.current = null;
+      }
+      const target = previouslyFocused.current;
+      if (target && document.contains(target)) target.focus();
+      // 打开抽屉的元素可能已不在文档里：焦点不能留在即将 aria-hidden 的抽屉内，
+      // 否则浏览器会以「含焦点的祖先不能被 aria-hidden」为由忽略这个属性。
+      if (document.activeElement instanceof HTMLElement && panelRef.current?.contains(document.activeElement)) {
+        document.activeElement.blur();
+      }
+      panelRef.current?.setAttribute('aria-hidden', 'true');
+      return;
+    }
+    // 打开（含离场中途反向）：重新锁滚动、取消 aria-hidden，并把焦点圈回抽屉
+    if (!scrollLock.current) {
+      scrollLock.current = { root, previous: root.style.overflow };
+      root.style.overflow = 'hidden';
+    }
+    // 记录/更新「焦点从哪来往哪还」：初次打开是触发元素；
+    // 离场中途反向重开时用户可能已经点了别的卡，归还目标要跟着换
+    if (document.activeElement instanceof HTMLElement && !panelRef.current?.contains(document.activeElement)) {
+      previouslyFocused.current = document.activeElement;
+    }
+    panelRef.current?.removeAttribute('aria-hidden');
+    const first = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+    (first ?? panelRef.current)?.focus();
+    return () => {
+      // 卸载兜底：App 没走 leaving 直接卸载时，也要把页面滚动与焦点还回去
+      if (scrollLock.current) {
+        scrollLock.current.root.style.overflow = scrollLock.current.previous;
+        scrollLock.current = null;
+      }
+      const target = previouslyFocused.current;
+      if (target && document.contains(target)) target.focus();
+    };
+  }, [closing]);
+
+  // —— 遮罩 blur 的启用时点（性能，见 DRAWER_BLUR_SETTLE_MS）——
+  // 进场动画期间保持关闭，动画结束后再开启；离场一开始就关掉（收回的 180ms 也不掉帧）。
+  useEffect(() => {
+    if (closing) {
+      setBlurSettled(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setBlurSettled(true), DRAWER_BLUR_SETTLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [closing]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Tab' || !panelRef.current) return;
+      // 离场期间不再拦截 Tab：圈定已经解除，焦点该回到打开抽屉的元素上
+      if (closingRef.current || event.key !== 'Tab' || !panelRef.current) return;
       const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
         (element) => element.offsetParent !== null,
       );
@@ -232,7 +332,9 @@ export function DetailDrawer({
 
   return (
     <div
-      className="kb-drawer-overlay"
+      className={`kb-drawer-overlay${closing ? ' kb-drawer-overlay--leaving' : ''}${
+        blurSettled ? ' kb-drawer-overlay--settled' : ''
+      }`}
       role="presentation"
       onPointerDown={(event) => event.target === event.currentTarget && requestClose()}
     >
@@ -344,7 +446,12 @@ export function DetailDrawer({
                 >
                   <span
                     className="kb-progress__fill"
-                    style={{ width: `${Math.max(0, Math.min(100, card.progress.percent ?? 0))}%` }}
+                    style={
+                      {
+                        // A-07：进度改由 transform: scaleX 驱动，值用 0–1 的 CSS 变量传给 drawer.css
+                        '--kb-progress': Math.max(0, Math.min(100, card.progress.percent ?? 0)) / 100,
+                      } as CSSProperties
+                    }
                   />
                 </div>
                 <span className="kb-progress__label">
@@ -365,25 +472,30 @@ export function DetailDrawer({
           {/* 分支 / 工作树：数据不可用、读取失败或旧服务端 404 时整块静默隐藏 */}
           <GitBranchSection card={card} sessions={sessions} />
 
-          {pendingApprovals.length ? (
+          {/* 审批区块列表含离场的审批（approvalSlotIds 比 pendingApprovals 多活一拍，见上方注释） */}
+          {approvalSlotIds.length ? (
             <section className="kb-drawer__section kb-drawer__section--approval">
               <h3 className="kb-drawer__section-title">{t('drawer.approvals')}</h3>
               {targetOptions.length > 1 && targetLabel ? (
                 <p className="kb-drawer__target-hint">{t('drawer.approvalTargetHint', { session: targetLabel })}</p>
               ) : null}
-              {pendingApprovals.map((approval) => (
-                <ApprovalPanel
-                  key={approval.id}
-                  approval={approval}
-                  busy={resolvingApprovalId === approval.id}
-                  now={now}
-                  inDrawer
-                  onResolve={(target, submission, comment, decision) =>
-                    onResolveApproval(card, target, submission, comment, decision, targetSession)
-                  }
-                  onValidationError={(message) => onNotify(message, 'error')}
-                />
-              ))}
+              {approvalSlotIds.map((approvalId) => {
+                const approval = pendingApprovals.find((item) => item.id === approvalId) ?? null;
+                // 交互式审批走 ApprovalSlot：提交成功后由它保留 140ms 做「已提交」淡出（§6.3）
+                return (
+                  <ApprovalSlot
+                    key={approvalId}
+                    approval={approval}
+                    busy={resolvingApprovalId === approvalId}
+                    now={now}
+                    inDrawer
+                    onResolve={(target, submission, comment, decision) =>
+                      onResolveApproval(card, target, submission, comment, decision, targetSession)
+                    }
+                    onValidationError={(message) => onNotify(message, 'error')}
+                  />
+                );
+              })}
             </section>
           ) : null}
 
@@ -396,7 +508,7 @@ export function DetailDrawer({
                     {checklistDone}/{card.checklists.length}
                   </span>
                   <div className="kb-progress__bar kb-checklist__bar">
-                    <span className="kb-progress__fill" style={{ width: `${checklistPercent}%` }} />
+                    <span className="kb-progress__fill" style={{ '--kb-progress': checklistPercent / 100 } as CSSProperties} />
                   </div>
                 </div>
                 <ul className="kb-checklist__items">
