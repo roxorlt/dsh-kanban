@@ -77,16 +77,33 @@ ul {
   display: none !important;
 }
 
+/* 动效底座：唯一事实源见 docs/11-motion.md。
+   时长只允许这四档 + 两个退出档，组件里不写裸数值；曲线三条，
+   进入/退出用 ease-out，屏幕内移动用 ease-in-out，抽屉/底弹用 ease-drawer。
+
+   必须挂在 :root 而不是 .kb-app-scope —— Toast/Menu/Modal 都是 createPortal 到
+   document.body 的，拿不到 .kb-app-scope 上的变量。变量缺失会让整条 `transition` /
+   `animation` 简写「计算值无效」（IACVT）而静默失效（M3 实测证据见 docs/11-motion.md §8）。
+   动效令牌与主题无关，放 :root 不影响配色令牌的分主题覆盖。 */
+:root {
+  --kb-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --kb-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --kb-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --kb-dur-press: 120ms;
+  --kb-dur-fast: 120ms;
+  --kb-dur: 180ms;
+  --kb-dur-slow: 220ms;
+  /* 退出比进入快一档：系统响应要跟手，收回的自解释比展开更重要 */
+  --kb-dur-exit: 140ms;
+  --kb-dur-exit-slow: 180ms;
+}
+
 .kb-app-scope {
   --kb-r-card: 12px;
   --kb-r-col: 14px;
   --kb-r-ctl: 8px;
   --kb-gap: 12px;
   --kb-pad-x: 16px;
-  --kb-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --kb-dur-fast: 120ms;
-  --kb-dur: 180ms;
-  --kb-dur-slow: 220ms;
 
   /* 状态「色点/图标」用 --kb-status-*；状态「文字」用 --kb-status-*-text（docs/10 A-02）。
      浅色把语义色向 label-primary 收敛到正文 ≥4.5:1；暗色沿用原语义色（暗底已达标，不回退）。
@@ -799,7 +816,28 @@ ul {
   box-shadow: var(--dsw-elevation-panel);
   font: var(--dsw-font-xxs-12);
   pointer-events: auto;
-  animation: kb-toast-in var(--kb-dur) var(--kb-ease-out);
+  /* Toast 进出（docs/11-motion.md §6.4 / 审计 A-03）：用过渡而不是 keyframes。
+     Toast 一秒内可能连出两条，keyframes 会从起点重放；过渡可以中途 retarget、不闪回。 */
+  transition:
+    opacity var(--kb-dur) var(--kb-ease-out),
+    transform var(--kb-dur) var(--kb-ease-out);
+}
+
+/* 进场起始帧：180ms 淡入 + 6px 下落；离场反向 140ms（由 useToasts 先标 leaving 再移除）。
+   reduced-motion 下 base.css 末尾 B 级例外把过渡锁成纯 opacity 120ms，不会真的位移。 */
+@starting-style {
+  .kb-toast {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* 离场：每条 toast 自己渐隐并轻微上移；吃掉指针事件，避免点已淡出的关闭按钮 */
+.kb-toast--leaving {
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition-duration: var(--kb-dur-exit);
 }
 
 .kb-toast .kb-icon {
@@ -950,17 +988,6 @@ ul {
   }
 }
 
-@keyframes kb-toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @keyframes kb-breathe {
   0%,
   100% {
@@ -977,6 +1004,10 @@ ul {
   }
 }
 
+/* reduced-motion 分两级（docs/11-motion.md §4）：
+   A. 位移/缩放/高度动画 —— 全部即时（下面对 * 的覆盖是总闸，位移在 RM 下没有存在价值）；
+   B. 纯透明度/颜色的状态反馈 —— 保留 120ms 淡变，因为它帮助理解「发生了什么」而不产生位移。
+   只有下面清单里的元素享受 B 级待遇，其余一律 A 级。 */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -987,9 +1018,44 @@ ul {
     scroll-behavior: auto !important;
   }
 
+  /* B 级例外：只淡不动的浮层，保留最短淡变（显式 !important 且选择器更具体，压过上面的总闸） */
+  .kb-drawer-overlay,
+  .kb-toast,
+  .kb-batchbar,
+  .kb-approval-slot {
+    transition-property: opacity !important;
+    transition-duration: var(--kb-dur-fast) !important;
+  }
+
+  /* B 级浮层在 RM 下必须真的「只淡不动」：总闸把 transform 变成瞬时跳变，
+     如果离场态还写位移量，就会出现「先瞬移 2–6px 再淡出」的闪动（M3 实测，见 §8）。
+     这条用 !important 是因为 app.css/drawer.css 的离场规则在本文件之后导入。 */
+  .kb-toast--leaving,
+  .kb-batchbar--leaving,
+  .kb-approval-slot--leaving {
+    transform: none !important;
+  }
+
   .kb-dot--business::after {
     display: none;
   }
+}
+
+
+/* --------------------------------------------------- 审批区块离场外壳（v0.25）*/
+/* 由 ApprovalSlot.tsx 使用：提交成功后审批消失，这里保留 140ms 淡出做「已提交」反馈。
+   只动 opacity/transform；离场期间吃掉指针事件，避免误点到卡片折叠。 */
+
+.kb-approval-slot {
+  transition:
+    opacity var(--kb-dur-exit) var(--kb-ease-out),
+    transform var(--kb-dur-exit) var(--kb-ease-out);
+}
+
+.kb-approval-slot--leaving {
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
 }
 
 

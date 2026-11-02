@@ -291,6 +291,39 @@
   height: 6px;
 }
 
+/* 展开/收起：与看板卡片同一套手风琴节奏（docs/11-motion.md §6.1）。
+   外层做 grid-template-rows 0fr↔1fr 过渡，内层 .kb-list__expanded 保留原有内容样式与响应式规则。 */
+.kb-list__expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--kb-dur) var(--kb-ease-out),
+    opacity var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-list__expand--open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* 离场 140ms（--kb-dur-exit）；期间吃掉指针事件，避免误触正在消失的按钮 */
+.kb-list__expand--leaving {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: var(--kb-dur-exit);
+}
+
+/* 网格项是一层纯剪裁元素：内层 .kb-list__expanded 的 border/padding 若直接挂在网格项上，
+   0fr 收起后会残留一条高度，包一层纯元素才能收干净。 */
+.kb-list__expand__clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .kb-list__expanded {
   display: flex;
   flex-direction: column;
@@ -298,7 +331,6 @@
   padding: 10px 12px 12px 29px;
   border-top: 0.5px solid var(--dsw-alias-border-l1);
   cursor: auto;
-  animation: kb-reveal var(--kb-dur) var(--kb-ease-out);
 }
 
 .kb-list__action {

@@ -1,6 +1,9 @@
 /* lint-tokens-ignore: global-sheet */
 /* 卡片详情抽屉（宽屏右侧 400–520px；<720px 底部 sheet 见 responsive.css） */
 
+/* 进出场用 CSS 过渡 + @starting-style（docs/11-motion.md §6.2），不用 keyframes：
+   连续开关或动画中途反向时，过渡能从当前值 retarget，不会闪回起点。
+   离场由 App 的 usePresence 驱动——closing 时加 .kb-drawer-overlay--leaving，180ms 后再卸载。 */
 .kb-drawer-overlay {
   position: fixed;
   inset: 0;
@@ -8,9 +11,32 @@
   display: flex;
   justify-content: flex-end;
   background: var(--dsw-alias-bg-mask-2);
+  /* 遮罩只动 opacity：进场 180ms；离场在 --leaving 里降到 140ms（--kb-dur-exit） */
+  transition: opacity var(--kb-dur) var(--kb-ease-out);
+}
+
+/* 遮罩的全屏 backdrop-filter 只在「动画已结束」时开启（.kb-drawer-overlay--settled，
+   由 DetailDrawer.tsx 的 blurSettled 在进场 240ms 后挂上、离场第一帧摘掉）。
+   理由：全屏 blur 在动画期间每帧重新合成，是本机实测唯一的掉帧源——进场 240ms 窗口
+   16–18 帧、3–4 帧 >20ms、p95 41.7ms；动画期去掉后 35–36 帧、1 帧 >20ms、p95 8.9–16.7ms
+   （软件渲染，GPU 未验证，见 docs/11-motion.md §8）。
+   静止后仍然保留 DSH 的 mask-blur，设计意图不变。 */
+.kb-drawer-overlay--settled {
   -webkit-backdrop-filter: var(--dsw-mask-blur);
   backdrop-filter: var(--dsw-mask-blur);
-  animation: kb-fade var(--kb-dur) var(--kb-ease-out);
+}
+
+@starting-style {
+  .kb-drawer-overlay {
+    opacity: 0;
+  }
+}
+
+.kb-drawer-overlay--leaving {
+  opacity: 0;
+  transition-duration: var(--kb-dur-exit);
+  /* 离场期间整块不接指针：避免收回动画里点穿到卡片或重复触发关闭 */
+  pointer-events: none;
 }
 
 .kb-drawer {
@@ -23,29 +49,35 @@
   border: 0;
   background: var(--dsw-alias-bg-layer-1);
   box-shadow: var(--dsw-elevation-prominent);
-  animation: kb-slide-in var(--kb-dur-slow) var(--kb-ease-out);
+  /* 抽屉本体：进场 220ms；离场在 --leaving 里降到 180ms（--kb-dur-exit-slow） */
+  transition:
+    opacity var(--kb-dur-slow) var(--kb-ease-drawer),
+    transform var(--kb-dur-slow) var(--kb-ease-drawer);
+}
+
+@starting-style {
+  .kb-drawer {
+    opacity: 0.6;
+    transform: translateX(18px);
+  }
+}
+
+.kb-drawer-overlay--leaving .kb-drawer {
+  opacity: 0;
+  transform: translateX(18px);
+  transition-duration: var(--kb-dur-exit-slow);
 }
 
 .kb-drawer__grabber {
   display: none;
 }
 
+/* @keyframes kb-fade 的定义保留：styles/modal.css 的 .kb-overlay 仍在使用（它不是本批次范围） */
 @keyframes kb-fade {
   from {
     opacity: 0;
   }
   to {
-    opacity: 1;
-  }
-}
-
-@keyframes kb-slide-in {
-  from {
-    transform: translateX(18px);
-    opacity: 0.6;
-  }
-  to {
-    transform: none;
     opacity: 1;
   }
 }
@@ -231,13 +263,17 @@
   overflow: hidden;
 }
 
+/* A-07：进度用 transform 而不是 width 过渡（width 每帧 layout+paint）。
+   进度值由组件通过 --kb-progress（0–1）传入，见 DetailDrawer.tsx。 */
 .kb-progress__fill {
   display: block;
   height: 100%;
   border-radius: 999px;
   corner-shape: round;
   background: var(--kb-status-running);
-  transition: width var(--kb-dur-slow) var(--kb-ease-out);
+  transform: scaleX(var(--kb-progress, 0));
+  transform-origin: left;
+  transition: transform var(--kb-dur-slow) var(--kb-ease-out);
 }
 
 .kb-progress__label {
@@ -1910,4 +1946,39 @@
   .kb-app-scope .kb-composer__footer .kb-btn {
     min-height: 44px;
   }
+}
+
+/* ------------------------------------------------- 审批提交反馈（docs/11-motion.md §6.3） */
+/* 审批面板在抽屉/卡片/列表三处复用，所以按压反馈写在这组全局选择器上；
+   面板本身的布局仍在 styles/board.css，这里只管「按下 / 正在处理」的状态反馈。 */
+
+.kb-decision-actions .kb-btn {
+  /* 在既有颜色过渡之外补 transform：按下 120ms（--kb-dur-press）缩到 0.97 */
+  transition:
+    background-color var(--kb-dur-fast) var(--kb-ease-out),
+    color var(--kb-dur-fast) var(--kb-ease-out),
+    border-color var(--kb-dur-fast) var(--kb-ease-out),
+    transform var(--kb-dur-press) var(--kb-ease-out);
+}
+
+.kb-decision-actions .kb-btn:active {
+  transform: scale(0.97);
+}
+
+/* 处理中：图标位换成 .kb-spinner、文案切「处理中…」，内容整体降到 .7
+   （只做透明度过渡，不加闪动/弹跳；disabled 状态本身由按钮样式表达） */
+.kb-decision-submit__inner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-decision-submit--busy .kb-decision-submit__inner {
+  opacity: 0.7;
+}
+
+.kb-decision-submit__inner .kb-spinner {
+  flex: none;
 }

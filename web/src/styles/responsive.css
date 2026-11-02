@@ -362,6 +362,8 @@
     justify-content: center;
   }
 
+  /* 底部 sheet 换竖向位移（docs/11-motion.md §6.2）：进场从屏下 100% 滑上来、离场滑下去；
+     时长/曲线沿用 drawer.css 里 .kb-drawer 的过渡（220ms 进 / 180ms 出）。 */
   .kb-drawer {
     width: 100%;
     max-width: none;
@@ -369,7 +371,16 @@
     min-height: 42dvh;
     max-height: 92dvh;
     border-radius: 16px 16px 0 0;
-    animation: kb-sheet-in var(--kb-dur-slow) var(--kb-ease-out);
+  }
+
+  @starting-style {
+    .kb-drawer {
+      transform: translateY(100%);
+    }
+  }
+
+  .kb-drawer-overlay--leaving .kb-drawer {
+    transform: translateY(100%);
   }
 
   .kb-drawer__grabber {
@@ -452,6 +463,8 @@
     margin-left: auto;
   }
 
+  /* 抽屉已改用过渡（见上），这个 keyframes 现在只剩本文件的 .kb-modal（底部弹层）在用，
+     保留定义；modal 的进出场不在本批次范围。 */
   @keyframes kb-sheet-in {
     from {
       transform: translateY(48px);

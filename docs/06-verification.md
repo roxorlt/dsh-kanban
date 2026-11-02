@@ -670,7 +670,7 @@
 | 测试 | 服务端 **315/315**、Web **36 文件 / 477 例**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS **0 error / 0 warning**；控制台 `console error 0 / 未捕获异常 0 / 4xx 0`（board/list/worklines/workspaces + 抽屉） |
 | 截图 | `docs/assets/screens/visual-v2/final/`（25 张：1440/1024/720/390 × 亮/暗 × 各视图 + 抽屉/审批/选择/composer/空态/loading/错误/断网/工作线/工作区）；修复前同场景在 `.../baseline/`（25 张） |
 | 报告 | [`docs/12-visual-acceptance.md`](12-visual-acceptance.md)（矩阵 + before→after + design-review/craft 评审 + 退回项 + 复跑方法）；机器可读 `.tmp/visual/final.json` |
-| 提交状态 | **未 git commit**：工作区同时含并行动效任务与会话绑定任务的未提交改动，提交/发版需按文件拆分；本记录为工作副本快照（commit `65cbf6c` + 43 files changed） |
+| 提交状态 | **已提交并合入 main**：分支 `feat/visual-v2`（`61d5aab`，按 hunk 拆分、只含视觉批次；并行会话的 WIP 与会话绑定改动未进本批次）→ merge `cad2af7`（2026-11-02）；`web/dist` 已在 v0.26.0 合并后统一重建 |
 
 ## 1.44 v0.25.0（清理闭环：③ 清理留痕 + ⑯ 批量清理 + ⑱ 视图内可清理提醒，2026-11-02）
 
@@ -684,6 +684,21 @@
 | 测试 | 本分支：服务端 **310/310**（v0.24.0 基线 308 + 2 例 `test/git-cleanup.test.mjs`：清理成功后留痕含已完成卡片 / 不含归档卡 / revision 增加；清理被拒绝时不留痕、revision 不变）；Web **36 文件 / 485 例**（+1 文件 12 例 `worktreeBatchCleanup.test.ts`：安全候选与全部排除项 / 运行中会话 cwd / 分组顺序 / 提醒 24h TTL / 失败文案 / `affectedCards` 归一化；另更新 `useWorkspaces.test.ts` 的 `normalizeCleanupResult` 期望）。**合入 main 后整树（含并行未提交改动）**：服务端 **317/317**、Web **37 文件 / 489 例**、`tsc --noEmit` 0 error、`vite build` 通过（JS gzip ~151KB / CSS gzip ~20KB）、令牌 lint **11 个 CSS 0 error / 0 warning** |
 | 验收口径 | 用户确认「精简验收」：单测 + 构建 + CHANGELOG/README，本轮**不做**隔离 dev-server 截图与真实宿主复验；含服务端改动，合并后需重启 DSH 才生效（客户端部分刷新看板即可） |
 | 生效方式 | 服务端 + 客户端：**已合入 main（merge `49400ca`，`--no-ff`）**，重启 DSH 后生效（`/health` version 0.25.0），`web/dist` 已从合并后源码重新构建；分支 `feat/workspace-cleanup-closure`（基于 `65cbf6c`）。合入时主工作区并行未提交改动（视觉 V2–V6 / 会话与卡片联动 / 动效批次）经 stash→merge→apply 原样保留：53 个改动文件中 43 个逐字节一致，8 个重叠文件为双方合并结果（routes.js / api.ts / i18n.tsx / workspaces.css / CHANGELOG / README / docs/06），2 个 dist 资源由合并后源码重建 |
+
+## 1.45 动效第一批（M1 审计 + M2 六项实现 + M3 独立审查，2026-11-02）
+
+| 项 | 结果 |
+|---|---|
+| 范围 | 纯前端（无服务端改动）：动效规范 `docs/11-motion.md`（审计 A-01~A-10、频率闸门、tokens、两级 reduced-motion、60fps 预算、逐项规格）+ 第一批 6 项实现（卡片展开/收起、详情抽屉进出、审批提交反馈、批量条出现/退出、返回气泡 + 来源高亮复核、拖拽落位/跨列过渡）+ `review-animations` 独立审查与修复 |
+| 动效 tokens | 时长四档 `--kb-dur-press/fast/base/slow = 120/180/220ms` + 退出快一档 `--kb-dur-exit/exit-slow = 140/180ms`；曲线三条 `--kb-ease-out`(0.22,1,0.36,1) / `--kb-ease-in-out`(0.77,0,0.175,1) / `--kb-ease-drawer`(0.32,0.72,0,1)；**tokens 从 `.kb-app-scope` 上移到 `:root`**（Toast/Menu/Modal 是 body portal，作用域外拿不到变量会让整条过渡 IACVT —— 这是审查命中的 Block 级既有缺陷） |
+| 退出动画原语 | `web/src/lib/usePresence.ts`：`usePresence(open, exitMs, {keepInReducedMotion})` / `usePresenceValue`（携带离场数据快照）/ `presenceExitMs` 纯函数（4 例单测）。React 条件渲染卸载前先挂 `leaving` 类，用 CSS 过渡而非 keyframes（可打断） |
+| reduced-motion | 两级：位移/缩放/高度类**即时**（总闸 0.01ms + `presenceExitMs` 归零）；纯透明度类（抽屉遮罩/Toast/批量条/审批区块）保留 120ms 淡变，且 `transition-property` 锁 opacity、leaving 态 `transform: none` |
+| 实现要点 | 卡片展开=手风琴 `grid-template-rows 0fr↔1fr`（唯一允许的 layout 动画，420px 封顶）；抽屉/批量条/Toast 全部改「CSS 过渡 + `@starting-style`」，抽屉离场 180ms / 遮罩 140ms；审批提交=按压 scale(.97) 120ms + `.kb-spinner` 处理中 + `ApprovalSlot` 整块淡出 140ms；拖拽落位=`.kb-card--dropped` 180ms + 目标列 `.kb-column--received` 220ms（**不做 FLIP**）；进度条 `width`→`transform: scaleX`（A-07） |
+| 审查结论 | `review-animations`：**Approve（修复后）**；共 21 条 findings（3 层），修掉 2 个 Block（Toast 过渡作用域失效、批量条离场闪「已选 0 张」）+ P1（抽屉全屏 `backdrop-filter` 动画期掉帧，改「动画期关、静止后开」）+ RM 下 B 级浮层瞬移 + 1 处死 `@starting-style`。记录见 `docs/11-motion.md` §8.1 |
+| 测试 | 服务端 **308/308**（= HEAD 基线，无回归）；Web **36 文件 / 477 例**（+`usePresence.test.ts` 4 例）；`tsc --noEmit` 0 error；`vite build` 通过；令牌 lint 11 CSS 0/0；全流程 pageerror 0、React 告警 0 |
+| 浏览器实测（Playwright Chromium 1440×900，mock 数据 14 卡） | 卡片展开 44 帧 / max 16.7ms / >20ms 帧 0；批量条开 41 帧 / max 9.3 / 0；抽屉开 p95 25.1ms（blur 静置瞬间 4 帧 >20ms）、关 p95 16.6 / 2；拖拽 `.kb-column--received` 220ms + `.kb-card--dropped` 180ms；RM：遮罩 120ms opacity、抽屉本体 1e-05s、离场类正确。**本机 Chromium = SwiftShader 软件渲染（无 GPU），帧数只作下限参考，GPU 真机未验证**；截图在会话 `.tmp/motion-shots/`（未入库） |
+| 未验证 / 风险 | ① GPU 真机 60fps 未测；② 宿主 Composer 里「返回看板」气泡的 `@starting-style` 进场未在真实宿主验证（`--ds-ease-out` 不存在，用 `var(--ds-ease-out, var(--ds-ease-in-out))` 兜底）；③ 2000 卡规模为架构性保证（无 FLIP / 无逐卡 stagger / 只动 GPU 属性），非实测；④ 抽屉遮罩 blur **静止期**成本（软件渲染 ~25ms/帧）保留为产品决策项；⑤ 审查同根因连带恢复菜单/Modal 的既有进场效果（此前一直静默失效） |
+| 提交 | 分支 `feat/motion-batch`（基线 `65cbf6c`），**已合入 main（merge `6ec4dce`，v0.26.0，2026-11-02，与视觉批次 `cad2af7` 同版上线）**：App.tsx / styles/*.css 的合入冲突已按「视觉规则优先、动效增补保留」逐处对齐（KanbanCard 展开区改用 `kb-card-expand` 离场结构、BoardView 保留落位类常量、drawer.css 同时保留 A-05 触屏热区与审批提交反馈） |
 
 ## 2. 自动化测试
 

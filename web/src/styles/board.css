@@ -23,6 +23,8 @@
   border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: var(--kb-r-col);
   background: var(--kb-surface-column);
+  /* 列背景统一走 220ms（--kb-dur-slow）：跨列接收提示（§6.6）与拖拽悬停高亮同色系，只重绘、不布局 */
+  transition: background-color var(--kb-dur-slow) var(--kb-ease-out);
 }
 
 .kb-column[data-column='running'] {
@@ -35,6 +37,13 @@
 
 .kb-column--over {
   background: color-mix(in srgb, var(--kb-status-running) 9%, var(--kb-surface-column));
+}
+
+/* 跨列落位后目标列的一次性接收提示（docs/11-motion.md §6.6）：只改背景色、不触发布局。
+   与 .kb-column--over 同色系（--kb-status-running 混色）但更深一档，drop 后看得出「闪一下」。
+   选择器写成 .kb-column.kb-column--received：压过 [data-column] 的基础色（同特异性、靠后生效）。 */
+.kb-column.kb-column--received {
+  background: color-mix(in srgb, var(--kb-status-running) 13%, var(--kb-surface-column));
 }
 
 .kb-column-head {
@@ -276,7 +285,9 @@
   cursor: pointer;
   transition:
     background-color var(--kb-dur-fast) var(--kb-ease-out),
-    border-color var(--kb-dur-fast) var(--kb-ease-out);
+    border-color var(--kb-dur-fast) var(--kb-ease-out),
+    /* 拖起/放下的透明度反馈也走 120ms（docs/11-motion.md §6.6） */
+    opacity var(--kb-dur-fast) var(--kb-ease-out);
 }
 
 .kb-card:hover {
@@ -347,8 +358,31 @@
   border: 0.5px solid color-mix(in srgb, var(--kb-status-failed) 26%, var(--dsw-alias-border-l2));
 }
 
+/* 拖起：透明度反馈由 .kb-card 的 transition 提供（120ms），不再瞬变（docs/11-motion.md §6.6）。 */
 .kb-card--dragging {
   opacity: 0.45;
+}
+
+/* 拖拽落位 settle（docs/11-motion.md §6.6）：放下后给目标卡挂一次性类，只动 opacity/transform。
+   180ms 落定（--kb-dur），BoardView 约 200ms 后移除类，避免下次误播。 */
+.kb-card--dropped {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--kb-dur) var(--kb-ease-out),
+    transform var(--kb-dur) var(--kb-ease-out);
+}
+
+/* 起始帧：BoardView 放下时先挂 .kb-card--dropped-start（.6 / scale(.98)、无过渡），
+   次帧再换成 .kb-card--dropped，过渡才有起点。跨列重排会让卡片换父列表、重新挂载，
+   同列重排则是同一个 DOM 节点 —— 两种都靠这一个「次帧移除起始态」的机制覆盖，
+   不需要再写 @starting-style（那个只对「插入时已带 .kb-card--dropped」的节点生效，
+   而这条路径永远先经过 --dropped-start，M3 实测里从未触发，已删掉避免误导）。 */
+.kb-card--dropped-start {
+  opacity: 0.6;
+  transform: scale(0.98);
+  /* 起始帧必须瞬时到位：否则会先「淡下去」再落定，看起来像误播了两次 */
+  transition: none;
 }
 
 .kb-card-head {
@@ -627,6 +661,51 @@
 
 /* ------------------------------------------------------------- 展开内容 */
 
+/* 展开/收起的高度过渡（docs/11-motion.md §6.1）：手风琴用 grid-template-rows 0fr↔1fr。
+   不做 height 动画到 auto（不可插值），也不做 JS 测量：fr 轨道本身可过渡，连续开合会从
+   当前值 retarget、不闪回，内容动态变长时也自动跟随；只动当前这一块，其他卡片自然 reflow。
+   动画属性仅高度（规范允许的 accordion 例外）+ opacity，不写 keyframes。 */
+.kb-card-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  min-height: 0;
+  /* 内容超过 420px 上限时的兜底：即使 1fr 解析得比上限高，也不会在卡片里留空白 */
+  max-height: 420px;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--kb-dur) var(--kb-ease-out),
+    opacity var(--kb-dur) var(--kb-ease-out);
+}
+
+.kb-card-expand--open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* 离场快一档：140ms（--kb-dur-exit），期间吃掉指针事件，避免点到正在消失的内容 */
+.kb-card-expand--leaving {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: var(--kb-dur-exit);
+}
+
+/* 网格项是一层纯剪裁元素（没有 padding/border/margin）：
+   内层的边框/内边距如果直接挂在网格项上，0fr 收起后仍会被撑出 ~11px 残留，
+   多包一层纯元素才能让收起真正到 0；420px 上限与内部滚动仍留在 .kb-card-expanded。 */
+.kb-card-expand__clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 与 responsive.css 的移动端规则对齐：手机上展开区不再限高，交给整页滚动 */
+@media (max-width: 719px) {
+  .kb-card-expand {
+    max-height: none;
+  }
+}
+
 .kb-card-expanded {
   display: flex;
   flex-direction: column;
@@ -638,7 +717,6 @@
   padding-top: 8px;
   border-top: 0.5px solid var(--dsw-alias-border-l1);
   cursor: default;
-  animation: kb-reveal var(--kb-dur) var(--kb-ease-out);
 }
 
 .kb-card-timeline-scroll {
@@ -648,17 +726,6 @@
   max-height: 240px;
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-
-@keyframes kb-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(-2px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 .kb-exp-head {

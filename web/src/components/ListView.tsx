@@ -20,6 +20,9 @@ import { CardRelationBadges } from './CardRelations';
 import { ArchiveBox } from './ArchiveBox';
 import type { ArchiveBoxProps } from './ArchiveBox';
 import { ApprovalPanel } from './ApprovalPanel';
+import { ApprovalSlot } from './ApprovalSlot';
+// 展开区挂载外壳与看板卡片共用（同一套语感）；实现放 KanbanCard.tsx 是为了不新增文件。
+import { useExpandedPresence } from './KanbanCard';
 import { NativeInbox } from './NativeInbox';
 import type { NativeInboxProps } from './NativeInbox';
 import { MenuButton } from './MenuButton';
@@ -250,6 +253,7 @@ function ListRow({
 }) {
   const { t, lang } = useI18n();
   const expanded = shared.expandedIds.has(card.id);
+  const expand = useExpandedPresence(expanded);
   const statusKey = `status.${card.status}` as I18nKey;
   const tone =
     card.status === 'done'
@@ -447,53 +451,62 @@ function ListRow({
         <WorklineBadge cwd={card.cwd} status={worklineStatus} />
       </div>
 
-      {expanded && !selectionMode ? (
-        <div className="kb-list__expanded" id={`kb-list-exp-${card.id}`}>
-          {card.currentAction ? <p className="kb-list__action">{card.currentAction}</p> : null}
-          {pendingApproval ? (
-            <ApprovalPanel
-              approval={pendingApproval}
-              busy={shared.resolvingApprovalId === pendingApproval.id}
-              now={shared.now}
-              onResolve={(approval, submission, comment, decision) =>
-                actions.onResolveApproval(card, approval, submission, comment, decision)
-              }
-              onValidationError={(message) => actions.onNotify(message, 'error')}
-            />
-          ) : resolvedApproval ? (
-            <ApprovalPanel approval={resolvedApproval} busy={false} now={shared.now} onResolve={() => undefined} />
-          ) : null}
-          <div className="kb-list__section">
-            <h3 className="kb-list__section-title">{t('list.recentNodes')}</h3>
-            <Timeline activities={timeline} now={shared.now} variant="compact" />
-          </div>
-          <div className="kb-list__actions">
-            <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => actions.onOpenDetail(card.id)}>
-              {t('card.openDetail')}
-              <span className="kb-icon" aria-hidden="true">
-                <IconChevronRight />
-              </span>
-            </button>
-            <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => actions.onEdit(card)}>
-              <span className="kb-icon" aria-hidden="true">
-                <IconEdit />
-              </span>
-              {t('card.edit')}
-            </button>
-            {card.status === 'failed' ? (
-              <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => actions.onRetry(card)}>
-                <span className="kb-icon" aria-hidden="true">
-                  <IconRedo />
-                </span>
-                {t('card.retry')}
-              </button>
-            ) : null}
-            <button type="button" className="kb-btn kb-btn--sm kb-btn--danger" onClick={() => actions.onArchive(card)}>
-              <span className="kb-icon" aria-hidden="true">
-                <IconArchive />
-              </span>
-              {t('card.archive')}
-            </button>
+      {expand.render && !selectionMode ? (
+        <div
+          className={`kb-list__expand${expand.revealed ? ' kb-list__expand--open' : ''}${
+            expand.leaving ? ' kb-list__expand--leaving' : ''
+          }`}
+        >
+          <div className="kb-list__expand__clip">
+            <div className="kb-list__expanded" id={`kb-list-exp-${card.id}`}>
+              {card.currentAction ? <p className="kb-list__action">{card.currentAction}</p> : null}
+              {/* 交互式审批由 ApprovalSlot 负责离场（docs/11-motion.md §6.3）：不能再让 pendingApproval
+                  条件包住它，否则审批一消失组件就被卸载，淡出帧丢失；只读历史视图保持原样。 */}
+              <ApprovalSlot
+                approval={pendingApproval ?? null}
+                busy={pendingApproval ? shared.resolvingApprovalId === pendingApproval.id : false}
+                now={shared.now}
+                onResolve={(approval, submission, comment, decision) =>
+                  actions.onResolveApproval(card, approval, submission, comment, decision)
+                }
+                onValidationError={(message) => actions.onNotify(message, 'error')}
+              />
+              {!pendingApproval && resolvedApproval ? (
+                <ApprovalPanel approval={resolvedApproval} busy={false} now={shared.now} onResolve={() => undefined} />
+              ) : null}
+              <div className="kb-list__section">
+                <h3 className="kb-list__section-title">{t('list.recentNodes')}</h3>
+                <Timeline activities={timeline} now={shared.now} variant="compact" />
+              </div>
+              <div className="kb-list__actions">
+                <button type="button" className="kb-btn kb-btn--sm kb-btn--outline" onClick={() => actions.onOpenDetail(card.id)}>
+                  {t('card.openDetail')}
+                  <span className="kb-icon" aria-hidden="true">
+                    <IconChevronRight />
+                  </span>
+                </button>
+                <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => actions.onEdit(card)}>
+                  <span className="kb-icon" aria-hidden="true">
+                    <IconEdit />
+                  </span>
+                  {t('card.edit')}
+                </button>
+                {card.status === 'failed' ? (
+                  <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => actions.onRetry(card)}>
+                    <span className="kb-icon" aria-hidden="true">
+                      <IconRedo />
+                    </span>
+                    {t('card.retry')}
+                  </button>
+                ) : null}
+                <button type="button" className="kb-btn kb-btn--sm kb-btn--danger" onClick={() => actions.onArchive(card)}>
+                  <span className="kb-icon" aria-hidden="true">
+                    <IconArchive />
+                  </span>
+                  {t('card.archive')}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

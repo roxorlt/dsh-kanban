@@ -98,8 +98,12 @@ import type { ApprovalDecision, ApprovalSubmission } from './components/Approval
 import type { CardActionHandlers, Placement } from './components/types';
 import { SessionArchiveBatchDialog } from './components/SessionArchiveBatchDialog';
 import { StopAndArchiveDialog } from './components/StopAndArchiveDialog';
+import { usePresenceValue } from './lib/usePresence';
 
 const VIEW_STORAGE_KEY = 'dsh-kanban.view';
+/** 离场时长：与 styles/base.css 的 --kb-dur-exit-slow / --kb-dur-exit 同源（docs/11-motion.md §3.1）。 */
+const DRAWER_EXIT_MS = 180;
+const BATCHBAR_EXIT_MS = 140;
 const EMPTY_GROUPS: ColumnGroups = { backlog: [], running: [], needs_you: [], done: [] };
 
 /**
@@ -534,7 +538,12 @@ export function App() {
     if (!cardId) return;
     setHighlightCardId(cardId);
     const frame = requestAnimationFrame(() => {
-      document.querySelector(`[data-card-id="${cardId}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      // reduced-motion 下不要平滑滚动：JS 显式 behavior 会绕过 base.css 里的
+      // `scroll-behavior: auto !important`，必须在这里判一次（docs/11-motion.md §4）
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+      document
+        .querySelector(`[data-card-id="${cardId}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
     });
     return () => cancelAnimationFrame(frame);
   }, [highlightSession, snapshot.cards]);
@@ -586,6 +595,12 @@ export function App() {
   );
   const projects = useMemo(() => extractProjects(snapshot.cards), [snapshot.cards]);
   const activeCard = activeCardId ? snapshot.cards.find((card) => card.id === activeCardId) ?? null : null;
+  // 抽屉离场要保留最后一张卡的数据 180ms，否则数据先没了动画也没了（docs/11-motion.md §6.2）。
+  // keepInReducedMotion：抽屉本体的位移在 RM 下即时，但遮罩的 120ms 淡变需要这个窗口（§4 B 级）。
+  const drawerPresence = usePresenceValue(Boolean(activeCard), activeCard, DRAWER_EXIT_MS, {
+    keepInReducedMotion: true,
+  });
+  const drawerCard = drawerPresence.value;
   const doneTotal = useMemo(() => doneCardsOf(snapshot.cards).length, [snapshot.cards]);
   // ---- 原生待确认收件（工具授权 / Agent 提问 / 计划审批，见 docs/contracts/04）----
   const nativeEntries = useMemo(
@@ -1016,10 +1031,10 @@ export function App() {
     [notifyToast, rebindBusy, rebindTarget, refresh, t, workspaceState],
   );
 
-  /** 详情抽屉里当前卡片的 cwd 状态（无 / 已失效 / 正常）。 */
+  /** 详情抽屉里当前卡片的 cwd 状态（无 / 已失效 / 正常）。离场期间沿用最后一张卡的数据。 */
   const activeCardCwdState = useMemo(
-    () => (activeCard ? cardCwdState(activeCard, workspaceState.unavailable) : 'ok'),
-    [activeCard, workspaceState.unavailable],
+    () => (drawerCard ? cardCwdState(drawerCard, workspaceState.unavailable) : 'ok'),
+    [drawerCard, workspaceState.unavailable],
   );
 
   // ------------------------------------------------------------ 原生待确认作答
@@ -1858,6 +1873,19 @@ export function App() {
   const visibleCardIds = useMemo(() => filteredCards.map((card) => card.id), [filteredCards]);
   const allVisibleSelected = allCardsSelected(selectedIds, visibleCardIds);
 
+  // 离场那 140ms 里选中集/忙碌态已经清空，批量条不该先闪一帧「已选 0 张 / 按钮全禁用」：
+  // 用 usePresenceValue 把「离场前一刻的批量条数据快照」带进离场窗口（docs/11-motion.md §6.4）。
+  // 注意：不能用一个「leaving 时不覆盖」的 ref —— 离场状态是 effect 里下一轮渲染才置上的，
+  // 清空选中集的同一次提交里 leaving 仍是 false，那个 ref 会被 0 值覆盖（M3 实测闪 0 张，见 §8）。
+  const batchbarOpen = selectionMode && view !== 'workspaces';
+  const batchbarSnapshot = usePresenceValue(
+    batchbarOpen,
+    batchbarOpen ? { count: selectedIds.size, visibleCount: visibleCardIds.length, busy: batchBusy, allSelected: allVisibleSelected } : null,
+    // 批量条只淡不位移，reduced-motion 下保留 120ms 淡出
+    BATCHBAR_EXIT_MS,
+    { keepInReducedMotion: true },
+  );
+
   const exitSelectionMode = useCallback(() => {
     setSelectionMode(false);
     setSelectedIds(clearSelection());
@@ -2277,17 +2305,18 @@ export function App() {
           onToggleSelection={handleToggleSelectionMode}
           loading={firstLoad}
         />
-        {selectionMode && view !== 'workspaces' ? (
+        {batchbarSnapshot.mounted && batchbarSnapshot.value && view !== 'workspaces' ? (
           <SelectionBar
-            count={selectedIds.size}
-            visibleCount={visibleCardIds.length}
-            busy={batchBusy}
-            allSelected={allVisibleSelected}
+            count={batchbarSnapshot.value.count}
+            visibleCount={batchbarSnapshot.value.visibleCount}
+            busy={batchbarSnapshot.value.busy}
+            allSelected={batchbarSnapshot.value.allSelected}
             onSelectAll={handleSelectAllVisible}
             onClear={handleClearSelection}
             onMove={(column) => void handleBatchAction('move', column)}
             onArchive={() => void handleBatchAction('archive')}
             onCancel={exitSelectionMode}
+            closing={batchbarSnapshot.leaving}
           />
         ) : null}
         <main className={`kb-main${loading ? ' kb-main--loading' : ''}`}>
@@ -2353,12 +2382,12 @@ export function App() {
           </span>
         </footer>
 
-        {activeCard ? (
+        {drawerPresence.mounted && drawerCard ? (
           <DetailDrawer
-            card={activeCard}
+            card={drawerCard}
             boardName={snapshot.board?.name ?? t('app.boardFallback')}
-            feed={feeds[activeCard.id]}
-            onLoadEarlier={() => loadEarlier(activeCard.id)}
+            feed={feeds[drawerCard.id]}
+            onLoadEarlier={() => loadEarlier(drawerCard.id)}
             sessions={sessions}
             workspaces={workspaces}
             allCards={snapshot.cards}
@@ -2366,6 +2395,7 @@ export function App() {
             now={now}
             resolvingApprovalId={resolvingApprovalId}
             onClose={() => setActiveCardId(null)}
+            closing={drawerPresence.leaving}
             actions={actions}
             onReply={handleReply}
             onResolveApproval={(card, approval, submission, comment, decision, sessionId) =>
