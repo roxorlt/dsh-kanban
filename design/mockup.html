@@ -2741,7 +2741,7 @@
     return '<div class="empty">' +
       '<span class="empty-icon">' + icon(filtering ? 'search' : 'plus') + '</span>' +
       '<span class="empty-title">' + (filtering ? '没有匹配的卡片' : '这一列还没有卡片') + '</span>' +
-      '<span class="empty-desc">' + (filtering ? '换个关键词，或清除筛选条件。' : '从其他列拖入，或新建一张卡片让会话领取。') + '</span>' +
+      (filtering ? '<span class="empty-desc">换个关键词，或清除筛选条件。</span>' : '') +
       (filtering
         ? '<button type="button" class="btn btn-ghost btn-sm" data-action="clear-filters">清除筛选</button>'
         : '<button type="button" class="btn btn-ghost btn-sm" data-action="add-col" data-col="' + col.id + '">' + icon('plus') + '新建卡片</button>') +

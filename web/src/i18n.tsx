@@ -466,7 +466,7 @@ const zh = {
   'rebind.hint': '选择候选目录作为卡片新的工作目录；已完成卡片也可以修改，改完会写一条时间线。',
   'rebind.searchPlaceholder': '搜索仓库 / 分支 / 目录',
   'rebind.empty': '没有匹配的候选目录',
-  'rebind.noCandidates': '暂无候选目录：先让同仓库的其它卡片出现在工作区视图，或先给卡片绑定会话',
+  'rebind.noCandidates': '暂无候选目录：候选来自同一仓库的工作副本，以及卡片已绑定会话的执行目录。',
   'rebind.mainWorktree': '主工作副本 · {repo}',
   'rebind.sessionCandidate': '绑定会话：{title}',
   'rebind.sessionDetail': '会话执行目录 · {path}',
@@ -530,7 +530,6 @@ const zh = {
   'drawer.createSession': '新建会话',
   'drawer.createSessionCancel': '收起新建会话',
   'empty.columnTitle': '这一列还没有卡片',
-  'empty.columnHint': '从其他列拖入，或让 Agent 领取一个新任务。',
 
   'list.expandRow': '展开行',
   'list.collapseRow': '收起行',
@@ -596,9 +595,6 @@ const zh = {
   'sessionSuggest.reasonCwd': '执行目录和卡片一致',
   'sessionSuggest.reasonProject': '对应卡片项目「{name}」',
   'sessionSuggest.bind': '绑定推荐会话',
-  'drawer.noArtifacts': '暂无产物',
-  'drawer.noChecklist': '暂无清单',
-  'drawer.sectionEmpty': '暂无内容',
 
   // 卡片 Git 上下文（详情抽屉「分支 / 工作树」区块）
   'git.title': '工作线',
@@ -1342,7 +1338,7 @@ const en: Record<I18nKey, string> = {
   'rebind.hint': 'Pick a candidate directory as the card’s new working directory. Finished cards can be changed too, and a timeline entry is written.',
   'rebind.searchPlaceholder': 'Search repo / branch / directory',
   'rebind.empty': 'No matching candidate directories',
-  'rebind.noCandidates': 'No candidates yet: let other cards of the same repo show up in the workspaces view first, or bind a session to the card',
+  'rebind.noCandidates': 'No candidate directories yet: candidates come from worktrees in the same repo and the working directories of sessions bound to the card.',
   'rebind.mainWorktree': 'Main worktree · {repo}',
   'rebind.sessionCandidate': 'Bound session: {title}',
   'rebind.sessionDetail': 'Session directory · {path}',
@@ -1406,7 +1402,6 @@ const en: Record<I18nKey, string> = {
   'drawer.createSession': 'New session',
   'drawer.createSessionCancel': 'Close new session',
   'empty.columnTitle': 'Nothing in this column yet',
-  'empty.columnHint': 'Drag a card in, or let the agent pick up a new task.',
 
   'list.expandRow': 'Expand row',
   'list.collapseRow': 'Collapse row',
@@ -1472,9 +1467,6 @@ const en: Record<I18nKey, string> = {
   'sessionSuggest.reasonCwd': 'Same working directory as the card',
   'sessionSuggest.reasonProject': 'Matches the card project “{name}”',
   'sessionSuggest.bind': 'Bind suggested session',
-  'drawer.noArtifacts': 'No artifacts',
-  'drawer.noChecklist': 'No checklist',
-  'drawer.sectionEmpty': 'Nothing yet',
 
   // Card git context (detail drawer “Branch / Worktree” section)
   'git.title': 'Work line',

@@ -700,6 +700,21 @@
 | 未验证 / 风险 | ① GPU 真机 60fps 未测；② 宿主 Composer 里「返回看板」气泡的 `@starting-style` 进场未在真实宿主验证（`--ds-ease-out` 不存在，用 `var(--ds-ease-out, var(--ds-ease-in-out))` 兜底）；③ 2000 卡规模为架构性保证（无 FLIP / 无逐卡 stagger / 只动 GPU 属性），非实测；④ 抽屉遮罩 blur **静止期**成本（软件渲染 ~25ms/帧）保留为产品决策项；⑤ 审查同根因连带恢复菜单/Modal 的既有进场效果（此前一直静默失效） |
 | 提交 | 分支 `feat/motion-batch`（基线 `65cbf6c`），**已合入 main（merge `68fbc4f`，v0.26.0，2026-11-02，与视觉批次 `cad2af7` 同版上线）**：App.tsx / styles/*.css 的合入冲突已按「视觉规则优先、动效增补保留」逐处对齐（KanbanCard 展开区改用 `kb-card-expand` 离场结构、BoardView 保留落位类常量、drawer.css 同时保留 A-05 触屏热区与审批提交反馈） |
 
+## 1.46 空列表文案审计与修复（列内空态删误导提示 + 重绑空态改写，2026-11-03）
+
+| 项 | 结果 |
+|---|---|
+| 范围 | 卡片 `card-f195a9e0`：① 删除看板四列空态共用说明「从其他列拖入，或让 Agent 领取一个新任务。」；② 全站盘点空列表文案，修掉同类问题（重新绑定目录空态）；③ 清理 3 个不再渲染的空态死键。纯前端，不改数据契约、不改服务端。 |
+| 列内空态 | `empty.columnHint`（中/英）删除；`BoardView` 空态只保留图标 + 「这一列还没有卡片」+「新建卡片」；`board.css` 删 `.kb-column__empty-desc`；`design/mockup.html` 同步去掉同一句。原因：该说明对「待你确认」列不成立（审批/提问才进这列），且「让 Agent 领取一个新任务」不是看板动作。`DESIGN.md` 空态行补「列内空态不写跨列拖拽 / Agent 领取类说明」。 |
+| 同类修复 | `rebind.noCandidates`（中/英）改为说明候选来源：「暂无候选目录：候选来自同一仓库的工作副本，以及卡片已绑定会话的执行目录。」原句「先让同仓库的其它卡片出现在工作区视图」不是用户可执行动作。 |
+| 死键清理 | `drawer.noArtifacts` / `drawer.noChecklist` / `drawer.sectionEmpty`（中/英）已无渲染路径（为空时区块整块隐藏），删除。 |
+| 审计（保持不改） | 看板全局空态（board / filtered / noMatchShort）、列表分组空态、工作区 / 工作线空态与 `noReposHint`、归档箱、会话选择器（含按工作区为空）、筛选「暂无项目」、详情时间线、批量归档对话框、卡内会话区：均为准确说明「这里会出现什么」或下一步，无同类误导。`empty.board`（看板为 null）与 `archive.empty`（空归档箱整块隐藏）现有数据路径下基本不可达，不动。 |
+| 测试 | 服务端 **310/310**（`npm test`）；Web **37 文件 / 489 例**（`npm --prefix web run test`）；`tsc --noEmit` 0 error、`vite build` 通过（JS gzip 152.25KB / CSS gzip 20.70KB）、令牌 lint **11 CSS 0 error / 0 warning**。 |
+| 浏览器验收 | 零依赖 CDP + Chrome for Testing（临时脚本 `.tmp/copy-audit/`，未入库）：隔离 dev-server `--seed empty` 空看板（1440×900 亮/暗、390×844）+ 列表 / 工作线 / 工作区空态；真实宿主 `http://127.0.0.1:63506/dsh-kanban/` 刷新后「待你确认」列空态 = `这一列还没有卡片\n新建卡片`，`body.innerText` 中/英旧文案均为 `false`；重新绑定目录对话框显示新文案、旧句 `false`；中/英双语、两种环境 console error **0**、未捕获异常 0。截图见下。 |
+| 截图 | `docs/assets/screens/empty-state-copy/`：`before-board-empty-1440-light.png`（改前四列空态含旧提示）→ `board-empty-1440-light/dark.png`、`board-empty-390-light.png`、`list-empty-1440-light.png`、`worklines-empty-1440-light.png`、`workspaces-empty-1440-light.png`、`rebind-no-candidates-1440-light.png`、`real-host-board-1440-light.png`（真实宿主待你确认列）。 |
+| 生效方式 | 纯前端：合入 main 后刷新看板即生效，无需重启 DSH；`web/dist` 已重建（index 资源哈希更新）。 |
+| 提交状态 | 分支 `fix/empty-state-copy`，合并提交与合入后验收见下方「提交记录」（本行在合入后补写）。 |
+
 ## 2. 自动化测试
 
 ### 2.1 服务端（node --test）
