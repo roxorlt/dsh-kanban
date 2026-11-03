@@ -182,12 +182,6 @@
   font: var(--dsw-font-xxs-strong-12);
 }
 
-.kb-column__empty-desc {
-  max-width: 22em;
-  color: var(--dsw-alias-label-secondary);
-  font: var(--dsw-font-xxxs-11);
-}
-
 .kb-column__empty .kb-btn {
   margin-top: 2px;
 }

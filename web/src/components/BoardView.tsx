@@ -300,7 +300,6 @@ export function BoardView({
                     <IconPlus />
                   </span>
                   <span className="kb-column__empty-title">{t('empty.columnTitle')}</span>
-                  <span className="kb-column__empty-desc">{t('empty.columnHint')}</span>
                   <button type="button" className="kb-btn kb-btn--sm kb-btn--ghost" onClick={() => onCreateInColumn(column)}>
                     <span className="kb-icon" aria-hidden="true">
                       <IconPlus />
