@@ -31,6 +31,7 @@
 - 浏览器（零依赖 CDP + Chrome for Testing；隔离 dev-server `--seed empty` 与真实宿主 `127.0.0.1:63506`）：1440×900 亮 / 暗、390×844、board / list / worklines / workspaces 空态截图确认删改到位；真实宿主刷新后「待你确认」列空态只剩「这一列还没有卡片 + 新建卡片」，`body.innerText` 中不再含中 / 英旧文案；重新绑定目录对话框显示新文案；中 / 英双语、两种环境 console error **0**。
 - 截图：`docs/assets/screens/empty-state-copy/`（before→after、1440 / 390、亮 / 暗、列表 / 工作线 / 工作区空态、重绑空态、真实宿主待你确认列）。
 - 生效方式：**纯前端**（只改 `web/src` 与构建产物），合入 main 后刷新看板即生效，无需重启 DSH；`web/dist` 已重建。
+- 合并：分支 `fix/empty-state-copy`（`4cb8b99`）→ **已合入 main（merge `5e3d971`，`--no-ff`，2026-11-03）**；合入后整树复跑服务端 **310/310**、Web **37 文件 / 489 例**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS 0/0，`web/dist` 重建后无 diff（构建产物与合并后源码一致）。
 
 ## v0.26.0 — 2026-11-02
 

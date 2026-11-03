@@ -713,7 +713,7 @@
 | 浏览器验收 | 零依赖 CDP + Chrome for Testing（临时脚本 `.tmp/copy-audit/`，未入库）：隔离 dev-server `--seed empty` 空看板（1440×900 亮/暗、390×844）+ 列表 / 工作线 / 工作区空态；真实宿主 `http://127.0.0.1:63506/dsh-kanban/` 刷新后「待你确认」列空态 = `这一列还没有卡片\n新建卡片`，`body.innerText` 中/英旧文案均为 `false`；重新绑定目录对话框显示新文案、旧句 `false`；中/英双语、两种环境 console error **0**、未捕获异常 0。截图见下。 |
 | 截图 | `docs/assets/screens/empty-state-copy/`：`before-board-empty-1440-light.png`（改前四列空态含旧提示）→ `board-empty-1440-light/dark.png`、`board-empty-390-light.png`、`list-empty-1440-light.png`、`worklines-empty-1440-light.png`、`workspaces-empty-1440-light.png`、`rebind-no-candidates-1440-light.png`、`real-host-board-1440-light.png`（真实宿主待你确认列）。 |
 | 生效方式 | 纯前端：合入 main 后刷新看板即生效，无需重启 DSH；`web/dist` 已重建（index 资源哈希更新）。 |
-| 提交状态 | 分支 `fix/empty-state-copy`，合并提交与合入后验收见下方「提交记录」（本行在合入后补写）。 |
+| 提交状态 | 分支 `fix/empty-state-copy`（`4cb8b99`）→ **已合入 main（merge `5e3d971`，`--no-ff`，2026-11-03）**；合入后整树复跑服务端 **310/310**、Web **37 文件 / 489 例**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS 0/0，`web/dist` 重建后无 diff（构建产物与合并后源码一致）。 |
 
 ## 2. 自动化测试
 
