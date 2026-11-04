@@ -83,7 +83,6 @@ export function NativeInbox({
         <span className="kb-pill kb-pill--warn kb-pill--count" aria-label={t('native.count', { count: entries.length })}>
           {entries.length}
         </span>
-        <span className="kb-inbox__hint">{t('native.sectionHint')}</span>
       </header>
 
       <div className="kb-inbox__list" role="list">

@@ -448,7 +448,6 @@ export function SessionPicker({
                     {t('sessionPicker.manualSubmit')}
                   </button>
                 </div>
-                <p className="kb-session-picker__manual-hint">{t('sessionPicker.manualHint')}</p>
               </form>
             ) : (
               <button type="button" className="kb-session-picker__manual-toggle" onClick={() => setManualOpen(true)}>

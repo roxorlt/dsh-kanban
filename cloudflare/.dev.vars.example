@@ -1,0 +1,17 @@
+# 本地 `wrangler dev` 用的密钥模板：复制为 cloudflare/.dev.vars 后填入测试值。
+# cloudflare/.dev.vars 已被 .gitignore 忽略，切勿提交真实密钥。
+# 生产环境请用 `wrangler secret put <NAME>`。
+
+# 状态面 Bearer 令牌（必填；openssl rand -hex 32）
+CLOUD_SYNC_TOKEN="replace-with-openssl-rand-hex-32"
+
+# 入站来源密钥（按需；不配置 = 该来源 fail-closed 503）
+# GITHUB_WEBHOOK_SECRET="replace-with-github-webhook-secret"
+# FEISHU_VERIFICATION_TOKEN="replace-with-feishu-verification-token"
+# FEISHU_ENCRYPT_KEY="replace-with-feishu-encrypt-key"
+# DINGTALK_SIGN_SECRET="replace-with-dingtalk-sign-secret"
+# DINGTALK_ACCESS_TOKEN="replace-with-dingtalk-access-token"
+# INGRESS_GENERIC_TOKEN="replace-with-generic-ingress-token"
+
+# 日志级别：debug / info / warn / error；默认静默
+# LOG_LEVEL="info"

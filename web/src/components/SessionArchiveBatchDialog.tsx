@@ -154,8 +154,6 @@ export function SessionArchiveBatchDialog({
         </>
       }
     >
-      <p className="kb-archive-batch__hint">{t('sessionArchive.batchHint')}</p>
-
       {scanning ? (
         <p className="kb-drawer__loading" role="status">
           <span className="kb-spinner" aria-hidden="true" />

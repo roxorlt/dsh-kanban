@@ -17,6 +17,7 @@
 | 5 | 密度优先 | 13px 正文 + 11px 元信息；折叠卡片承载 80% 信息；审批选项例外——必须完整展开 |
 | 6 | 状态不只靠颜色 | 每个状态点有中文状态词；受阻/失败有原因文案；审批有图标、问题与每个选项说明 |
 | 7 | 会话是主体 | 运行中的实体是「会话」；DSH Agent 只出现在时间线 actor 与消息发送者语境 |
+| 8 | 布局自解释 | **Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.** 不堆砌解释性副标题、导语、表单二次说明与宣传注脚 |
 
 ## 2. 信息架构
 

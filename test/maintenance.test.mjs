@@ -338,3 +338,47 @@ test('kanban_archive_cards：dryRun 报告、归档跳过未收口子卡、resto
   const detail = parse(await byName.get('kanban_card').execute({ cardId: parent.card.id }, EXEC))
   assert.ok(detail.activities.some(activity => activity.type === 'unarchived' && activity.text === '恢复了归档卡片'))
 })
+
+test('kanban_create_card Fast-Path 准入守卫：同名未完成卡去重复用、同会话刚完成卡追问重开、forceNew 强制新建', async t => {
+  const { store, byName } = await setupBound(t)
+  const first = await createCardVia(byName, { title: '实现登录鉴权模块', status: 'backlog' })
+  assert.equal(first.reused, undefined)
+
+  // 同会话重复创建同名卡片（含标点/空格差异）→ 自动复用已有卡并可推进状态，不新增卡片
+  const countBefore = (await store.read()).cards.length
+  const dup = await createCardVia(byName, { title: '实现：登录鉴权模块！', summary: '补充摘要', status: 'running' })
+  assert.equal(dup.reused, true)
+  assert.equal(dup.card.id, first.card.id)
+  assert.equal(dup.card.status, 'running')
+  assert.equal(dup.card.summary, '补充摘要')
+  assert.equal((await store.read()).cards.length, countBefore)
+
+  // 完成该卡后，同一会话立即針對同一标题建卡 → 自动重开原卡（done → running）
+  parse(await byName.get('kanban_complete_card').execute({ cardId: first.card.id, result: '初步完成' }, SESSION_EXEC))
+  const reopened = await createCardVia(byName, { title: '实现登录鉴权模块', status: 'running' })
+  assert.equal(reopened.reused, true)
+  assert.equal(reopened.reopened, true)
+  assert.equal(reopened.card.id, first.card.id)
+  assert.equal(reopened.card.status, 'running')
+  assert.equal((await store.read()).cards.length, countBefore)
+
+  // 显式 forceNew: true 允许强制创建同名新卡
+  const forced = await createCardVia(byName, { title: '实现登录鉴权模块', forceNew: true })
+  assert.equal(forced.reused, undefined)
+  assert.notEqual(forced.card.id, first.card.id)
+})
+
+test('kanban_create_card Fast-Path 准入守卫：单会话未收口卡 ≥8 时第 9 张自动收敛为主卡 checklist', async t => {
+  const { store, byName } = await setupBound(t)
+  const main = await createCardVia(byName, { title: '主任务交付卡', status: 'running' })
+  for (let idx = 1; idx <= 7; idx += 1) {
+    await createCardVia(byName, { title: `独立待办子项 ${idx}` })
+  }
+  const countAtCap = (await store.read()).cards.length
+  const ninth = await createCardVia(byName, { title: '第九个小步骤自动转检查项' })
+  assert.equal(ninth.reused, true)
+  assert.equal(ninth.convergedToChecklist, true)
+  assert.equal(ninth.card.id, main.card.id)
+  assert.equal((await store.read()).cards.length, countAtCap, '超出单会话 WIP 上限时不应新增卡片')
+  assert.ok(ninth.card.checklists.some(item => item.text === '第九个小步骤自动转检查项'))
+})

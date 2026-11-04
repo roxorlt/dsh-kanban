@@ -45,6 +45,9 @@ let effectCleanups = []
 
 const fakeReact = {
   createElement(type, props, ...children) { return { type, props: props ?? {}, children } },
+  useState(initialValue) {
+    return [typeof initialValue === 'function' ? initialValue() : initialValue, () => {}]
+  },
   useRef(initialValue) {
     if (initialValue === null || initialValue === undefined) return { current: activeFrame }
     return { current: initialValue }
@@ -368,4 +371,136 @@ test('host.revealPath：未知方法仍返回 UNKNOWN_METHOD（不改旧协议�
   const response = await call(env, 'host.nope', {})
   assert.equal(response.ok, false)
   assert.equal(response.error.code, 'UNKNOWN_METHOD')
+})
+
+test('SuperAgentLauncher：点击左侧常驻入口立即定位已有会话并调 layout.selectPanel(null) 退出等待面板（不卡死、不空发 prompt）', async (t) => {
+  const env = createEnvironment()
+  installGlobals(env)
+  const calls = { opened: [], selectedPanels: [], created: 0, usingCalls: 0, savedPosts: [] }
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async (url, init = {}) => {
+    if (url === '/api/kanban/super-agent' && (!init.method || init.method === 'GET')) {
+      return {
+        ok: true,
+        async json() {
+          return { ok: true, sessionId: 'session-super-existing', bootstrapPrompt: '引导指令' }
+        },
+      }
+    }
+    if (url === '/api/kanban/super-agent' && init.method === 'POST') {
+      calls.savedPosts.push(JSON.parse(init.body))
+      return {
+        ok: true,
+        async json() { return { ok: true, decorated: true } },
+      }
+    }
+    throw new Error('unexpected fetch: ' + url)
+  }
+
+  const ctx = createFakeContext(env)
+  ctx.layout = { selectPanel(panelKey) { calls.selectedPanels.push(panelKey) } }
+  ctx.uiWorkspace = { openSession(id) { calls.opened.push(id) } }
+  ctx.sessions = {
+    list: {
+      getSnapshot: () => ({
+        phase: 'ready',
+        ids: ['session-super-existing'],
+        byId: { 'session-super-existing': { id: 'session-super-existing', title: '★ Super Agent' } },
+        current: null,
+      }),
+      subscribe: () => () => {},
+    },
+    refresh: async () => {},
+    create: async () => { calls.created += 1; return 'session-super-new' },
+    using: async () => { calls.usingCalls += 1 },
+  }
+
+  clientModule.apply(ctx)
+  t.after(() => {
+    globalThis.fetch = origFetch
+    ctx.dispose()
+  })
+
+  const superPanel = env.registrations.find(
+    (entry) => entry.config?.name === 'main' && entry.config?.key === 'kanban-super-agent',
+  )
+  assert.ok(superPanel, 'SuperAgentLauncher 应注册到 main 插槽')
+
+  effectCleanups = []
+  superPanel.component({})
+  const cleanups = effectCleanups
+  effectCleanups = []
+
+  await waitFor(() => calls.selectedPanels.includes(null) && calls.savedPosts.length >= 1)
+  assert.deepEqual(calls.opened, ['session-super-existing'])
+  assert.deepEqual(calls.selectedPanels, [null], '必须显式调用 layout.selectPanel(null) 退出自定义面板切回对话视图')
+  assert.equal(calls.created, 0, '已有有效常驻会话时不应重复新建会话')
+  assert.equal(calls.usingCalls, 0, '跳转已有会话时绝不触发空文本 promptSession')
+
+  for (const fn of cleanups) fn()
+})
+
+test('SuperAgentLauncher：当记录的旧会话已失效不在 catalog 中时，自动新建会话、切回对话并保存新 ID', async (t) => {
+  const env = createEnvironment()
+  installGlobals(env)
+  const calls = { opened: [], selectedPanels: [], created: 0, savedPosts: [] }
+  const origFetch = globalThis.fetch
+  globalThis.fetch = async (url, init = {}) => {
+    if (url === '/api/kanban/super-agent' && (!init.method || init.method === 'GET')) {
+      return {
+        ok: true,
+        async json() {
+          return { ok: true, sessionId: 'session-stale-deleted', bootstrapPrompt: '引导指令' }
+        },
+      }
+    }
+    if (url === '/api/kanban/super-agent' && init.method === 'POST') {
+      calls.savedPosts.push(JSON.parse(init.body))
+      return {
+        ok: true,
+        async json() { return { ok: true, decorated: true } },
+      }
+    }
+    throw new Error('unexpected fetch: ' + url)
+  }
+
+  const ctx = createFakeContext(env)
+  ctx.layout = { selectPanel(panelKey) { calls.selectedPanels.push(panelKey) } }
+  ctx.uiWorkspace = { openSession(id) { calls.opened.push(id) } }
+  ctx.sessions = {
+    list: {
+      getSnapshot: () => ({
+        phase: 'ready',
+        ids: [],
+        byId: {},
+        current: null,
+      }),
+      subscribe: () => () => {},
+    },
+    refresh: async () => {},
+    create: async () => { calls.created += 1; return 'session-fresh-super' },
+    using: async () => {},
+  }
+
+  clientModule.apply(ctx)
+  t.after(() => {
+    globalThis.fetch = origFetch
+    ctx.dispose()
+  })
+
+  const superPanel = env.registrations.find(
+    (entry) => entry.config?.name === 'main' && entry.config?.key === 'kanban-super-agent',
+  )
+  effectCleanups = []
+  superPanel.component({})
+  const cleanups = effectCleanups
+  effectCleanups = []
+
+  await waitFor(() => calls.savedPosts.length >= 1)
+  assert.equal(calls.created, 1)
+  assert.deepEqual(calls.opened, ['session-fresh-super'])
+  assert.deepEqual(calls.selectedPanels, [null])
+  assert.deepEqual(calls.savedPosts, [{ sessionId: 'session-fresh-super' }])
+
+  for (const fn of cleanups) fn()
 })

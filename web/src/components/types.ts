@@ -42,6 +42,7 @@ export interface CardActionHandlers {
   onReply: (card: Card, text: string) => Promise<{ ok: boolean; error?: string }>;
   onRetry: (card: Card) => void;
   onSessionClick: (card: Card) => void;
+  onToggleAutoStart?: (card: Card, next: boolean) => void;
 }
 
 export type { Activity, ApprovalOption };

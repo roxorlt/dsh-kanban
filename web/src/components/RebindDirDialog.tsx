@@ -115,8 +115,6 @@ export function RebindDirDialog({ candidates, busy, error, onSubmit, onClose }: 
       }
     >
       <div className="kb-rebind">
-        <p className="kb-rebind__hint">{t('rebind.hint')}</p>
-
         <div className="kb-rebind__search">
           <span className="kb-icon" aria-hidden="true">
             <IconSearch />

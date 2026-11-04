@@ -1,6 +1,7 @@
 // index.js：插件导出契约与 apply 接线（fake ctx 验证路由/工具注册与卸载）。
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { apply, inject, name } from '../lib/index.js'
@@ -143,7 +144,7 @@ test('apply autoArchiveDays：启动后立即归档超期 done/canceled，runnin
   await closeEffects(state)
 })
 
-test('apply autoArchiveDays=0 关闭自动归档；默认 30 天归档 40 天前完成的卡', async t => {
+test('apply autoArchiveDays=0 关闭自动归档；默认 3 天归档 40 天前完成的卡', async t => {
   // 0 = 关闭
   const offDir = await tempDir(t)
   const off = await seedOldCompletedCards(offDir)
@@ -154,7 +155,7 @@ test('apply autoArchiveDays=0 关闭自动归档；默认 30 天归档 40 天前
   assert.equal(offData.cards.find(card => card.id === off.doneId).archived, undefined)
   await closeEffects(offContext.state)
 
-  // 默认 30 天：40 天前的 done 会被归档
+  // 默认 3 天：40 天前的 done 会被归档
   const defaultDir = await tempDir(t)
   const seeded = await seedOldCompletedCards(defaultDir)
   const defaultContext = fakeContext()
@@ -169,7 +170,7 @@ test('apply autoArchiveDays=0 关闭自动归档；默认 30 天归档 40 天前
   assert.equal(defaultData.cards.find(card => card.id === seeded.doneId).archived, true)
   assert.match(
     defaultData.activities.find(item => item.cardId === seeded.doneId && item.type === 'archived').text,
-    /自动归档：已完成超过 30 天/,
+    /自动归档：已完成超过 3 天/,
   )
   await closeEffects(defaultContext.state)
 })
@@ -266,5 +267,123 @@ test('apply sessionFailureSync=false：不挂 session/event 监听', async t => 
   apply(ctx, { dataDir: dir, seed: 'empty', sessionFailureSync: false })
   await flush()
   assert.equal(state.events.has('session/event'), false)
+  await closeEffects(state)
+})
+
+
+// ---------------------------------------------------------------------------
+// 云同步守护器挂载（C3）：未配置/关闭/非法配置时零网络；状态接口经 index 路由可达
+// ---------------------------------------------------------------------------
+
+/** 用 fake ctx 注册到 state.routes 的路由起一个真实 HTTP 服务（验证 index 的接线而不仅是 handler）。 */
+async function serveRegisteredRoutes(t, state) {
+  const server = createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url || '/', 'http://localhost')
+      let best
+      for (const route of state.routes) {
+        if (route.kind === 'exact' && url.pathname === route.path) { best = route; break }
+        if (route.kind === 'prefix' && (url.pathname === route.path || url.pathname.startsWith(route.path + '/'))) {
+          if (!best || route.path.length > best.path.length) best = route
+        }
+      }
+      if (!best) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('not found'); return }
+      await best.handler(req, res)
+    } catch {
+      if (!res.headersSent) { res.writeHead(500, { 'content-type': 'text/plain' }); res.end('error') }
+    }
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => new Promise(resolve => server.close(resolve)))
+  return `http://127.0.0.1:${server.address().port}`
+}
+
+async function getCloudStatus(url) {
+  const response = await fetch(`${url}/api/kanban/cloud/status`)
+  const text = await response.text()
+  return { status: response.status, json: JSON.parse(text) }
+}
+
+test('apply 挂载云同步守护器：未配置/已关闭/配置非法都零网络，状态接口可读', async t => {
+  const originalFetch = globalThis.fetch
+  const localFetch = originalFetch
+  let networkCalls = 0
+  // 只统计「非本地回环」的出站请求：状态接口自身走 127.0.0.1，不算云同步流量
+  globalThis.fetch = async (...args) => {
+    const url = String(args[0])
+    if (!url.startsWith('http://127.0.0.1') && !url.startsWith('http://localhost')) networkCalls += 1
+    throw new Error('云同步未配置/关闭时不应发起任何外部网络请求')
+  }
+  t.after(() => { globalThis.fetch = originalFetch })
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+  // 1) 未配置：/cloud/status 静默降级为 enabled:false
+  const missingDir = await tempDir(t)
+  const missingCtx = fakeContext()
+  apply(missingCtx.ctx, { dataDir: missingDir, seed: 'empty', sessionFailureSync: false })
+  await wait(120)
+  const missingUrl = await serveRegisteredRoutes(t, missingCtx.state)
+  // 状态接口用真实 fetch（上面替换的 stub 只统计外部请求；这里临时恢复）
+  globalThis.fetch = localFetch
+  const missingStatus = await getCloudStatus(missingUrl)
+  globalThis.fetch = async (...args) => {
+    const url = String(args[0])
+    if (!url.startsWith('http://127.0.0.1') && !url.startsWith('http://localhost')) networkCalls += 1
+    throw new Error('云同步未配置/关闭时不应发起任何外部网络请求')
+  }
+  assert.equal(missingStatus.status, 200)
+  assert.equal(missingStatus.json.ok, true)
+  assert.equal(missingStatus.json.cloud.enabled, false)
+  assert.equal(missingStatus.json.cloud.configStatus, 'missing')
+  assert.equal(networkCalls, 0, '未配置 cloud-config.json 时不应产生任何外部网络请求')
+  await closeEffects(missingCtx.state)
+
+  // 2) 显式 enabled:false：同样零网络，状态接口给出 disabled
+  const disabledDir = await tempDir(t)
+  await writeFile(join(disabledDir, 'cloud-config.json'), JSON.stringify({ version: 1, enabled: false }), { mode: 0o600 })
+  const disabledCtx = fakeContext()
+  apply(disabledCtx.ctx, { dataDir: disabledDir, seed: 'empty', sessionFailureSync: false })
+  await wait(120)
+  const disabledUrl = await serveRegisteredRoutes(t, disabledCtx.state)
+  globalThis.fetch = localFetch
+  const disabledStatus = await getCloudStatus(disabledUrl)
+  globalThis.fetch = async (...args) => {
+    const url = String(args[0])
+    if (!url.startsWith('http://127.0.0.1') && !url.startsWith('http://localhost')) networkCalls += 1
+    throw new Error('云同步未配置/关闭时不应发起任何外部网络请求')
+  }
+  assert.equal(disabledStatus.json.cloud.enabled, false)
+  assert.equal(disabledStatus.json.cloud.configStatus, 'disabled')
+  assert.equal(networkCalls, 0)
+  await closeEffects(disabledCtx.state)
+
+  // 3) 配置非法（权限 0644 / 缺 token）：静默降级并给出 configError，不抛错、不联网
+  const invalidDir = await tempDir(t)
+  await writeFile(
+    join(invalidDir, 'cloud-config.json'),
+    JSON.stringify({ version: 1, enabled: true, workerUrl: 'https://worker.invalid', token: '', clientId: 'x' }),
+    { mode: 0o644 },
+  )
+  const invalidCtx = fakeContext()
+  apply(invalidCtx.ctx, { dataDir: invalidDir, seed: 'empty', sessionFailureSync: false })
+  await wait(120)
+  const invalidUrl = await serveRegisteredRoutes(t, invalidCtx.state)
+  globalThis.fetch = localFetch
+  const invalidStatus = await getCloudStatus(invalidUrl)
+  assert.equal(invalidStatus.status, 200)
+  assert.equal(invalidStatus.json.cloud.enabled, false)
+  assert.equal(invalidStatus.json.cloud.configStatus, 'invalid')
+  assert.match(invalidStatus.json.cloud.configError.message, /0600/)
+  assert.equal(networkCalls, 0)
+  await closeEffects(invalidCtx.state)
+})
+
+test('apply cloudSync:false：不创建守护器 effect（完全关闭云同步）', async t => {
+  const dir = await tempDir(t)
+  const { ctx, state } = fakeContext()
+  apply(ctx, { dataDir: dir, seed: 'empty', cloudSync: false, sessionFailureSync: false })
+  await flush()
+  // 两条前缀路由 + 工具注册，cloudSync:false 时不应额外注册云同步相关 effect
+  assert.equal(state.routes.length, 2)
   await closeEffects(state)
 })

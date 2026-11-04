@@ -178,8 +178,9 @@ export function GitBranchSection({ card, sessions }: GitBranchSectionProps) {
 
   return (
     <section className="kb-drawer__section kb-git">
-      <h3 className="kb-drawer__section-title">{t('git.title')}</h3>
-      <p className="kb-git__summary">{summaryText(summary, t)}</p>
+      <h3 className="kb-drawer__section-title" title={summaryText(summary, t)}>
+        {t('git.title')}
+      </h3>
       <dl className="kb-git__facts">
         <div className="kb-git__fact">
           <dt>{t('git.factBranch')}</dt>

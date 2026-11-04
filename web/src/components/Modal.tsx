@@ -14,7 +14,7 @@ interface ModalProps {
   footer?: ReactNode;
   /** 初始聚焦的元素选择器，默认聚焦第一个可交互元素 */
   initialFocus?: string;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 const FOCUSABLE =

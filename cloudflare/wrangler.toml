@@ -1,0 +1,65 @@
+# ============================================================================
+# dsh-kanban 云端持久化（C2/3）——Cloudflare Worker 部署模板
+# ----------------------------------------------------------------------------
+# 契约：docs/contracts/08-cloud-sync.md
+# 用法：
+#   1) wrangler d1 create dsh-kanban-sync
+#      把输出的 database_id 填到下文的 database_id（<...> 占位符）
+#   2) wrangler d1 migrations apply dsh-kanban-sync --remote
+#      （本文件已声明 migrations_dir，默认读取 cloudflare/migrations/）
+#   3) wrangler secret put CLOUD_SYNC_TOKEN
+#      可选来源密钥：GITHUB_WEBHOOK_SECRET / FEISHU_VERIFICATION_TOKEN / FEISHU_ENCRYPT_KEY
+#                    DINGTALK_SIGN_SECRET 或 DINGTALK_ACCESS_TOKEN / INGRESS_GENERIC_TOKEN
+#   4) wrangler deploy
+#
+# 说明：
+#   - 本文件不含任何密钥；密钥一律 wrangler secret put，本地开发用 .dev.vars
+#     （cloudflare/.dev.vars 已被 .gitignore 忽略，参考 .dev.vars.example）。
+#   - worker.mjs 直接 import ../lib/cloud-sync-protocol.js（C1 协议层），
+#     因此需要 nodejs_compat（node:crypto / Buffer）与足够新的 compatibility_date。
+#   - 免费计划即可跑个人量级（1 库、少量 push/pull + 入站暂存），配额以 Cloudflare 控制台为准。
+# ============================================================================
+
+name = "dsh-kanban-sync"
+main = "worker.mjs"
+
+# node:crypto（createHash/createHmac/timingSafeEqual）与全局 Buffer 依赖 nodejs_compat；
+# 2024-09-23 起 nodejs_compat 提供 Buffer 全局，这里取一个稳妥的日期。
+compatibility_date = "2024-11-06"
+compatibility_flags = ["nodejs_compat"]
+
+# 个人部署直接使用 workers.dev 域名即可；自定义域名可加 routes。
+workers_dev = true
+
+# ---------------------------------------------------------------------------
+# D1：状态镜像 + 入站暂存队列（Schema 见 migrations/0001_kanban_sync.sql）
+# ---------------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "dsh-kanban-sync"
+# ！！替换：wrangler d1 create dsh-kanban-sync 输出里的 database_id
+database_id = "<REPLACE_WITH_D1_DATABASE_ID>"
+migrations_dir = "migrations"
+
+# ---------------------------------------------------------------------------
+# Cron：每小时清理过期入站事件 / 已投递 outbox / 90 天前时间线镜像
+# （语义见契约 §3.9；可改为 "0 * * * *" 对齐整点）
+# ---------------------------------------------------------------------------
+[triggers]
+crons = ["17 * * * *"]
+
+# ---------------------------------------------------------------------------
+# 观测：Worker 日志（只记 id/seq/provider/status/attempts，不记请求体全文）
+# ---------------------------------------------------------------------------
+[observability]
+enabled = true
+
+# ---------------------------------------------------------------------------
+# 非密钥变量（可选）。密钥不要写在这里，用 `wrangler secret put`。
+# ---------------------------------------------------------------------------
+[vars]
+# 允许的 Webhook 来源由代码内 CLOUD_INGRESS_PROVIDERS 决定；
+# 未配置对应 secret 的来源会 fail-closed 返回 503。
+# 日志只记元数据（revision/provider/id/seq/count），不含请求体、令牌与签名头。
+# 设为 warn 可只看告警；设为空（删掉此行）则完全静默。
+LOG_LEVEL = "info"

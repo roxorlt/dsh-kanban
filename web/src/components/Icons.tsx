@@ -316,3 +316,26 @@ export const IconArrowDown = (props: IconProps) => (
     <path d="M8 3v10M4.5 9.5 8 13l3.5-3.5" />
   </Svg>
 );
+
+export const IconMessageChannel = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="M2.6 4.4A1.6 1.6 0 0 1 4.2 2.8h7.6a1.6 1.6 0 0 1 1.6 1.6v5.2a1.6 1.6 0 0 1-1.6 1.6H7.2l-3.1 2.2v-2.2H4.2a1.6 1.6 0 0 1-1.6-1.6V4.4Z" />
+    <path d="M5.6 7h4.8M5.6 9h2.8" />
+  </Svg>
+);
+
+export const IconQrCode = (props: IconProps) => (
+  <Svg {...props}>
+    <rect x="2.5" y="2.5" width="4.2" height="4.2" rx="0.7" />
+    <rect x="9.3" y="2.5" width="4.2" height="4.2" rx="0.7" />
+    <rect x="2.5" y="9.3" width="4.2" height="4.2" rx="0.7" />
+    <path d="M9.6 9.6h1.6v1.6H9.6zM11.9 11.9h1.6v1.6h-1.6zM11.9 9.6h1.6M9.6 12.7h1.4" />
+  </Svg>
+);
+
+export const IconTrash = (props: IconProps) => (
+  <Svg {...props}>
+    <path d="M3 4.4h10M6.2 4.4V3.1c0-.4.3-.7.7-.7h2.2c.4 0 .7.3.7.7v1.3" />
+    <path d="M4.3 4.4 4.9 12.6c0 .6.5 1 1.1 1h4c.6 0 1.1-.4 1.1-1l.6-8.2M6.8 7v4.2M9.2 7v4.2" />
+  </Svg>
+);

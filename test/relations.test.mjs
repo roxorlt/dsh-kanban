@@ -424,3 +424,25 @@ test('reviewBoard：staleDays 与 limit 边界（limit 截断样例、staleDays 
   const none = reviewBoard(draft, { staleDays: 365, now: FIXED_NOW })
   assert.equal(none.staleBacklog.length, 0)
 })
+
+test('自动推进增强：子卡收口自动汇总父卡进度与 parentReady；completeCard 返回 wokenDependents 且支持 autoStart', () => {
+  const draft = seedDraft()
+  const parent = makeCard(draft, { title: '总控父卡', status: 'running' })
+  const childA = makeCard(draft, { title: '子卡 A', status: 'running', parentCardId: parent.id })
+  const childB = makeCard(draft, { title: '子卡 B', status: 'running', parentCardId: parent.id })
+  const autoDownstream = makeCard(draft, { title: '自动点火下游卡', status: 'blocked', dependsOn: [childB.id] })
+  autoDownstream.autoStart = true
+
+  const resA = completeCard(draft, childA.id, { result: 'A 完成', now: FIXED_NOW + 10, actor: ACTOR })
+  assert.equal(resA.parentReady, null)
+  assert.deepEqual(findById(draft, parent.id).progress, { step: 1, total: 2, percent: 50, text: '子卡进度 1/2' })
+
+  const resB = completeCard(draft, childB.id, { result: 'B 完成', now: FIXED_NOW + 20, actor: ACTOR })
+  assert.deepEqual(resB.parentReady, { id: parent.id, title: '总控父卡', status: 'running', totalChildren: 2, sessionIds: [] })
+  assert.deepEqual(findById(draft, parent.id).progress, { step: 2, total: 2, percent: 100, text: '子卡进度 2/2' })
+  assert.match(findById(draft, parent.id).currentAction, /全部 2 张子卡已收口/)
+  assert.equal(resB.wokenDependents.length, 1)
+  assert.equal(resB.wokenDependents[0].id, autoDownstream.id)
+  assert.equal(resB.wokenDependents[0].status, 'running')
+  assert.equal(findById(draft, autoDownstream.id).status, 'running')
+})

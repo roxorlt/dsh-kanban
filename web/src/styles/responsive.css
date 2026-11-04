@@ -169,8 +169,23 @@
     display: none;
   }
 
+  .kb-im-trigger {
+    margin-left: auto;
+    min-height: 36px;
+  }
+
+  .kb-autopilot-switch {
+    margin-left: auto;
+  }
+
   .kb-agent-live {
     margin-left: auto;
+  }
+
+  .kb-im-trigger ~ .kb-autopilot-switch,
+  .kb-im-trigger ~ .kb-agent-live,
+  .kb-autopilot-switch ~ .kb-agent-live {
+    margin-left: 0;
   }
 
   .kb-statusbar {

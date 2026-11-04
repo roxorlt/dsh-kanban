@@ -98,6 +98,7 @@ ul {
   --kb-dur-exit-slow: 180ms;
 }
 
+:root,
 .kb-app-scope {
   --kb-r-card: 12px;
   --kb-r-col: 14px;
@@ -142,7 +143,9 @@ ul {
   --kb-surface-column: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, var(--dsw-alias-bg-base));
   --kb-surface-card: var(--dsw-alias-bg-layer-1);
   --kb-hairline: var(--dsw-alias-border-l2);
+}
 
+.kb-app-scope {
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -609,6 +612,76 @@ ul {
   min-width: 0;
 }
 
+/* ------------------------------------------------------------------ 开关（Switch） */
+
+.kb-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--kb-r-ctl);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--kb-dur-fast) var(--kb-ease-out),
+    color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-switch:not(:disabled):hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-switch--on {
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-switch:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.kb-switch__track {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  width: 28px;
+  height: 16px;
+  padding: 2px;
+  border-radius: 99px;
+  corner-shape: round;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 18%, transparent);
+  transition: background-color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-switch--on .kb-switch__track {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.kb-switch__thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: light-dark(var(--dsw-alias-label-primary-inverted), var(--dsw-alias-label-primary));
+  transform: translateX(0);
+  transition: transform var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-switch--on .kb-switch__thumb {
+  transform: translateX(12px);
+}
+
+.kb-switch__label {
+  line-height: 16px;
+}
+
 /* ------------------------------------------------------------------ 标签 */
 
 .kb-tag {
@@ -1062,6 +1135,7 @@ ul {
 .kb-tag--handoff {
   flex: none;
   background: var(--dsw-alias-state-business-tertiary);
-  color: var(--dsw-alias-state-business-primary);
-  font: var(--dsw-font-xxxs-strong-11);
+  color: var(--kb-status-running-text);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 500;
 }

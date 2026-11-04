@@ -193,7 +193,17 @@ node scripts/install-desktop.mjs             # 写入 profile（自动备份 pac
     autoArchiveDays: 30        # 已完成卡片自动归档天数；0 关闭（默认 30）
     autoArchiveSessionsDays: 7 # 已完成卡片的会话自动归档天数；0 关闭（默认 7，需 DSH 0.2.x 可逆归档）
     workspaceBackfill: true    # v0.22.1：启动时把「有 cwd、缺 workspaceId」的未归档卡按工作区注册表回填；false 关闭
+    cloudSync: true            # 可选云控制面同步守护器（默认 true，但只有存在 ~/.dsh-kanban/cloud-config.json 且 enabled:true 才会联网）；false 完全关闭
 ```
+
+### 云同步（可选，默认关闭）
+
+本机合盖休眠时若仍想接住 IM / GitHub 回调，或用手机看只读看板镜像，可启用云控制面（Cloudflare Worker + D1）：
+
+1. 按 [`cloudflare/README.md`](cloudflare/README.md) 部署 Worker、执行 D1 迁移、`wrangler secret put CLOUD_SYNC_TOKEN`；
+2. 本机写 `~/.dsh-kanban/cloud-config.json` 并 `chmod 600`（结构与示例见 [云同步契约](docs/contracts/08-cloud-sync.md) 附录 A）；
+3. 重启 DSH 后生效（或在页面刷新后由新插件实例加载）；`GET http://127.0.0.1:<看板端口>/api/kanban/cloud/status` 查看同步/回放状态与最近错误；
+4. 只镜像**看板控制面**（卡片/时间线脱敏副本 + 休眠期入站暂存），代码仓库、工作副本、进程、DSH 会话 ID 都不上云；仓库内零个人密钥。
 
 ## 使用
 
@@ -287,7 +297,7 @@ docs/             # 分析、契约、设计、架构、验证
 - [DSH 插件机制与集成要点](docs/02-dsh-integration.md)
 - [设计规范与响应式规格](docs/03-design-system.md)
 - [架构与信息架构](docs/04-architecture.md)
-- [契约：数据模型](docs/contracts/01-data-model.md) / [HTTP API](docs/contracts/02-http-api.md) / [客户端桥](docs/contracts/03-client-bridge.md) / [决策日志](docs/contracts/05-decision-log.md) / [卡片 Git 上下文](docs/contracts/06-git-context.md)
+- [契约：数据模型](docs/contracts/01-data-model.md) / [HTTP API](docs/contracts/02-http-api.md) / [客户端桥](docs/contracts/03-client-bridge.md) / [决策日志](docs/contracts/05-decision-log.md) / [卡片 Git 上下文](docs/contracts/06-git-context.md) / [云同步（Local-First 镜像与入站暂存）](docs/contracts/08-cloud-sync.md)
 - [**DESIGN.md：视觉唯一事实源**](DESIGN.md)（令牌/字体层级/组件规则/动效预算/「不该改」清单/验收门槛）
 - [验证记录（含 0.2.1 宿主）](docs/06-verification.md)
 - [Deep link 提案（已搁置，应用内打开会话已实现）](docs/08-deeplink-proposal.md)

@@ -5,13 +5,15 @@ import type {
   Board,
   BoardSummary,
   Card,
+  CardWaitCondition,
   ColumnId,
   SessionActivityEntry,
   SessionRow,
   WorkspaceRow,
 } from './types';
 import { KanbanApiError, api } from './api';
-import type { SessionArchiveBatchResult } from './api';
+import { collectBoardHygieneCandidates, shouldShowHygieneNudge } from './lib/runtime';
+import type { ImStatusResponse, SessionArchiveBatchResult } from './api';
 import { BridgeUnavailableError, bridge, nextThemePreference, useBridgeState } from './bridge';
 import { buildNativeInbox } from './lib/nativeInbox';
 import type { NativeInboxEntry, NativeQuestionAnswer } from './lib/nativeInbox';
@@ -86,14 +88,15 @@ import { DetailDrawer } from './components/DetailDrawer';
 import { EmptyState, SkeletonBoard } from './components/feedback';
 import { IconAlert } from './components/Icons';
 import { HelpDialog } from './components/HelpDialog';
+import { ImChannelModal } from './components/ImChannelModal';
 import { ListView } from './components/ListView';
-import { WorklineFilterBar, WorklineView } from './components/WorklineView';
+import { WorklineFilterBar } from './components/WorklineView';
 import { WorkspaceView } from './components/WorkspaceView';
 import { ToastRegion, useToasts } from './components/Toast';
 import type { ToastAction } from './components/Toast';
 import { RebindDirDialog } from './components/RebindDirDialog';
 import { Toolbar } from './components/Toolbar';
-import type { SyncState, ViewMode } from './components/Toolbar';
+import type { ImToolbarSummary, SyncState, ViewMode } from './components/Toolbar';
 import type { ApprovalDecision, ApprovalSubmission } from './components/ApprovalPanel';
 import type { CardActionHandlers, Placement } from './components/types';
 import { SessionArchiveBatchDialog } from './components/SessionArchiveBatchDialog';
@@ -101,6 +104,7 @@ import { StopAndArchiveDialog } from './components/StopAndArchiveDialog';
 import { usePresenceValue } from './lib/usePresence';
 
 const VIEW_STORAGE_KEY = 'dsh-kanban.view';
+const HYGIENE_DISMISS_STORAGE_KEY = 'dsh-kanban.hygiene.nudge-dismissed-at';
 /** 离场时长：与 styles/base.css 的 --kb-dur-exit-slow / --kb-dur-exit 同源（docs/11-motion.md §3.1）。 */
 const DRAWER_EXIT_MS = 180;
 const BATCHBAR_EXIT_MS = 140;
@@ -131,6 +135,7 @@ interface Snapshot {
   boards: BoardSummary[];
   board: Board | null;
   cards: Card[];
+  autoAdvanceEnabled: boolean;
   revision: number;
 }
 
@@ -191,8 +196,7 @@ function readStoredView(): ViewMode {
     const stored = localStorage.getItem(VIEW_STORAGE_KEY);
     // 兼容旧值：只认这四个视图，其它（含 null）回落到看板
     if (stored === 'list') return 'list';
-    if (stored === 'workspaces') return 'workspaces';
-    if (stored === 'worklines') return 'worklines';
+    if (stored === 'workspaces' || stored === 'worklines') return 'workspaces';
     return 'board';
   } catch {
     return 'board';
@@ -272,8 +276,10 @@ export function App() {
     boards: [],
     board: null,
     cards: [],
+    autoAdvanceEnabled: true,
     revision: -1,
   });
+  const [autopilotBusy, setAutopilotBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
   /** 错误页默认只给用户文案；错误码/原始错误收进「诊断信息」按需展开（docs/10 A-09）。 */
@@ -309,6 +315,7 @@ export function App() {
         boards: payload.boards ?? [],
         board: payload.board ?? null,
         cards: payload.cards ?? [],
+        autoAdvanceEnabled: payload.autoAdvanceEnabled !== false,
         revision: payload.revision ?? 0,
       });
       setLoadError(null);
@@ -328,10 +335,26 @@ export function App() {
     void refresh();
   }, [refresh]);
 
+  const [pendingFocusCardId, setPendingFocusCardId] = useState<string | null>(() => {
+    try {
+      const urlCard = new URLSearchParams(window.location.search).get('cardId')?.trim();
+      if (urlCard) return urlCard;
+      const stored = window.sessionStorage.getItem('dsh-kanban:focus-card')?.trim();
+      if (stored) {
+        window.sessionStorage.removeItem('dsh-kanban:focus-card');
+        return stored;
+      }
+    } catch {
+      /* 忽略环境限制 */
+    }
+    return null;
+  });
+
   const { status: realtimeStatus, reconnect: reconnectRealtime } = useRealtime({
     enabled: embedded ? bridgeState.visible : true,
     revision: snapshot.revision,
     onRefresh: () => void refresh({ silent: true }),
+    onFocusCard: (cardId) => setPendingFocusCardId(cardId),
   });
 
   // SSE 从断线状态恢复后补一次全量刷新：断线期间可能错过 revision 变更（docs/10 A-08）。
@@ -496,6 +519,47 @@ export function App() {
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [restoringArchiveId, setRestoringArchiveId] = useState<string | null>(null);
+  const [imStatus, setImStatus] = useState<ImStatusResponse | null>(null);
+  const [imModalOpen, setImModalOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pullIm = () => {
+      api
+        .getImStatus()
+        .then((res) => {
+          if (!cancelled) setImStatus(res);
+        })
+        .catch(() => {
+          /* 独立预览或旧服务端无 IM 接口时静默降级 */
+        });
+    };
+    pullIm();
+    const timer = window.setInterval(pullIm, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const imSummary = useMemo<ImToolbarSummary>(() => {
+    if (!imStatus) return { state: 'idle', activeCount: 0 };
+    if (imStatus.weixinLive?.sessionExpired) {
+      return { state: 'expired', activeCount: 0 };
+    }
+    const enabledWebhooks = (imStatus.config.targets || []).filter((target) => target.enabled).length;
+    const wxActive =
+      Boolean(imStatus.weixinLive?.loggedIn) &&
+      !imStatus.weixinLive?.sessionExpired &&
+      imStatus.config.weixin?.enabled !== false
+        ? 1
+        : 0;
+    const activeCount = enabledWebhooks + wxActive;
+    return {
+      state: activeCount > 0 ? 'connected' : 'idle',
+      activeCount,
+    };
+  }, [imStatus]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 15_000);
@@ -530,6 +594,30 @@ export function App() {
     setFilters({ query: '', project: null });
     setWorklineFilter(null);
   }, []);
+
+  useEffect(() => {
+    if (bridgeState.focusedCard?.cardId) {
+      setPendingFocusCardId(bridgeState.focusedCard.cardId);
+    }
+  }, [bridgeState.focusedCard]);
+
+  useEffect(() => {
+    if (!pendingFocusCardId || loading) return;
+    const targetId = pendingFocusCardId;
+    setPendingFocusCardId(null);
+    if (view === 'workspaces' || view === 'worklines') {
+      setViewState('board');
+    }
+    setActiveCardId(targetId);
+    setHighlightCardId(targetId);
+    const frame = requestAnimationFrame(() => {
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+      document
+        .querySelector(`[data-card-id="${targetId}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loading, pendingFocusCardId, snapshot.cards, view]);
 
   useEffect(() => {
     if (!highlightSession || snapshot.cards.length === 0) return;
@@ -602,6 +690,25 @@ export function App() {
   });
   const drawerCard = drawerPresence.value;
   const doneTotal = useMemo(() => doneCardsOf(snapshot.cards).length, [snapshot.cards]);
+  // ---- 看板收敛与一键归档（Hygiene Banner）----
+  const [hygieneDismissedAt, setHygieneDismissedAt] = useState<number | null>(() => {
+    try {
+      const raw = window.localStorage.getItem(HYGIENE_DISMISS_STORAGE_KEY);
+      const parsed = raw ? Number(raw) : NaN;
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
+  const [hygieneBusy, setHygieneBusy] = useState(false);
+  const hygienePlan = useMemo(
+    () => collectBoardHygieneCandidates(snapshot.cards, now),
+    [snapshot.cards, now],
+  );
+  const showHygieneBanner =
+    (view === 'board' || view === 'list') &&
+    !selectionMode &&
+    shouldShowHygieneNudge(hygienePlan.archivableIds.length, hygieneDismissedAt, now);
   // ---- 原生待确认收件（工具授权 / Agent 提问 / 计划审批，见 docs/contracts/04）----
   const nativeEntries = useMemo(
     () => buildNativeInbox(bridgeState.nativePending.items, snapshot.cards, lang),
@@ -938,18 +1045,20 @@ export function App() {
   }, [archiveAvailable, embedded]);
 
   const sendToSession = useCallback(
-    async (input: { text: string; sessionId?: string; cwd?: string }): Promise<{ ok: boolean; error?: string }> => {
+    async (
+      input: { text: string; sessionId?: string; cwd?: string },
+    ): Promise<{ ok: boolean; error?: string; sessionId?: string; created?: boolean }> => {
       if (!embedded) {
         const copied = await copyText(input.text);
         return copied ? { ok: true } : { ok: false, error: t('composer.copyFailed') };
       }
       try {
-        await bridge.request('session.ensure', {
+        const ensured = await bridge.request('session.ensure', {
           text: input.text,
           ...(input.sessionId ? { sessionId: input.sessionId } : {}),
           ...(input.cwd ? { cwd: input.cwd } : {}),
         });
-        return { ok: true };
+        return { ok: true, sessionId: ensured.sessionId, created: ensured.created };
       } catch (error) {
         await copyText(input.text);
         // 桥层发消息前会自动恢复已归档会话；恢复失败时不静默，给出可操作提示
@@ -1425,8 +1534,8 @@ export function App() {
           submission.optionIds,
         );
         const sessionId = sessionIdOverride ?? approval.sessionId ?? card.sessionIds[0];
-        // 审批已经写入时间线：会话缺失/失效时只做中性提示，不报错
-        if (!sessionId) {
+        // 若无绑定会话但处于嵌入宿主环境，尝试通过 sendToSession (session.ensure) 自动补建并绑定会话
+        if (!sessionId && !embedded) {
           setUnsentDecision({
             cardId: card.id,
             cardTitle: card.title,
@@ -1439,12 +1548,29 @@ export function App() {
         } else {
           const sessionResult = await sendToSession({
             text,
-            sessionId,
+            ...(sessionId ? { sessionId } : {}),
             ...(card.cwd ? { cwd: card.cwd } : {}),
           });
           if (sessionResult.ok) {
+            if (!sessionId && sessionResult.sessionId) {
+              try {
+                await api.bindSession(card.id, sessionResult.sessionId);
+              } catch {
+                /* 绑定失败不阻塞审批完成 */
+              }
+            }
             notifyToast(t('toast.approvalResolved'), 'success');
             announce(`${t('toast.approvalResolved')}：${approval.title}`);
+          } else if (!sessionId) {
+            setUnsentDecision({
+              cardId: card.id,
+              cardTitle: card.title,
+              ...(card.cwd ? { cwd: card.cwd } : {}),
+              text,
+              reason: 'no_session',
+            });
+            notifyToast(t('toast.approvalRecordedNoSession'), 'info');
+            announce(t('toast.approvalRecordedNoSession'));
           } else if (/SESSION_NOT_FOUND|not found|不存在|失效|invalid/i.test(sessionResult.error ?? '')) {
             setUnsentDecision({
               cardId: card.id,
@@ -1515,6 +1641,21 @@ export function App() {
         ...(targetSessionId ? { sessionId: targetSessionId } : {}),
         ...(card.cwd ? { cwd: card.cwd } : {}),
       });
+      if (result.ok && !targetSessionId && result.sessionId) {
+        try {
+          await api.bindSession(card.id, result.sessionId);
+        } catch {
+          /* 绑定失败不阻塞消息发送 */
+        }
+      }
+      const latestBeforeMove = snapshotRef.current.cards.find((item) => item.id === card.id) ?? card;
+      if (result.ok && shouldPromptStartAfterReply(latestBeforeMove.status)) {
+        try {
+          await api.moveCard(card.id, 'running');
+        } catch {
+          /* 状态自动推进失败时由下方 refresh 兜底 */
+        }
+      }
       await refresh({ silent: true });
       if (!result.ok) {
         notifyToast(result.error ?? t('composer.replyFailed'), 'error');
@@ -1522,11 +1663,6 @@ export function App() {
       }
       if (!embedded) notifyToast(t('composer.standaloneHint'), 'info');
       else notifyToast(t('toast.saved'), 'success');
-      // 待办卡回复后只提示、不自动改状态
-      const latest = snapshotRef.current.cards.find((item) => item.id === card.id) ?? card;
-      if (shouldPromptStartAfterReply(latest.status)) {
-        notifyToast(t('toast.replyBacklogHint'), 'info');
-      }
       return { ok: true };
     },
     [embedded, notifyToast, refresh, sendToSession, t],
@@ -1687,6 +1823,7 @@ export function App() {
               status: values.status,
               project: values.project || undefined,
               cwd: values.cwd || undefined,
+              autoStart: Boolean(values.autoStart),
             });
             notifyToast(t('toast.saved'), 'success');
           } catch (error) {
@@ -1706,9 +1843,15 @@ export function App() {
             project: values.project || undefined,
             workspaceId: values.workspaceId || undefined,
             cwd: values.cwd || undefined,
+            ...(values.autoStart ? { autoStart: true } : {}),
             ...(values.session.kind === 'existing' && values.session.sessionId
               ? { sessionId: values.session.sessionId }
               : {}),
+            ...(values.session.kind === 'new'
+              ? { sessionMode: 'new' as const }
+              : values.session.kind === 'none'
+                ? { sessionMode: 'none' as const }
+                : {}),
           });
           notifyToast(t('toast.created'), 'success');
           announce(t('toast.created'));
@@ -1716,33 +1859,52 @@ export function App() {
             // 独立预览：只建卡，不建会话
             notifyToast(t('toast.cardCreatedNoSession'), 'info');
           } else if (embedded && values.session.kind !== 'none') {
-            const plan = {
-              kind: values.session.kind,
-              ...(values.session.sessionId ? { sessionId: values.session.sessionId } : {}),
-              ...(card.workspaceId ? { workspaceId: card.workspaceId } : {}),
-              ...(card.cwd ? { cwd: card.cwd } : {}),
-              title: card.title,
-              start: values.status === 'running',
-              prompt: buildStartPrompt(card),
-            };
-            const result = await setupNewCardSession(plan, {
-              createSession: (input) => bridge.request('session.create', input),
-              ensureSession: (input) => bridge.request('session.ensure', input),
-              promptSession: async (sessionId, text) => {
-                await bridge.request('session.prompt', { sessionId, text });
-              },
-              bindSession: async (sessionId) => {
-                await api.bindSession(card.id, sessionId);
-              },
-            });
-            if (result.status === 'failed') {
-              notifyToast(t('toast.cardCreatedSessionFailed'), 'error');
-            } else if (values.status === 'running') {
-              notifyToast(t('toast.sessionAutoStarted'), 'success');
-            } else if (values.session.kind === 'new') {
-              notifyToast(t('toast.sessionCreatedBound'), 'success');
+            const serverBoundSessionId = values.session.kind === 'new' ? card.sessionIds[0] : undefined;
+            if (serverBoundSessionId) {
+              // 服务端已通过 sessionController 原子创建并绑定了新会话：只需在 running 时发送启动提示
+              if (values.status === 'running') {
+                try {
+                  await bridge.request('session.prompt', {
+                    sessionId: serverBoundSessionId,
+                    text: buildStartPrompt(card),
+                  });
+                  notifyToast(t('toast.sessionAutoStarted'), 'success');
+                } catch {
+                  notifyToast(t('toast.cardCreatedSessionFailed'), 'error');
+                }
+              } else {
+                notifyToast(t('toast.sessionCreatedBound'), 'success');
+              }
+              void refreshWorkspaces();
+            } else {
+              const plan = {
+                kind: values.session.kind,
+                ...(values.session.sessionId ? { sessionId: values.session.sessionId } : {}),
+                ...(card.workspaceId ? { workspaceId: card.workspaceId } : {}),
+                ...(card.cwd ? { cwd: card.cwd } : {}),
+                title: card.title,
+                start: values.status === 'running',
+                prompt: buildStartPrompt(card),
+              };
+              const result = await setupNewCardSession(plan, {
+                createSession: (input) => bridge.request('session.create', input),
+                ensureSession: (input) => bridge.request('session.ensure', input),
+                promptSession: async (sessionId, text) => {
+                  await bridge.request('session.prompt', { sessionId, text });
+                },
+                bindSession: async (sessionId) => {
+                  await api.bindSession(card.id, sessionId);
+                },
+              });
+              if (result.status === 'failed') {
+                notifyToast(t('toast.cardCreatedSessionFailed'), 'error');
+              } else if (values.status === 'running') {
+                notifyToast(t('toast.sessionAutoStarted'), 'success');
+              } else if (values.session.kind === 'new') {
+                notifyToast(t('toast.sessionCreatedBound'), 'success');
+              }
+              void refreshWorkspaces();
             }
-            void refreshWorkspaces();
           }
         }
         setFormState(null);
@@ -1778,6 +1940,103 @@ export function App() {
     }
   }, [activeCardId, announce, archiveCards, archiveTarget, loadArchivedCards, notifyToast, refresh, t]);
 
+  const handleHygieneArchive = useCallback(async () => {
+    if (!hygienePlan.archivableIds.length || hygieneBusy) return;
+    setHygieneBusy(true);
+    try {
+      await batchCards('archive', hygienePlan.archivableIds);
+      const msg = t('hygiene.archivedToast', { count: hygienePlan.archivableIds.length });
+      notifyToast(msg, 'success');
+      announce(msg);
+      await refresh({ silent: true });
+      if (archiveCards !== null) void loadArchivedCards();
+    } catch (error) {
+      notifyToast(error instanceof Error ? error.message : t('toast.archiveFailed'), 'error');
+      await refresh({ silent: true });
+    } finally {
+      setHygieneBusy(false);
+    }
+  }, [announce, archiveCards, hygieneBusy, hygienePlan.archivableIds, loadArchivedCards, notifyToast, refresh, t]);
+
+  const handleHygieneDismiss = useCallback(() => {
+    const ts = Date.now();
+    setHygieneDismissedAt(ts);
+    try {
+      window.localStorage.setItem(HYGIENE_DISMISS_STORAGE_KEY, String(ts));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const handleToggleAutopilot = useCallback(async () => {
+    if (autopilotBusy) return;
+    const prev = snapshotRef.current.autoAdvanceEnabled;
+    const next = !prev;
+    setAutopilotBusy(true);
+    setSnapshot((current) => ({ ...current, autoAdvanceEnabled: next }));
+    try {
+      const res = await api.setAutopilot(next);
+      setSnapshot((current) => ({
+        ...current,
+        autoAdvanceEnabled: res.autoAdvanceEnabled,
+        revision: Math.max(current.revision, res.revision),
+      }));
+      const msg = res.autoAdvanceEnabled ? t('runtime.autopilotToastOn') : t('runtime.autopilotToastOff');
+      notifyToast(msg, 'success');
+      announce(msg);
+    } catch (error) {
+      setSnapshot((current) => ({ ...current, autoAdvanceEnabled: prev }));
+      notifyToast(error instanceof Error ? error.message : t('toast.saveFailed'), 'error');
+    } finally {
+      setAutopilotBusy(false);
+    }
+  }, [announce, autopilotBusy, notifyToast, t]);
+
+  const handleToggleAutoStart = useCallback(
+    async (card: Card, next: boolean) => {
+      try {
+        const { card: updated } = await api.updateCard(card.id, card.version, { autoStart: next });
+        notifyToast(
+          next ? t('runtime.toggledAutoStartOn') : t('runtime.toggledAutoStartOff'),
+          'success',
+        );
+        await refresh({ silent: true });
+        // 若用户在待办卡上开启「自动接力」，且全局自动推进开启、前置依赖已全部完成（或无前置依赖）、并发未超上限（3 张），立即自动点火推进！
+        if (next && updated.status === 'backlog' && snapshotRef.current.autoAdvanceEnabled !== false) {
+          const allCards = snapshotRef.current.cards;
+          const byId = new Map(allCards.map((item) => [item.id, item]));
+          const deps = updated.dependsOn ?? [];
+          const depsReady = deps.every((depId) => {
+            const dep = byId.get(depId);
+            return dep && (dep.status === 'done' || dep.status === 'canceled');
+          });
+          const runningNow = allCards.filter((item) => !item.archived && item.status === 'running').length;
+          if (depsReady && runningNow < 3) {
+            await handleStartCard(updated);
+          }
+        }
+      } catch (error) {
+        notifyToast(error instanceof Error ? error.message : t('toast.saveFailed'), 'error');
+        await refresh({ silent: true });
+      }
+    },
+    [handleStartCard, notifyToast, refresh, t],
+  );
+
+  const handleUpdateWaitCondition = useCallback(
+    async (card: Card, waitCondition: CardWaitCondition | null) => {
+      try {
+        await api.updateCard(card.id, card.version, { waitCondition });
+        notifyToast(t('toast.saved'), 'success');
+        await refresh({ silent: true });
+      } catch (error) {
+        notifyToast(error instanceof Error ? error.message : t('toast.saveFailed'), 'error');
+        await refresh({ silent: true });
+      }
+    },
+    [notifyToast, refresh, t],
+  );
+
   const actions = useMemo<CardActionHandlers>(
     () => ({
       onToggleExpanded: handleToggleExpanded,
@@ -1793,6 +2052,7 @@ export function App() {
       onReply: (card, text) => handleReply(card, text),
       onRetry: handleRestart,
       onSessionClick: handleSessionClick,
+      onToggleAutoStart: (card, next) => void handleToggleAutoStart(card, next),
     }),
     [
       handleArchiveRequest,
@@ -1805,6 +2065,7 @@ export function App() {
       handleRestart,
       handleSessionClick,
       handleStartCard,
+      handleToggleAutoStart,
       handleToggleExpanded,
       notifyToast,
     ],
@@ -2104,7 +2365,7 @@ export function App() {
         handleViewChange('list');
       } else if (key.toLowerCase() === 'w') {
         event.preventDefault();
-        handleViewChange('worklines');
+        handleViewChange('workspaces');
       } else if (key.toLowerCase() === 't') {
         event.preventDefault();
         void cycleTheme();
@@ -2188,20 +2449,7 @@ export function App() {
     if (!snapshot.board) {
       return <EmptyState title={t('empty.board')} hint={t('empty.boardHint')} />;
     }
-    if (view === 'worklines') {
-      return (
-        <WorklineView
-          overview={worklineOverview}
-          disabled={workspaceState.disabled}
-          loaded={workspaceState.loaded}
-          selected={worklineFilter}
-          now={now}
-          onSelectWorkline={handleSelectWorkline}
-          onOpenCard={actions.onOpenDetail}
-        />
-      );
-    }
-    if (view === 'workspaces') {
+    if (view === 'workspaces' || view === 'worklines') {
       return (
         <WorkspaceView
           cards={filteredCards}
@@ -2214,6 +2462,7 @@ export function App() {
           onRebindCard={handleOpenRebind}
           revealPathAvailable={revealPathAvailable}
           onRevealPath={(path) => void handleRevealWorktreePath(path)}
+          onSelectWorkline={handleSelectWorkline}
           onNotify={actions.onNotify}
         />
       );
@@ -2303,6 +2552,11 @@ export function App() {
           onShowHelp={() => setHelpOpen(true)}
           selectionMode={selectionMode}
           onToggleSelection={handleToggleSelectionMode}
+          autoAdvanceEnabled={snapshot.autoAdvanceEnabled}
+          autopilotBusy={autopilotBusy}
+          onToggleAutopilot={() => void handleToggleAutopilot()}
+          imSummary={imSummary}
+          onOpenImModal={() => setImModalOpen(true)}
           loading={firstLoad}
         />
         {batchbarSnapshot.mounted && batchbarSnapshot.value && view !== 'workspaces' ? (
@@ -2327,6 +2581,36 @@ export function App() {
               cardCount={filteredCards.length}
               onClear={clearWorklineFilter}
             />
+          ) : null}
+          {showHygieneBanner ? (
+            <div className="kb-hygiene-banner" role="region" aria-label={t('hygiene.bannerTitle')}>
+              <span className="kb-hygiene-banner__text">
+                {t('hygiene.bannerText', {
+                  count: hygienePlan.archivableIds.length,
+                  days: hygienePlan.staleDays,
+                })}
+              </span>
+              <div className="kb-hygiene-banner__actions">
+                <button
+                  type="button"
+                  className="kb-btn kb-btn--sm kb-btn--outline"
+                  disabled={hygieneBusy}
+                  onClick={() => void handleHygieneArchive()}
+                >
+                  {hygieneBusy
+                    ? t('hygiene.archiving')
+                    : t('hygiene.archiveAction', { count: hygienePlan.archivableIds.length })}
+                </button>
+                <button
+                  type="button"
+                  className="kb-btn kb-btn--sm kb-btn--ghost"
+                  disabled={hygieneBusy}
+                  onClick={handleHygieneDismiss}
+                >
+                  {t('hygiene.dismiss')}
+                </button>
+              </div>
+            </div>
           ) : null}
           {main}
         </main>
@@ -2369,7 +2653,7 @@ export function App() {
             <span className="kb-kbd">L</span> {t('shortcut.list')}
           </span>
           <span>
-            <span className="kb-kbd">W</span> {t('shortcut.worklines')}
+            <span className="kb-kbd">W</span> {t('app.viewWorkspaces')}
           </span>
           <span>
             <span className="kb-kbd">⌘K</span> {t('shortcut.search')}
@@ -2414,6 +2698,8 @@ export function App() {
             onUnarchiveSession={(card, sessionId) => void handleUnarchiveSession(card, sessionId)}
             cwdState={activeCardCwdState}
             onRebindDir={handleOpenRebind}
+            onToggleAutoStart={(card, next) => void handleToggleAutoStart(card, next)}
+            onUpdateWaitCondition={(card, waitCondition) => void handleUpdateWaitCondition(card, waitCondition)}
           />
         ) : null}
 
@@ -2541,6 +2827,16 @@ export function App() {
         ) : null}
 
         {helpOpen ? <HelpDialog onClose={() => setHelpOpen(false)} /> : null}
+
+        {imModalOpen ? (
+          <ImChannelModal
+            boardName={snapshot.board?.name ?? t('app.boardFallback')}
+            initialStatus={imStatus}
+            onStatusChange={setImStatus}
+            onNotify={notifyToast}
+            onClose={() => setImModalOpen(false)}
+          />
+        ) : null}
 
         {nativeModal ? (
           <NativeAnswerModal

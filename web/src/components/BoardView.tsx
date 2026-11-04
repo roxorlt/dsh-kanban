@@ -357,6 +357,7 @@ export function BoardView({
                     onReply={actions.onReply}
                     onRetry={actions.onRetry}
                     onSessionClick={actions.onSessionClick}
+                    onToggleAutoStart={actions.onToggleAutoStart}
                     onDragStart={(cardId) => {
                       if (selectionMode) return;
                       setDraggedId(cardId);

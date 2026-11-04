@@ -77,7 +77,6 @@ export function ApprovalDraftModal({ card, busy, error, onSubmit, onCancel }: Ap
         }
       >
         <form id="kb-approval-form" className="kb-form" onSubmit={handleSubmit}>
-          <p className="kb-form__note">{t('approvalDraft.hint')}</p>
           <label className="kb-field">
             <span className="kb-field__label">{t('approvalDraft.fieldTitle')}</span>
             <input

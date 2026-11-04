@@ -352,6 +352,77 @@
   flex: 1;
 }
 
+.kb-im-trigger {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--kb-dur-fast) var(--kb-ease-out),
+    border-color var(--kb-dur-fast) var(--kb-ease-out),
+    color var(--kb-dur-fast) var(--kb-ease-out);
+}
+
+.kb-im-trigger:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-im-trigger:active:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.kb-im-trigger:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+
+.kb-im-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.kb-im-trigger__icon {
+  width: 13px;
+  height: 13px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.kb-im-trigger .kb-dot {
+  width: 6px;
+  height: 6px;
+}
+
+.kb-im-trigger--connected {
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-im-trigger--expired {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 42%, var(--dsw-alias-border-l2));
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 7%, transparent);
+  color: var(--kb-status-needs-text);
+}
+
+.kb-autopilot-switch {
+  flex: none;
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-toolbar-divider {
+  flex: none;
+  height: 12px;
+}
+
 .kb-agent-live {
   display: inline-flex;
   align-items: center;
@@ -456,6 +527,47 @@
   overflow: hidden;
 }
 
+.kb-hygiene-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px var(--kb-pad-x) 0;
+  padding: 8px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-hygiene-banner__body {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-hygiene-banner__title {
+  color: var(--kb-status-running-text);
+  font: var(--dsw-font-xxs-12);
+  font-weight: 500;
+}
+
+.kb-hygiene-banner__text {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kb-hygiene-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
 .kb-main__centered {
   display: flex;
   align-items: center;
@@ -538,5 +650,12 @@
   .kb-app-scope .kb-help-btn {
     min-width: 44px;
     height: 44px;
+  }
+
+  /* 全局自动推进开关（工具栏右侧） */
+  .kb-app-scope .kb-autopilot-switch {
+    min-height: 36px;
+    height: 36px;
+    padding: 0 8px;
   }
 }

@@ -3,9 +3,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  SESSION_TURN_FAILURE, SESSION_TURN_RECOVERED,
+  SESSION_TURN_FAILURE, SESSION_TURN_RECOVERED, SESSION_TURN_REOPENED, SESSION_TURN_STARTED,
   cardsByMainSession, createCard, createSeed, mainSessionId, normalizeStore, recordSessionTurnFailure,
-  recordSessionTurnRecovered,
+  recordSessionTurnRecovered, recordSessionTurnStart,
 } from '../lib/domain.js'
 import { createSessionTurnSync, registerSessionTurnSync, turnFailureOf } from '../lib/session-sync.js'
 
@@ -194,4 +194,38 @@ test('registerSessionTurnSync：以 global 监听 session/event，可重复挂�
   assert.equal(typeof calls[0].handler, 'function')
   assert.equal(typeof dispose, 'function')
   assert.equal(registerSessionTurnSync({}, {})(), undefined)
+})
+
+test('turn/start 自动推进：依赖就绪的 backlog 卡自动升入 running；全是 done 卡时自动重开最新卡', async () => {
+  const draft = emptyDraft()
+  const dep = createCard(draft, { title: '前置依赖', status: 'running' }, { now: FIXED_NOW }).card
+  const blockedByDep = createCard(draft, {
+    title: '等待依赖的待办卡', status: 'backlog', sessionId: SESSION, dependsOn: [dep.id],
+  }, { now: FIXED_NOW + 10 }).card
+  const readyBacklog = createCard(draft, {
+    title: '已就绪待办卡', status: 'backlog', sessionId: SESSION,
+  }, { now: FIXED_NOW + 20 }).card
+
+  const store = fakeStore(draft)
+  const handle = createSessionTurnSync({ store, logger: { info() {}, warn() {} } })
+  await handle({ id: SESSION }, { type: 'turn/start', seq: 10, time: FIXED_NOW + 100, data: { turn: 1 } })
+
+  assert.equal(store.calls.update, 1)
+  assert.equal(store.data.cards.find(item => item.id === readyBacklog.id).status, 'running')
+  assert.equal(store.data.cards.find(item => item.id === blockedByDep.id).status, 'backlog')
+  assert.ok(store.data.activities.some(
+    item => item.cardId === readyBacklog.id && item.data?.reason === SESSION_TURN_STARTED,
+  ))
+
+  // 当同一会话下只有已完成卡片时，新轮次自动重开最近完成的卡片
+  const doneDraft = emptyDraft()
+  const olderDone = createCard(doneDraft, { title: '旧完成卡', status: 'done', sessionId: SESSION }, { now: FIXED_NOW }).card
+  const latestDone = createCard(doneDraft, { title: '新完成卡', status: 'done', sessionId: SESSION }, { now: FIXED_NOW + 500 }).card
+  const doneResult = recordSessionTurnStart(doneDraft, { sessionId: SESSION, turn: 2, seq: 12, at: FIXED_NOW + 1000 })
+  assert.equal(doneResult.cards.length, 1)
+  assert.equal(doneDraft.cards.find(item => item.id === latestDone.id).status, 'running')
+  assert.equal(doneDraft.cards.find(item => item.id === olderDone.id).status, 'done')
+  assert.ok(doneDraft.activities.some(
+    item => item.cardId === latestDone.id && item.data?.reason === SESSION_TURN_REOPENED,
+  ))
 })

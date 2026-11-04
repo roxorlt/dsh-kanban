@@ -95,6 +95,7 @@ export function WorklineBadge({ cwd, status, className }: WorklineBadgeProps) {
   const branch = status.branch ?? '';
   const relation = relationText(status, t);
   const remote = remoteText(status, t);
+  const showRemoteInline = status.remoteRelation === 'behind' || status.remoteRelation === 'diverged';
   return (
     <span
       className={classes.join(' ')}
@@ -103,17 +104,20 @@ export function WorklineBadge({ cwd, status, className }: WorklineBadgeProps) {
       title={t('workline.title', { branch, relation, remote })}
     >
       <span className="kb-workline__dot" aria-hidden="true" />
-      <span className="kb-workline__label">{t('workline.prefix')}</span>
       {branch ? (
         <code className="kb-workline__branch" title={`${t('workline.branch')} ${branch}`}>
           {branch}
         </code>
       ) : null}
       <span className="kb-workline__relation">{relation}</span>
-      <span className="kb-workline__sep" aria-hidden="true">
-        ·
-      </span>
-      <span className="kb-workline__remote">{remote}</span>
+      {showRemoteInline ? (
+        <>
+          <span className="kb-workline__sep" aria-hidden="true">
+            ·
+          </span>
+          <span className="kb-workline__remote">{remote}</span>
+        </>
+      ) : null}
     </span>
   );
 }

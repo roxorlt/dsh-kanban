@@ -74,6 +74,8 @@ interface WorkspaceViewProps {
   revealPathAvailable?: boolean;
   /** v0.24：点击「在 Finder 中打开」；宿主调用、允许路径校验与失败 toast 都由 App 负责。 */
   onRevealPath?: (path: string) => void;
+  /** 点击某工作副本的卡片计数：切回看板并只看该分支/工作副本的卡片 */
+  onSelectWorkline?: (selection: { repoRoot: string; worktreePath: string; branch: string | null; label: string }) => void;
   /** 操作结果 toast（App 的 actions.onNotify） */
   onNotify?: (message: string, tone?: 'info' | 'success' | 'error') => void;
 }
@@ -423,6 +425,7 @@ interface WorktreeRowProps {
   /** v0.24：宿主支持「在 Finder 中打开」时才渲染入口（契约 03 §8） */
   revealPathAvailable: boolean;
   onRevealPath?: (path: string) => void;
+  onSelectWorkline?: (selection: { repoRoot: string; worktreePath: string; branch: string | null; label: string }) => void;
 }
 
 /** 单个工作副本行：文件夹图标 + 分支/状态徽标 + 最近提交 + 卡片预览 + 清理/复制/定位按钮。 */
@@ -439,6 +442,7 @@ function WorktreeRow({
   onCopy,
   revealPathAvailable,
   onRevealPath,
+  onSelectWorkline,
 }: WorktreeRowProps) {
   const { t, lang } = useI18n();
   const branch = worktree.branch ?? t('workspace.detached');
@@ -516,7 +520,25 @@ function WorktreeRow({
               </button>
             ) : null}
           </span>
-          <span className="kb-workspace__card-count">{t('workspace.cardCount', { count: worktree.cards.length })}</span>
+          {onSelectWorkline && worktree.cards.length > 0 ? (
+            <button
+              type="button"
+              className="kb-link-btn kb-workspace__card-count"
+              title={t('worklines.select', { name: branch })}
+              onClick={() =>
+                onSelectWorkline({
+                  repoRoot: repo.root,
+                  worktreePath: worktree.path,
+                  branch: worktree.branch ?? null,
+                  label: `${repo.name} · ${branch}`,
+                })
+              }
+            >
+              {t('workspace.cardCount', { count: worktree.cards.length })}
+            </button>
+          ) : (
+            <span className="kb-workspace__card-count">{t('workspace.cardCount', { count: worktree.cards.length })}</span>
+          )}
           {sessionCount > 0 ? (
             <span className="kb-workspace__sessions">{t('workspace.sessions', { count: sessionCount })}</span>
           ) : null}
@@ -551,6 +573,7 @@ interface RepoSectionProps {
   /** v0.24：宿主支持「在 Finder 中打开」时才渲染入口（契约 03 §8） */
   revealPathAvailable: boolean;
   onRevealPath?: (path: string) => void;
+  onSelectWorkline?: (selection: { repoRoot: string; worktreePath: string; branch: string | null; label: string }) => void;
   collapsed: boolean;
   onToggle: (root: string) => void;
   idleExpanded: boolean;
@@ -570,6 +593,7 @@ function RepoSection({
   onCopy,
   revealPathAvailable,
   onRevealPath,
+  onSelectWorkline,
   collapsed,
   onToggle,
   idleExpanded,
@@ -596,6 +620,7 @@ function RepoSection({
       onCopy={onCopy}
       revealPathAvailable={revealPathAvailable}
       onRevealPath={onRevealPath}
+      onSelectWorkline={onSelectWorkline}
     />
   );
   return (
@@ -630,11 +655,7 @@ function RepoSection({
           </span>
         ) : null}
       </button>
-      {collapsed ? (
-        <p className="kb-workspace__repo-collapsed-hint">
-          {t('workspace.repoCollapsed', { count: repo.worktrees.length })}
-        </p>
-      ) : (
+      {collapsed ? null : (
         <div id={panelId}>
           <ul className="kb-workspace__worktrees">
             {split.main.map(renderRow)}
@@ -714,13 +735,8 @@ function UnassignedSection({ cards, onOpenCard, onRebind, collapsed, onToggle }:
         </span>
         <span className="kb-workspace__repo-meta">{t('workspace.cardCount', { count: cards.length })}</span>
       </button>
-      {collapsed ? (
-        <p className="kb-workspace__repo-collapsed-hint">
-          {t('workspace.unassignedCollapsed', { count: cards.length })}
-        </p>
-      ) : (
+      {collapsed ? null : (
         <div id={panelId}>
-          <p className="kb-workspace__hint">{t('workspace.unassignedHint')}</p>
           <MiniCardList cards={cards} onOpenCard={onOpenCard} onRebind={onRebind} />
         </div>
       )}
@@ -763,13 +779,8 @@ function TrashSection({ entries, collapsed, busy, error, now, onToggle, onRestor
         </span>
         <span className="kb-workspace__repo-meta">{t('workspace.trashCountMeta', { count: entries.length })}</span>
       </button>
-      {collapsed ? (
-        <p className="kb-workspace__repo-collapsed-hint">
-          {t('workspace.trashCollapsed', { count: entries.length })}
-        </p>
-      ) : (
+      {collapsed ? null : (
         <div id={panelId}>
-          <p className="kb-workspace__hint">{t('workspace.trashHint', { days: 7 })}</p>
           <ul className="kb-workspace__trash-list">
             {entries.map((entry) => {
               const deletedAt = formatLastCommitRelative(entry.trashedAt, now, lang as Lang);
@@ -839,6 +850,7 @@ export function WorkspaceView({
   onRebindCard,
   revealPathAvailable = false,
   onRevealPath,
+  onSelectWorkline,
   onNotify,
 }: WorkspaceViewProps) {
   const { t } = useI18n();
@@ -1225,6 +1237,7 @@ export function WorkspaceView({
           onCopy={(text, kind) => void handleCopy(text, kind)}
           revealPathAvailable={revealPathAvailable}
           onRevealPath={onRevealPath}
+          onSelectWorkline={onSelectWorkline}
           collapsed={collapsedRepos.has(repo.root)}
           onToggle={toggleRepo}
           idleExpanded={idleExpandedRepos.has(repo.root)}

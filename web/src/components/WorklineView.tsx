@@ -268,7 +268,6 @@ function UnassignedSection({
         <span className="kb-worklines__repo-meta">{t('worklines.cardCount', { count: cards.length })}</span>
       </header>
       <div className="kb-worklines__unassigned">
-        <p className="kb-worklines__hint">{t('worklines.unassignedHint')}</p>
         <ul className="kb-worklines__unassigned-list">
           {cards.map(({ card, reason }) => (
             <li className="kb-worklines__unassigned-item" key={card.id}>

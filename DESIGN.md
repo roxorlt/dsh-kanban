@@ -28,6 +28,7 @@
 | 4 | **状态必须可读且不只靠颜色**：状态点 + 中文状态词 + 原因；可读文字 ≥4.5:1 | 每个状态点都有文字；对比度见 §2.6 |
 | 5 | **动效克制可降级**：只给「状态变化」和「浮层进出」；UI 动效 ≤220ms；`prefers-reduced-motion` 两级降级 | 过不了 §5.1 频率闸门就不加 |
 | 6 | **安全区不可移除**：宿主 inset、`env(safe-area-inset-bottom)`、`dvh` 都在规则内 | 不换成固定 padding；390 与 iframe 都要验 |
+| 7 | **Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.** | 弹窗、区块、表单与开关不堆砌解释性副标题、导语、二次说明和宣传注脚；靠布局、状态点与控件自解释 |
 
 **视觉签名**：发丝线（0.5px 中性实线）、无边框浮层 + elevation、黑主按钮、状态点睛、安静的产品密度。**反模式**：紫色渐变、玻璃拟态、营销字体、大 hero、堆叠卡片阴影、彩色左条。
 

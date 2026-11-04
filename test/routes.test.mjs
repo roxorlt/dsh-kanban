@@ -1357,3 +1357,36 @@ test('GET /archive：归档箱列表（archivedAt 倒序、boardId/limit、字�
   assert.equal(after.json.total, 1)
   assert.deepEqual(after.json.cards.map(card => card.id), [second.id])
 })
+
+test('POST /cards 支持 sessionMode:new 服务端原子创建并绑定会话', async t => {
+  const { createSessionBinding } = await import('../lib/session-binding.js')
+  const { store } = await testStore(t)
+  const calls = []
+  const sessionBinding = createSessionBinding({
+    getWorkspaceRegistry: () => ({
+      list: () => [{ id: 'ws-route-1', path: '/repo/route-kanban' }],
+      get: id => (id === 'ws-route-1' ? { id: 'ws-route-1', path: '/repo/route-kanban' } : null),
+    }),
+    getSessionController: () => ({
+      async create(req) {
+        calls.push(['create', req])
+        return { sessionId: 'session-route-auto-1' }
+      },
+      async rename(req) {
+        calls.push(['rename', req])
+      },
+    }),
+  })
+  const server = await startServer(t, { store, sessionBinding })
+  const res = await api(server, '/api/kanban/cards', {
+    method: 'POST',
+    body: { title: 'Web 新建自动绑会话卡', status: 'backlog', sessionMode: 'new' },
+  })
+  assert.equal(res.status, 200, res.text)
+  assert.deepEqual(res.json.card.sessionIds, ['session-route-auto-1'])
+  assert.equal(res.json.card.workspaceId, 'ws-route-1')
+  assert.equal(res.json.card.cwd, '/repo/route-kanban')
+  assert.equal(res.json.binding.sessionId, 'session-route-auto-1')
+  assert.equal(res.json.binding.created, true)
+  assert.deepEqual(calls[0], ['create', { workspaceId: 'ws-route-1' }])
+})

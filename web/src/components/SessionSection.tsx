@@ -186,7 +186,9 @@ export function SessionSection({
 
       {bound.length ? (
         <>
-          <p className="kb-session__summary">{t('drawer.sessionCount', { count: bound.length })}</p>
+          {bound.length > 1 ? (
+            <p className="kb-session__summary">{t('drawer.sessionCount', { count: bound.length })}</p>
+          ) : null}
           <ul className="kb-session__list">
             {bound.map(({ id, session }, index) => {
               const isPrimary = index === 0;
@@ -216,8 +218,8 @@ export function SessionSection({
                     <IconSession />
                   </span>
                   <span className="kb-session__main">
-                    <span className="kb-session__title" title={session?.title ?? id}>
-                      <span className="kb-session__name">{session?.title ?? id}</span>
+                    <span className="kb-session__title" title={session?.title ? `${session.title} (${id})` : id}>
+                      <span className="kb-session__name">{session?.title ?? shortSessionId(id)}</span>
                       {isPrimary ? (
                         <span className="kb-tag kb-session__primary">{t('drawer.primarySession')}</span>
                       ) : null}
@@ -235,9 +237,6 @@ export function SessionSection({
                         </span>
                       )}
                       {pending ? <span className="kb-pill kb-pill--warn">{t('sessionArchive.pendingBadge')}</span> : null}
-                      <code className="kb-session__id" title={id}>
-                        {id}
-                      </code>
                     </span>
                   </span>
                   {embedded ? (

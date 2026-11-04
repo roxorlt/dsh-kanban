@@ -6,6 +6,7 @@ import type {
   ApprovalQuestion,
   Board,
   Card,
+  CardWaitCondition,
   ColumnId,
   GitContext,
   GitGraphCommit,
@@ -123,6 +124,8 @@ export function normalizeCard(raw: Partial<Card> & { id: string }): Card {
     // v0.22 关系字段：旧服务端没有（保持 undefined，UI 不渲染）；
     // 新服务端给了也别假设形态正确——非字符串/非数组一律丢弃。
     ...normalizeRelationFields(raw),
+    ...(raw.autoStart === true ? { autoStart: true } : {}),
+    ...(raw.runtime && typeof raw.runtime === 'object' ? { runtime: raw.runtime } : {}),
     ...(raw.handoff
       ? {
           handoff: {
@@ -262,6 +265,8 @@ export interface CreateCardInput {
   workspaceId?: string;
   cwd?: string;
   sessionId?: string;
+  sessionMode?: 'new' | 'reuse' | 'none';
+  autoStart?: boolean;
   agent?: { name: string };
 }
 
@@ -291,6 +296,10 @@ export type CardChanges = Partial<
   parentCardId?: string | null;
   /** v0.22 依赖：传 [] 清除全部依赖 */
   dependsOn?: string[] | null;
+  /** v0.27 Super-Agent Runtime：前置依赖完成后自动升入进行中并唤醒会话 */
+  autoStart?: boolean | null;
+  /** v0.27 Super-Agent Runtime：结构化等待条件（null 清除） */
+  waitCondition?: CardWaitCondition | null;
 };
 
 /** PATCH /cards/:id 的可选请求参数（4th 参数；旧调用不传也不受影响）。 */
@@ -337,6 +346,138 @@ export interface HealthPayload {
   schemaVersion: number;
   dataDir: string;
   revision: number;
+}
+
+export interface ImSanitizedTarget {
+  id: string;
+  name: string;
+  provider: string;
+  enabled: boolean;
+  urlMasked: string;
+  boardUrl?: string;
+  hasKeyword: boolean;
+  keyword?: string;
+  hasSecret: boolean;
+  format: 'card' | 'text';
+  events: string[];
+}
+
+export interface WeixinLiveStatus {
+  enabled: boolean;
+  running: boolean;
+  pollEnabled: boolean;
+  loggedIn: boolean;
+  sessionExpired: boolean;
+  accountId: string | null;
+  userId: string | null;
+  defaultUserId: string | null;
+  contextUserCount: number;
+  inboundCount: number;
+  outboundCount: number;
+  lastInboundAt: number | null;
+  lastOutboundAt: number | null;
+  lastError: string | null;
+  activeQr: {
+    qrcode?: string;
+    status: 'wait' | 'scaned' | 'confirmed' | 'expired';
+    createdAt: number;
+    qrcodeUrl?: string;
+  } | null;
+}
+
+export interface ImSanitizedConfig {
+  hasActionSecret: boolean;
+  targets: ImSanitizedTarget[];
+  weixin: {
+    enabled: boolean;
+    pollEnabled?: boolean;
+    hasDefaultUser?: boolean;
+    events?: string[];
+  };
+  cc2im?: {
+    enabled: boolean;
+    agentId?: string;
+    socketPath?: string;
+    webUrl?: string;
+    hasDefaultUser?: boolean;
+  };
+}
+
+export interface ImMcpStatusInfo {
+  httpEndpoint: string;
+  loopbackEndpoint: string;
+  stdioScriptPath: string;
+  dataDir: string;
+  toolCount: number;
+}
+
+export interface ImStatusResponse {
+  runtimeOrigin: string | null;
+  config: ImSanitizedConfig;
+  weixinLive: WeixinLiveStatus | null;
+  cc2imLive?: Record<string, unknown> | null;
+  mcp?: ImMcpStatusInfo;
+}
+
+export interface WeixinQrStartResult {
+  qrcode: string;
+  qrcodeUrl: string;
+  baseUrl?: string;
+  createdAt: number;
+  status: 'wait' | 'scaned' | 'confirmed' | 'expired';
+}
+
+export interface WeixinQrPollResult {
+  status: 'wait' | 'scaned' | 'confirmed' | 'expired';
+  loggedIn: boolean;
+  qrcode?: string;
+  qrcodeUrl?: string;
+  accountId?: string;
+  userId?: string;
+  baseUrl?: string;
+}
+
+export interface UpdateImConfigInput {
+  addTarget?: {
+    id?: string;
+    name: string;
+    provider: 'dingtalk' | 'feishu' | 'onebot' | 'generic';
+    url: string;
+    keyword?: string;
+    secret?: string;
+    format?: 'card' | 'text';
+    enabled?: boolean;
+  };
+  patchTarget?: {
+    id: string;
+    enabled?: boolean;
+    name?: string;
+    keyword?: string;
+    url?: string;
+    secret?: string;
+    events?: string[];
+  };
+  removeTargetId?: string;
+  events?: string[];
+  weixin?: {
+    enabled?: boolean;
+    pollEnabled?: boolean;
+  };
+}
+
+export interface ImSendResultItem {
+  ok: boolean;
+  targetId: string;
+  provider: string;
+  error?: string;
+  code?: string;
+  httpStatus?: number;
+  response?: Record<string, unknown> | null;
+}
+
+export interface ImSendResponse {
+  ok: boolean;
+  results: ImSendResultItem[];
 }
 
 /** state 响应在冻结契约之外可能附带 activities（时间线）；两者都容忍。 */
@@ -1169,6 +1310,81 @@ export const api = {
 
   ack: (cardId: string): Promise<{ revision: number }> =>
     request<{ revision: number }>(`/cards/${encodeURIComponent(cardId)}/ack`, { method: 'POST', body: '{}' }),
+
+  setAutopilot: (enabled: boolean): Promise<{ autoAdvanceEnabled: boolean; revision: number }> =>
+    request<{ autoAdvanceEnabled: boolean; revision: number }>('/autopilot', {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    }),
+
+  getImStatus: (): Promise<ImStatusResponse> =>
+    request<ImStatusResponse>('/im/status'),
+
+  updateImConfig: (
+    input: UpdateImConfigInput,
+  ): Promise<{ config: ImSanitizedConfig; weixinLive: WeixinLiveStatus | null }> =>
+    request<{ config: ImSanitizedConfig; weixinLive: WeixinLiveStatus | null }>('/im/config', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    }),
+
+  startWeixinQr: (): Promise<WeixinQrStartResult> =>
+    request<WeixinQrStartResult>('/im/weixin/qr', {
+      method: 'POST',
+      body: '{}',
+    }),
+
+  pollWeixinQr: (qrcode?: string, signal?: AbortSignal): Promise<WeixinQrPollResult> => {
+    const query = qrcode ? `?qrcode=${encodeURIComponent(qrcode)}` : '';
+    return request<WeixinQrPollResult>(`/im/weixin/qr-status${query}`, {
+      ...(signal ? { signal } : {}),
+    });
+  },
+
+  logoutWeixin: (): Promise<{ config: ImSanitizedConfig; weixinLive: WeixinLiveStatus | null }> =>
+    request<{ config: ImSanitizedConfig; weixinLive: WeixinLiveStatus | null }>('/im/weixin/logout', {
+      method: 'POST',
+      body: '{}',
+    }),
+
+  sendImTest: async (input: { targetId: string; boardName?: string }): Promise<ImSendResponse> => {
+    let response: Response;
+    try {
+      response = await fetch(`${BASE}/webhooks/send`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        cache: 'no-store',
+        body: JSON.stringify({
+          targetId: input.targetId,
+          event: {
+            template: 'light_text',
+            title: `${input.boardName || 'DSH 看板'} · 连通测试`,
+            summary: '通知通道已连通。',
+            project: 'dsh-kanban',
+            actorName: 'DSH Super-Agent',
+          },
+        }),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new KanbanApiError('NETWORK', message, 0);
+    }
+    const payload = (await response.json().catch(() => null)) as
+      | (ImSendResponse & { error?: { code?: string; message?: string } })
+      | null;
+    if (!response.ok) {
+      throw new KanbanApiError(
+        payload?.error?.code ?? 'INTERNAL',
+        payload?.error?.message ?? `HTTP ${response.status}`,
+        response.status,
+      );
+    }
+    return {
+      ok: Boolean(payload?.ok),
+      results: Array.isArray(payload?.results) ? payload.results : [],
+    };
+  },
 
   seed: (mode: 'demo' | 'empty' | 'reset'): Promise<{ revision: number }> =>
     request<{ revision: number }>('/seed', { method: 'POST', body: JSON.stringify({ mode }) }),

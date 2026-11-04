@@ -606,8 +606,9 @@
   min-height: 22px;
   padding: 0 5px;
   gap: 3px;
-  color: var(--dsw-alias-state-business-primary);
-  font: var(--dsw-font-xxxs-strong-11);
+  color: var(--kb-status-running-text);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 500;
 }
 
 .kb-foot-start .kb-icon {
@@ -618,6 +619,38 @@
 .kb-foot-start:hover {
   background: var(--dsw-alias-state-business-tertiary);
   color: var(--dsw-alias-state-business-primary);
+}
+
+/* v0.27 待办/受阻卡「自动接力」footer 次级切换按钮（与 .kb-foot-start 严格同高 22px、同字级 11/500，不抢主按钮黑底） */
+.kb-foot-autostart {
+  flex: none;
+  height: 22px;
+  min-height: 22px;
+  padding: 0 6px;
+  gap: 3px;
+  border-radius: 5px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 500;
+}
+
+.kb-foot-autostart:not(:disabled):hover {
+  border-color: var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.kb-foot-autostart--on {
+  border-color: transparent;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--kb-status-running-text);
+}
+
+.kb-foot-autostart--on:not(:disabled):hover {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 16%, var(--dsw-alias-state-business-tertiary));
+  color: var(--kb-status-running-text);
 }
 
 .kb-card-start {
@@ -1763,6 +1796,13 @@
     content: '';
     position: absolute;
     inset: -8px;
+  }
+
+  .kb-app-scope .kb-foot-start,
+  .kb-app-scope .kb-foot-autostart {
+    min-height: 32px;
+    height: 32px;
+    padding: 0 8px;
   }
 }
 

@@ -20,9 +20,16 @@ export async function testStore(t, options = {}) {
   return { store, dir }
 }
 
-export async function startServer(t, { store, staticRoot, sessionArchive } = {}) {
+export async function startServer(t, { store, staticRoot, sessionArchive, sessionBinding, cloudSync } = {}) {
   await store.ready()
-  const routes = createRoutes({ store, staticRoot, version: '0.0.0-test', ...(sessionArchive ? { sessionArchive } : {}) })
+  const routes = createRoutes({
+    store,
+    staticRoot,
+    version: '0.0.0-test',
+    ...(sessionArchive ? { sessionArchive } : {}),
+    ...(sessionBinding ? { sessionBinding } : {}),
+    ...(cloudSync ? { cloudSync } : {}),
+  })
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url || '/', 'http://localhost')

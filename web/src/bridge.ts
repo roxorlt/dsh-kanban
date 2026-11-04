@@ -109,6 +109,11 @@ type ParentPush =
       locale: 'zh' | 'en';
       dshVersion?: string;
       insets?: { top?: number; leading?: number; platform?: string; fullscreen?: boolean };
+    }
+  | {
+      type: 'kanban:focus-card';
+      version: 1;
+      cardId: string;
     };
 
 export type BridgeMode = 'connecting' | 'embedded' | 'standalone';
@@ -156,6 +161,8 @@ export interface BridgeState {
   archivedSessionIds: string[];
   /** 最近一次收到 kanban:sessions（含 archivedSessionIds）的时间；0 表示还没收到过 */
   archivedSessionIdsAt: number;
+  /** 宿主收到外部 IM 点击拉起请求后推送的待定位卡片 */
+  focusedCard: { cardId: string; at: number } | null;
 }
 
 export class BridgeUnavailableError extends Error {
@@ -187,7 +194,8 @@ function isParentPush(value: unknown): value is ParentPush {
     type === 'kanban:sessions' ||
     type === 'kanban:visibility' ||
     type === 'kanban:pending' ||
-    type === 'kanban:host'
+    type === 'kanban:host' ||
+    type === 'kanban:focus-card'
   );
 }
 
@@ -206,6 +214,7 @@ class KanbanBridge {
     nativePending: { support: false, items: [], at: 0 },
     archivedSessionIds: [],
     archivedSessionIdsAt: 0,
+    focusedCard: null,
   };
 
   private listeners = new Set<(state: BridgeState) => void>();
@@ -374,6 +383,12 @@ class KanbanBridge {
       }
       case 'kanban:visibility': {
         this.setState({ visible: data.visible });
+        break;
+      }
+      case 'kanban:focus-card': {
+        if (typeof data.cardId === 'string' && data.cardId.trim()) {
+          this.setState({ focusedCard: { cardId: data.cardId.trim(), at: Date.now() } });
+        }
         break;
       }
     }

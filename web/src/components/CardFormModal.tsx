@@ -25,6 +25,7 @@ export interface CardFormValues {
   status: Status;
   workspaceId: string;
   cwd: string;
+  autoStart?: boolean;
   /** 新建卡片时的会话选择（编辑模式忽略） */
   session: { kind: NewCardSessionKind; sessionId?: string };
 }
@@ -68,15 +69,33 @@ export function CardFormModal({
 }: CardFormModalProps) {
   const { t } = useI18n();
   const initialColumn: ColumnId = initial ? COLUMN_OF_STATUS[initial.status] : defaultColumn;
+  const defaultWorkspace = mode === 'create' && !initial ? workspaces[0] : undefined;
+  const defaultWsValues = workspaceDefaults(defaultWorkspace);
+  const initialWorkspaceId = initial?.workspaceId ?? (defaultWorkspace?.workspaceId ?? '');
+  const initialCwd =
+    initial?.cwd ??
+    (mode === 'create'
+      ? defaultWsValues.cwd ||
+        suggestCwds({ workspaces, sessions, cards, selectedWorkspaceId: initialWorkspaceId || null })[0]?.value ||
+        ''
+      : '');
+  const initialProject =
+    initial?.project ??
+    (mode === 'create'
+      ? defaultWsValues.project ||
+        suggestProjects({ workspaces, sessions, cards, selectedWorkspaceId: initialWorkspaceId || null })[0]?.value ||
+        ''
+      : '');
+  const initialSessionKind: NewCardSessionKind = mode === 'create' ? 'new' : 'none';
+
   const [title, setTitle] = useState(initial?.title ?? '');
   const [summary, setSummary] = useState(initial?.summary ?? '');
-  const [project, setProject] = useState(initial?.project ?? '');
+  const [project, setProject] = useState(initialProject);
   const [column, setColumn] = useState<ColumnId>(initialColumn);
-  const [workspaceId, setWorkspaceId] = useState(initial?.workspaceId ?? '');
-  const [cwd, setCwd] = useState(initial?.cwd ?? '');
-  const [sessionKind, setSessionKind] = useState<NewCardSessionKind>(
-    mode === 'create' && initialColumn === 'running' ? 'new' : 'none',
-  );
+  const [workspaceId, setWorkspaceId] = useState(initialWorkspaceId);
+  const [cwd, setCwd] = useState(initialCwd);
+  const [autoStart, setAutoStart] = useState(Boolean(initial?.autoStart));
+  const [sessionKind, setSessionKind] = useState<NewCardSessionKind>(initialSessionKind);
   const [sessionId, setSessionId] = useState('');
   const [titleError, setTitleError] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
@@ -87,11 +106,12 @@ export function CardFormModal({
   const baseline = {
     title: initial?.title ?? '',
     summary: initial?.summary ?? '',
-    project: initial?.project ?? '',
+    project: initialProject,
     column: initialColumn,
-    workspaceId: initial?.workspaceId ?? '',
-    cwd: initial?.cwd ?? '',
-    sessionKind: mode === 'create' && initialColumn === 'running' ? 'new' : 'none',
+    workspaceId: initialWorkspaceId,
+    cwd: initialCwd,
+    autoStart: Boolean(initial?.autoStart),
+    sessionKind: initialSessionKind,
     sessionId: '',
   };
   const dirty =
@@ -101,6 +121,7 @@ export function CardFormModal({
     column !== baseline.column ||
     workspaceId !== baseline.workspaceId ||
     cwd !== baseline.cwd ||
+    autoStart !== baseline.autoStart ||
     sessionKind !== baseline.sessionKind ||
     sessionId !== baseline.sessionId;
 
@@ -178,6 +199,7 @@ export function CardFormModal({
       status: statusOfColumn(column),
       workspaceId: workspaceId.trim(),
       cwd: cwd.trim(),
+      autoStart,
       session: embedded && mode === 'create' ? { kind: sessionKind, ...(sessionId ? { sessionId } : {}) } : { kind: 'none' },
     });
   };
@@ -285,7 +307,6 @@ export function CardFormModal({
                   </option>
                 ))}
               </select>
-              <span className="kb-field__note">{t('modal.workspaceHint')}</span>
             </label>
 
             <label className="kb-field">
@@ -335,7 +356,6 @@ export function CardFormModal({
                 value={project}
                 onPick={(value) => setProject(value)}
               />
-              <span className="kb-field__note">{t('modal.projectHint')}</span>
             </label>
             <label className="kb-field">
               <span className="kb-field__label">{t('modal.columnLabel')}</span>
@@ -352,6 +372,17 @@ export function CardFormModal({
               </select>
             </label>
           </div>
+
+          <label className="kb-field kb-field--full">
+            <span className={`kb-choice${autoStart ? ' kb-choice--on' : ''}`}>
+              <input
+                type="checkbox"
+                checked={autoStart}
+                onChange={(event) => setAutoStart(event.target.checked)}
+              />
+              <span>{t('runtime.autoStartLabel')}</span>
+            </span>
+          </label>
 
           {mode === 'create' ? (
             <fieldset className="kb-field kb-field--full kb-session-choice">
@@ -403,7 +434,6 @@ export function CardFormModal({
                       <span>{t('modal.sessionExisting')}</span>
                     </label>
                   </div>
-                  {running ? <p className="kb-field__note">{t('modal.sessionRunningHint')}</p> : null}
                   {sessionKind === 'existing' ? (
                     <div className="kb-session-choice__existing">
                       <select

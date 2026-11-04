@@ -12,6 +12,7 @@ import './styles/worklines.css';
 import './styles/workspaces.css';
 import './styles/drawer.css';
 import './styles/modal.css';
+import './styles/im-modal.css';
 import './styles/inbox.css';
 import './styles/responsive.css';
 

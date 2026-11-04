@@ -54,14 +54,10 @@ export function ArchiveBox({
           <IconChevronDown />
         </span>
         <span className="kb-archive__title">{t('archive.title', { count: items.length })}</span>
-        {!open && items.length > 0 ? (
-          <span className="kb-archive__head-hint">{t('archive.collapsedHint', { count: items.length })}</span>
-        ) : null}
       </button>
 
       {open ? (
         <div id={panelId} className="kb-archive__body">
-          <p className="kb-archive__hint">{t('archive.hint')}</p>
           {loading ? <p className="kb-archive__hint">{t('archive.loading')}</p> : null}
           {error ? (
             <p className="kb-archive__error" role="alert">

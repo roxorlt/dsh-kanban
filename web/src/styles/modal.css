@@ -28,6 +28,10 @@
   width: min(420px, 100%);
 }
 
+.kb-modal--lg {
+  width: min(760px, 100%);
+}
+
 @keyframes kb-modal-in {
   from {
     opacity: 0;

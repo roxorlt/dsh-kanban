@@ -1930,6 +1930,50 @@
   font: var(--dsw-font-xxxs-11);
 }
 
+/* ------------------------------------------ Super-Agent Runtime 标记与控制区 */
+
+.kb-tag--runtime {
+  flex: none;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--kb-status-running-text);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 500;
+}
+
+.kb-tag--runtime-warn {
+  flex: none;
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--kb-status-needs-text);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 500;
+}
+
+.kb-drawer__runtime {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-drawer__runtime-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kb-drawer__runtime-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.kb-drawer__runtime-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ------------------------------------------------- A-05 触控热区（≤719px）
    抽屉头部编辑/归档/关闭、footer 主按钮、composer 发送：有效热区 ≥44×44。 */
 @media (max-width: 719px) {

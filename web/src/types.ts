@@ -153,6 +153,37 @@ export interface CardMeta {
   tokensOut?: number;
 }
 
+export interface CardWaitCondition {
+  kind: 'time' | 'session_idle';
+  notBefore?: number;
+  targetSessionId?: string;
+  reason?: string;
+}
+
+export interface CardRuntimeBudget {
+  nudgesUsed: number;
+  retriesUsed: number;
+  lastAutoActionAt: number;
+}
+
+export interface CardTurnWatermark {
+  sessionId: string;
+  turn: number;
+  phase: 'running' | 'idle' | 'error';
+  at: number;
+  code?: string;
+  lastHandledTurn?: number;
+  lastRetryTurn?: number;
+  lastRetryExhaustedTurn?: number;
+}
+
+export interface CardRuntime {
+  generation: number;
+  budget: CardRuntimeBudget;
+  turnWatermark?: CardTurnWatermark;
+  waitCondition?: CardWaitCondition;
+}
+
 export interface Card {
   id: string;
   boardId: string;
@@ -186,6 +217,10 @@ export interface Card {
   dependsOn?: string[];
   /** v0.22 合并归档：本卡被合并到的目标卡 id（归档源卡上的只读记录） */
   mergedInto?: string;
+  /** v0.27 Super-Agent Runtime：前置依赖全部完成后是否自动升入 running 并经 Outbox 唤醒会话 */
+  autoStart?: boolean;
+  /** v0.27 Super-Agent Runtime：generation 栅栏、Watchdog 预算、轮次水位与等待条件 */
+  runtime?: CardRuntime;
   createdAt: number;
   updatedAt: number;
   startedAt?: number;
@@ -255,6 +290,7 @@ export interface KanbanState {
   boards: BoardSummary[];
   board: Board;
   cards: Card[];
+  autoAdvanceEnabled?: boolean;
   revision: number;
   serverTime: number;
   activities?: Activity[];

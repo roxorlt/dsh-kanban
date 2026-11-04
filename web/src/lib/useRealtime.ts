@@ -22,6 +22,8 @@ interface RealtimeOptions {
   /** 本地当前 revision；收到不同的 revision 才触发刷新。 */
   revision: number;
   onRefresh: () => void;
+  /** 收到服务端广播的外部 IM 定位卡片事件 */
+  onFocusCard?: (cardId: string) => void;
   /** SSE 地址，默认 /api/kanban/events（测试可覆盖）。 */
   url?: string;
 }
@@ -41,6 +43,7 @@ export function useRealtime({
   enabled,
   revision,
   onRefresh,
+  onFocusCard,
   url = '/api/kanban/events',
 }: RealtimeOptions): RealtimeController {
   const [status, setStatus] = useState<RealtimeStatus>(enabled ? 'connecting' : 'connected');
@@ -48,6 +51,8 @@ export function useRealtime({
   revisionRef.current = revision;
   const refreshRef = useRef(onRefresh);
   refreshRef.current = onRefresh;
+  const focusRef = useRef(onFocusCard);
+  focusRef.current = onFocusCard;
   const reconnectRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
@@ -113,6 +118,17 @@ export function useRealtime({
           }
         } catch {
           /* 心跳或非 JSON 数据忽略 */
+        }
+      });
+      next.addEventListener('focus', (event) => {
+        const message = event as MessageEvent<string>;
+        try {
+          const payload = JSON.parse(message.data) as { cardId?: unknown };
+          if (typeof payload.cardId === 'string' && payload.cardId.trim()) {
+            focusRef.current?.(payload.cardId.trim());
+          }
+        } catch {
+          /* 忽略格式异常 */
         }
       });
       next.addEventListener('error', () => {

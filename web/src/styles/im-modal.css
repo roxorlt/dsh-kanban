@@ -1,0 +1,377 @@
+/* lint-tokens-ignore: global-sheet */
+/* 外部连接弹窗（微信 / 钉钉飞书 Webhook / MCP / 通知） */
+
+.kb-im-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.kb-im-tabs {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.kb-im-tab-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  corner-shape: round;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 8%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  font-variant-numeric: tabular-nums;
+}
+
+.kb-im-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-card);
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 2%, var(--dsw-alias-bg-layer-1));
+}
+
+.kb-im-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kb-im-panel__title {
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
+}
+
+.kb-im-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 99px;
+  corner-shape: round;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 6%, transparent);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.kb-im-badge--connected {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent);
+  color: var(--kb-status-done-text);
+}
+
+.kb-im-badge--warn {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent);
+  color: var(--kb-status-needs-text);
+}
+
+.kb-im-badge--active {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+  color: var(--kb-status-running-text);
+}
+
+/* ----------------------------------------------------- 微信扫码状态区 */
+
+.kb-im-qr-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 16px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kb-im-qr-placeholder {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border: 0.5px dashed var(--dsw-alias-border-l3);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kb-im-qr-placeholder .kb-icon {
+  width: 28px;
+  height: 28px;
+}
+
+/* 二维码画布：无论亮色或暗色主题，始终保持浅底深码以确保手机摄像头秒级识别 */
+.kb-im-qr-box {
+  position: relative;
+  width: 176px;
+  height: 176px;
+  padding: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: light-dark(var(--dsw-alias-bg-layer-1), var(--dsw-alias-label-primary));
+  color: light-dark(var(--dsw-alias-label-primary), var(--dsw-alias-label-primary-foreground));
+  overflow: hidden;
+}
+
+.kb-im-qr-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.kb-im-qr-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--dsw-alias-bg-layer-1) 92%, transparent);
+  color: var(--dsw-alias-label-primary);
+  text-align: center;
+}
+
+.kb-im-qr-mask__title {
+  color: var(--kb-status-done-text);
+  font: var(--dsw-font-xxs-12);
+  font-weight: 500;
+}
+
+.kb-im-stage-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kb-im-alert {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 0.5px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary) 36%, var(--dsw-alias-border-l2));
+  border-radius: var(--kb-r-ctl);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent);
+}
+
+.kb-im-alert__title {
+  color: var(--kb-status-needs-text);
+  font: var(--dsw-font-xxs-12);
+  font-weight: 500;
+}
+
+.kb-im-feedback {
+  padding: 8px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  overflow-wrap: anywhere;
+}
+
+.kb-im-feedback--error {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 35%, var(--dsw-alias-border-l2));
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 7%, transparent);
+  color: var(--kb-status-failed-text);
+}
+
+/* 信息列表 */
+.kb-im-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 14px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-layer-1);
+  font: var(--dsw-font-xxs-12);
+}
+
+.kb-im-facts__dt {
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.kb-im-facts__dd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  overflow-wrap: anywhere;
+}
+
+.kb-im-code {
+  font: var(--dsw-font-xxxs-11);
+  font-family: var(--ds-font-family-code);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kb-im-panel__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ----------------------------------------------------- Webhook 列表与表单 */
+
+.kb-im-bot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kb-im-bot-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kb-im-bot-item__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kb-im-bot-item__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-im-bot-item__name {
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  font-weight: 500;
+}
+
+.kb-im-bot-item__url {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  font-family: var(--ds-font-family-code);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-im-bot-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.kb-im-bot-empty {
+  padding: 16px 12px;
+  border: 0.5px dashed var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+  text-align: center;
+}
+
+.kb-im-bot-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.kb-im-bot-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ----------------------------------------------------- MCP 配置片段 */
+
+.kb-im-mcp-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kb-im-codeblock {
+  margin: 0;
+  padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--kb-r-ctl);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxxs-11);
+  font-family: var(--ds-font-family-code);
+  line-height: 17px;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* ----------------------------------------------------- 推送事件订阅开关列表 */
+
+.kb-im-rules {
+  display: flex;
+  flex-direction: column;
+}
+
+.kb-im-rule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 2px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.kb-im-rule:first-child {
+  padding-top: 2px;
+  border-top: 0;
+}
+
+.kb-im-rule:last-child {
+  padding-bottom: 2px;
+}
+
+.kb-im-rule__title {
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xxs-12);
+  font-weight: 500;
+}
+
+@media (max-width: 719px) {
+  .kb-im-bot-item__top {
+    flex-wrap: wrap;
+  }
+
+  .kb-im-bot-item__actions {
+    margin-left: auto;
+  }
+}

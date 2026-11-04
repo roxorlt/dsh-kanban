@@ -6,12 +6,19 @@
   "author": "roxorlt",
   "type": "module",
   "main": "./lib/index.js",
+  "bin": {
+    "dsh-kanban-mcp": "./bin/kanban-mcp.mjs",
+    "dsh-kanban-weixin-login": "./bin/kanban-weixin-login.mjs"
+  },
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
+    "./mcp": "./lib/mcp-server.js",
     "./package.json": "./package.json"
   },
   "files": [
+    "bin/kanban-mcp.mjs",
+    "bin/kanban-weixin-login.mjs",
     "lib/index.js",
     "lib/store.js",
     "lib/domain.js",
@@ -24,6 +31,15 @@
     "lib/client.js",
     "lib/session-archive.js",
     "lib/session-sync.js",
+    "lib/watchdog.js",
+    "lib/cloud-sync-protocol.js",
+    "lib/cloud-sync-client.js",
+    "lib/router.js",
+    "lib/im-gateway.js",
+    "lib/im-notifier.js",
+    "lib/weixin-channel.js",
+    "lib/cc2im-bridge.js",
+    "lib/mcp-server.js",
     "lib/git.js",
     "web/dist",
     "skills",

@@ -12,6 +12,7 @@ import type { WorklineStatus } from '../lib/worklineSummary';
 import { usePresence } from '../lib/usePresence';
 import { ApprovalSlot } from './ApprovalSlot';
 import { canStartCard } from '../lib/startCard';
+import { describeCardRuntime } from '../lib/runtime';
 import type { ApprovalDecision, ApprovalSubmission } from './ApprovalPanel';
 import { MenuButton } from './MenuButton';
 import type { MenuEntry } from './MenuButton';
@@ -73,6 +74,7 @@ interface KanbanCardProps {
   onReply: (card: Card, text: string) => Promise<{ ok: boolean; error?: string }>;
   onRetry: (card: Card) => void;
   onSessionClick: (card: Card) => void;
+  onToggleAutoStart?: (card: Card, next: boolean) => void;
   onDragStart: (cardId: string) => void;
   onDragEnd: () => void;
   /**
@@ -145,6 +147,7 @@ export function KanbanCard({
   onReply,
   onRetry,
   onSessionClick,
+  onToggleAutoStart,
   onDragStart,
   onDragEnd,
   dropPhase,
@@ -167,6 +170,7 @@ export function KanbanCard({
     [card.approvals, pendingApproval?.id],
   );
   const elapsed = elapsedMs(card, now);
+  const runtimeInfo = useMemo(() => describeCardRuntime(card, now), [card, now]);
   const primarySession = card.sessionIds[0]
     ? sessions.find((session) => session.id === card.sessionIds[0])
     : undefined;
@@ -191,9 +195,20 @@ export function KanbanCard({
   }));
 
   const canStart = canStartCard(card);
+  const canToggleAuto = card.status !== 'done' && card.status !== 'canceled' && Boolean(onToggleAutoStart);
   const menuItems: MenuEntry[] = [
     ...(canStart
       ? [{ id: 'start', label: t('card.start'), icon: <IconSparkle />, separatorBefore: false }]
+      : []),
+    ...(canToggleAuto
+      ? [
+          {
+            id: 'autostart',
+            label: runtimeInfo.autoStart ? t('runtime.autoStartOn') : t('runtime.enableAutoStart'),
+            icon: <IconSparkle />,
+            checked: runtimeInfo.autoStart,
+          },
+        ]
       : []),
     { id: 'open', label: t('card.openDetail'), icon: <IconOpen /> },
     { id: 'edit', label: t('card.edit'), icon: <IconEdit /> },
@@ -206,6 +221,7 @@ export function KanbanCard({
 
   const handleMenuSelect = (id: string) => {
     if (id === 'start') onStartCard(card);
+    else if (id === 'autostart') onToggleAutoStart?.(card, !runtimeInfo.autoStart);
     else if (id === 'open') onOpenDetail(card.id);
     else if (id === 'edit') onEdit(card);
     else if (id === 'archive') onArchive(card);
@@ -382,8 +398,27 @@ export function KanbanCard({
             title={t('handoff.badgeAria', { date: formatDateTime(card.handoff.at, lang) })}
             aria-label={t('handoff.badgeAria', { date: formatDateTime(card.handoff.at, lang) })}
           >
-            {t('handoff.badge')}
+            {runtimeInfo.isUpstreamHandoff ? t('runtime.upstreamHandoffBadge') : t('handoff.badge')}
           </span>
+        ) : null}
+        {runtimeInfo.autoStart && !((card.status === 'backlog' || card.status === 'blocked') && !selectionMode && onToggleAutoStart) ? (
+          <span className="kb-tag kb-tag--runtime" title={t('runtime.autoStartHint')}>
+            {t('runtime.autoStartBadge')}
+          </span>
+        ) : null}
+        {runtimeInfo.waitActive ? (
+          <span className="kb-tag kb-tag--runtime" title={runtimeInfo.waitActive.reason || undefined}>
+            {t('runtime.waitBadge', { remaining: formatDuration(runtimeInfo.waitActive.remainingMs, lang) })}
+          </span>
+        ) : null}
+        {runtimeInfo.watchdogState === 'nudged' ? (
+          <span className="kb-tag kb-tag--runtime">{t('runtime.watchdogNudged', { used: runtimeInfo.nudgesUsed })}</span>
+        ) : runtimeInfo.watchdogState === 'stalled' ? (
+          <span className="kb-tag kb-tag--runtime-warn">{t('runtime.watchdogStalled')}</span>
+        ) : runtimeInfo.watchdogState === 'retrying' ? (
+          <span className="kb-tag kb-tag--runtime">{t('runtime.watchdogRetrying', { used: runtimeInfo.retriesUsed })}</span>
+        ) : runtimeInfo.watchdogState === 'retry_exhausted' ? (
+          <span className="kb-tag kb-tag--runtime-warn">{t('runtime.watchdogRetryExhausted')}</span>
         ) : null}
         <CardRelationBadges card={card} relations={relations} />
       </div>
@@ -450,6 +485,17 @@ export function KanbanCard({
               <IconSparkle />
             </span>
             {t('card.start')}
+          </button>
+        ) : null}
+        {(card.status === 'backlog' || card.status === 'blocked') && !selectionMode && onToggleAutoStart ? (
+          <button
+            type="button"
+            aria-pressed={runtimeInfo.autoStart}
+            className={`kb-btn kb-btn--sm kb-btn--ghost kb-foot-autostart${runtimeInfo.autoStart ? ' kb-foot-autostart--on' : ''}`}
+            title={t('runtime.autoStartHint')}
+            onClick={() => onToggleAutoStart(card, !runtimeInfo.autoStart)}
+          >
+            {runtimeInfo.autoStart ? t('runtime.autoStartBadge') : t('runtime.enableAutoStart')}
           </button>
         ) : null}
         <span className="kb-card-foot__metrics">

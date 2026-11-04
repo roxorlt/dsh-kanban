@@ -24,7 +24,6 @@ export function HelpDialog({ onClose }: HelpDialogProps) {
   const { t } = useI18n();
   return (
     <Modal title={t('help.title')} onClose={onClose} size="sm">
-      <p className="kb-help__hint">{t('help.hint')}</p>
       <ul className="kb-help__list">
         {SHORTCUTS.map((shortcut) => (
           <li className="kb-help__row" key={shortcut.labelKey}>

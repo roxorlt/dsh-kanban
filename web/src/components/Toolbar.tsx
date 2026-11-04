@@ -17,15 +17,20 @@ import {
   IconGlobe,
   IconHelp,
   IconList,
+  IconMessageChannel,
   IconMoon,
   IconPlus,
   IconSearch,
   IconSun,
-  IconWorkline,
 } from './Icons';
 
 export type ViewMode = 'board' | 'list' | 'workspaces' | 'worklines';
 export type SyncState = 'connected' | 'connecting' | 'reconnecting' | 'offline' | 'standalone';
+
+export interface ImToolbarSummary {
+  state: 'idle' | 'connected' | 'expired';
+  activeCount: number;
+}
 
 interface ToolbarProps {
   boardName: string;
@@ -50,6 +55,13 @@ interface ToolbarProps {
   onShowHelp: () => void;
   selectionMode: boolean;
   onToggleSelection: () => void;
+  /** 全局「自动推进（Autopilot）」总开关（默认 true） */
+  autoAdvanceEnabled?: boolean;
+  autopilotBusy?: boolean;
+  onToggleAutopilot?: () => void;
+  /** 外部 IM 通道（微信直连 / 钉钉飞书 Webhook）状态摘要与管理入口 */
+  imSummary?: ImToolbarSummary;
+  onOpenImModal?: () => void;
   /** 首屏数据尚未到达：顶栏计数改占位条、依赖数据的操作禁用（docs/10 A-13）。 */
   loading: boolean;
 }
@@ -90,6 +102,11 @@ export function Toolbar({
   onShowHelp,
   selectionMode,
   onToggleSelection,
+  autoAdvanceEnabled = true,
+  autopilotBusy = false,
+  onToggleAutopilot,
+  imSummary,
+  onOpenImModal,
   loading,
 }: ToolbarProps) {
   const { t } = useI18n();
@@ -111,7 +128,6 @@ export function Toolbar({
   const views: { id: ViewMode; icon: ReactNode; key: I18nKey }[] = [
     { id: 'board', icon: <IconBoard />, key: 'app.viewBoard' },
     { id: 'list', icon: <IconList />, key: 'app.viewList' },
-    { id: 'worklines', icon: <IconWorkline />, key: 'app.viewWorklines' },
     { id: 'workspaces', icon: <IconFolder />, key: 'app.viewWorkspaces' },
   ];
   const syncLabel =
@@ -351,6 +367,71 @@ export function Toolbar({
         )}
 
         <div className="kb-toolbar-spacer" />
+
+        {onOpenImModal ? (
+          <>
+            <button
+              type="button"
+              className={`kb-im-trigger${
+                imSummary?.state === 'connected'
+                  ? ' kb-im-trigger--connected'
+                  : imSummary?.state === 'expired'
+                    ? ' kb-im-trigger--expired'
+                    : ''
+              }`}
+              disabled={loading}
+              onClick={onOpenImModal}
+              title={
+                loading
+                  ? loadingHint
+                  : imSummary?.state === 'expired'
+                    ? t('im.triggerTipExpired')
+                    : imSummary?.state === 'connected'
+                      ? t('im.triggerTipConnected', { count: imSummary.activeCount })
+                      : t('im.triggerTipIdle')
+              }
+            >
+              {imSummary?.state === 'connected' ? (
+                <span className="kb-dot kb-dot--success" aria-hidden="true" />
+              ) : imSummary?.state === 'expired' ? (
+                <span className="kb-dot kb-dot--warn" aria-hidden="true" />
+              ) : (
+                <span className="kb-icon kb-im-trigger__icon" aria-hidden="true">
+                  <IconMessageChannel />
+                </span>
+              )}
+              <span>
+                {imSummary?.state === 'expired'
+                  ? t('im.triggerExpired')
+                  : imSummary?.state === 'connected'
+                    ? t('im.triggerConnected', { count: imSummary.activeCount })
+                    : t('im.triggerIdle')}
+              </span>
+            </button>
+            <span className="kb-divider-v kb-toolbar-divider" aria-hidden="true" />
+          </>
+        ) : null}
+
+        {onToggleAutopilot ? (
+          <>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoAdvanceEnabled}
+              aria-label={autoAdvanceEnabled ? t('runtime.autopilotTipOn') : t('runtime.autopilotTipOff')}
+              className={`kb-switch kb-autopilot-switch${autoAdvanceEnabled ? ' kb-switch--on' : ''}`}
+              disabled={loading || autopilotBusy}
+              onClick={onToggleAutopilot}
+              title={loading ? loadingHint : autoAdvanceEnabled ? t('runtime.autopilotTipOn') : t('runtime.autopilotTipOff')}
+            >
+              <span className="kb-switch__track" aria-hidden="true">
+                <span className="kb-switch__thumb" />
+              </span>
+              <span className="kb-switch__label">{t('runtime.autopilotOn')}</span>
+            </button>
+            <span className="kb-divider-v kb-toolbar-divider" aria-hidden="true" />
+          </>
+        ) : null}
 
         {syncRetryable ? (
           <button

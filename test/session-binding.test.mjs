@@ -320,7 +320,37 @@ test('planCreate：registry.get 抛错时无法校验，保留显式 workspaceId
 test('planCreate：工作区路径尾斜杠归一化', async () => {
   const registry = createFakeRegistry({ workspaces: [{ id: 'ws-1', path: '/repo/kanban/' }] })
   const plan = await planCreate({ args: { title: '卡片', workspaceId: 'ws-1' }, agent: AGENT, registry })
+  assert.equal(plan.workspaceId, undefined)
   assert.equal(plan.binding.workspaceId, 'ws-1')
   assert.equal(plan.binding.cwd, '/repo/kanban')
   assert.equal(plan.input.workspaceId, 'ws-1')
+})
+
+test('currentSession 扩展：支持从 exec.session / exec.sessionId / agent.sessionId 提取会话', () => {
+  assert.deepEqual(
+    currentSession({ id: 'a1' }, { session: { id: 's-exec', header: { cwd: '/repo/exec' } } }),
+    { sessionId: 's-exec', cwd: '/repo/exec' },
+  )
+  assert.deepEqual(
+    currentSession({ sessionId: 's-agent-direct', cwd: '/repo/direct' }),
+    { sessionId: 's-agent-direct', cwd: '/repo/direct' },
+  )
+  assert.deepEqual(
+    currentSession({ id: 'a1' }, { sessionId: 's-exec-id', cwd: '/repo/exec2' }),
+    { sessionId: 's-exec-id', cwd: '/repo/exec2' },
+  )
+})
+
+test('prepareCreate：reuse 模式下若无当前会话但提供了 workspaceId/cwd 且有 controller，自动 fallback 新建会话', async () => {
+  const registry = kanbanRegistry()
+  const controller = createFakeController({ sessionId: 'session-fallback-new' })
+  const binding = createSessionBinding({ getWorkspaceRegistry: () => registry, getSessionController: () => controller })
+  const prepared = await binding.prepareCreate({
+    args: { title: '兜底新建会话卡', cwd: '/repo/kanban' },
+    agent: { id: 'agent-only' },
+  })
+  assert.equal(prepared.binding.sessionId, 'session-fallback-new')
+  assert.equal(prepared.binding.created, true)
+  assert.equal(prepared.input.sessionId, 'session-fallback-new')
+  assert.deepEqual(controller.calls[0], ['create', { workspaceId: 'ws-1' }])
 })

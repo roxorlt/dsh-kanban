@@ -1,10 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { Approval, Card, SessionRow, WorkspaceRow } from '../types';
+import type { Approval, Card, CardWaitCondition, SessionRow, WorkspaceRow } from '../types';
 import { useI18n } from '../i18n';
 import type { I18nKey } from '../i18n';
 import { STATUS_TONE, isWarningStatus } from '../lib/status';
 import { elapsedMs, formatDateTime, formatDuration, formatRelative } from '../lib/time';
+import { describeCardRuntime } from '../lib/runtime';
 import type { ActivityFeed } from '../lib/activities';
 import { ApprovalPanel } from './ApprovalPanel';
 import { ApprovalSlot } from './ApprovalSlot';
@@ -79,6 +80,10 @@ interface DetailDrawerProps {
   cwdState?: 'ok' | 'missing' | 'invalid';
   /** v0.21.0 #16：打开「重新绑定目录」弹窗 */
   onRebindDir?: (card: Card) => void;
+  /** Super-Agent Runtime：切换自动接力开关 */
+  onToggleAutoStart?: (card: Card, next: boolean) => void;
+  /** Super-Agent Runtime：设置或清除等待唤醒条件 */
+  onUpdateWaitCondition?: (card: Card, waitCondition: CardWaitCondition | null) => void;
   /**
    * 离场中（App 用 `usePresence` 驱动，见 docs/11-motion.md §6.2）：
    * 挂 `.kb-drawer-overlay--leaving` 跑收回过渡，并在第一帧解除焦点圈定、归还焦点。
@@ -145,11 +150,14 @@ export function DetailDrawer({
   onUnarchiveSession,
   cwdState = 'ok',
   onRebindDir,
+  onToggleAutoStart,
+  onUpdateWaitCondition,
   closing = false,
 }: DetailDrawerProps) {
   const { t, lang } = useI18n();
   // v0.22 关系索引：用全量卡片算父子/依赖，避免详情抽屉里再请求接口
   const relations = useMemo(() => buildCardRelationIndex(allCards), [allCards]);
+  const runtimeInfo = useMemo(() => describeCardRuntime(card, now), [card, now]);
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -362,6 +370,12 @@ export function DetailDrawer({
                     <span>{card.project}</span>
                   </>
                 ) : null}
+                {card.agent?.name ? (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    <span>{card.agent.name}</span>
+                  </>
+                ) : null}
                 {isWarningStatus(card.status) ? (
                   <>
                     <span aria-hidden="true"> · </span>
@@ -410,55 +424,123 @@ export function DetailDrawer({
         </header>
 
         <div className="kb-drawer__body">
-          <div className="kb-drawer__chips">
-            <span
-              className={`kb-pill${tone === 'business' ? ' kb-pill--business' : tone === 'warn' ? ' kb-pill--warn' : tone === 'success' ? ' kb-pill--success' : tone === 'error' ? ' kb-pill--error' : ''}`}
-            >
-              <span className={`kb-dot kb-dot--${tone}`} aria-hidden="true" />
-              {t(statusKey)}
-            </span>
-            {card.agent?.name ? (
-              <span className="kb-pill">
-                {t('card.agent')} · {card.agent.name}
-              </span>
-            ) : null}
-          </div>
-
           <RelationSection card={card} relations={relations} onOpenCard={actions.onOpenDetail} />
 
-          {card.currentAction ? (
-            <section className="kb-drawer__section">
-              <h3 className="kb-drawer__section-title">{t('drawer.currentAction')}</h3>
-              <p className="kb-drawer__text">{card.currentAction}</p>
+          {card.status !== 'done' && card.status !== 'canceled' ? (
+            <section className="kb-drawer__section kb-drawer__runtime" aria-label={t('runtime.sectionTitle')}>
+              <div className="kb-drawer__runtime-head">
+                <h3 className="kb-drawer__section-title">{t('runtime.sectionTitle')}</h3>
+                <span className="kb-drawer__details-meta">
+                  {t('runtime.generationMeta', {
+                    gen: runtimeInfo.generation,
+                    nudges: runtimeInfo.nudgesUsed,
+                    retries: runtimeInfo.retriesUsed,
+                  })}
+                </span>
+              </div>
+              <div className="kb-drawer__runtime-controls">
+                <span
+                  className={`kb-tag ${
+                    runtimeInfo.watchdogState === 'stalled' || runtimeInfo.watchdogState === 'retry_exhausted'
+                      ? 'kb-tag--runtime-warn'
+                      : 'kb-tag--runtime'
+                  }`}
+                >
+                  {runtimeInfo.watchdogState === 'guarding'
+                    ? t('runtime.watchdogGuarding')
+                    : runtimeInfo.watchdogState === 'nudged'
+                      ? t('runtime.watchdogNudged', { used: runtimeInfo.nudgesUsed })
+                      : runtimeInfo.watchdogState === 'stalled'
+                        ? t('runtime.watchdogStalled')
+                        : runtimeInfo.watchdogState === 'retrying'
+                          ? t('runtime.watchdogRetrying', { used: runtimeInfo.retriesUsed })
+                          : runtimeInfo.watchdogState === 'retry_exhausted'
+                            ? t('runtime.watchdogRetryExhausted')
+                            : t('runtime.watchdogIdle')}
+                </span>
+                {onToggleAutoStart ? (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={runtimeInfo.autoStart}
+                    className={`kb-switch${runtimeInfo.autoStart ? ' kb-switch--on' : ''}`}
+                    title={t('runtime.autoStartHint')}
+                    onClick={() => onToggleAutoStart(card, !runtimeInfo.autoStart)}
+                  >
+                    <span className="kb-switch__track" aria-hidden="true">
+                      <span className="kb-switch__thumb" />
+                    </span>
+                    <span className="kb-switch__label">{t('runtime.autoStartBadge')}</span>
+                  </button>
+                ) : null}
+                {onUpdateWaitCondition ? (
+                  runtimeInfo.waitActive ? (
+                    <span className="kb-drawer__runtime-wait">
+                      <span className="kb-drawer__details-meta">
+                        {t('runtime.waitRemaining', {
+                          remaining: formatDuration(runtimeInfo.waitActive.remainingMs, lang),
+                          reason: runtimeInfo.waitActive.reason ? ` · ${runtimeInfo.waitActive.reason}` : '',
+                        })}
+                      </span>
+                      <button
+                        type="button"
+                        className="kb-btn kb-btn--sm kb-btn--outline"
+                        onClick={() => onUpdateWaitCondition(card, null)}
+                      >
+                        {t('runtime.waitClear')}
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="kb-btn kb-btn--sm kb-btn--ghost"
+                      onClick={() =>
+                        onUpdateWaitCondition(card, {
+                          kind: 'time',
+                          notBefore: Date.now() + 30 * 60_000,
+                          reason: '定时挂起 30m',
+                        })
+                      }
+                    >
+                      {t('runtime.waitSnooze30m')}
+                    </button>
+                  )
+                ) : null}
+              </div>
             </section>
           ) : null}
 
-          {card.progress ? (
+          {card.currentAction || card.progress ? (
             <section className="kb-drawer__section">
-              <h3 className="kb-drawer__section-title">{t('drawer.progress')}</h3>
-              <div className="kb-progress">
-                <div
-                  className="kb-progress__bar"
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={Math.round(card.progress.percent ?? 0)}
-                >
-                  <span
-                    className="kb-progress__fill"
-                    style={
-                      {
-                        // A-07：进度改由 transform: scaleX 驱动，值用 0–1 的 CSS 变量传给 drawer.css
-                        '--kb-progress': Math.max(0, Math.min(100, card.progress.percent ?? 0)) / 100,
-                      } as CSSProperties
-                    }
-                  />
+              <h3 className="kb-drawer__section-title">
+                {card.progress ? t('drawer.progress') : t('drawer.currentAction')}
+              </h3>
+              {card.currentAction ? <p className="kb-drawer__text">{card.currentAction}</p> : null}
+              {card.progress ? (
+                <div className="kb-progress">
+                  <div
+                    className="kb-progress__bar"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(card.progress.percent ?? 0)}
+                  >
+                    <span
+                      className="kb-progress__fill"
+                      style={
+                        {
+                          // A-07：进度改由 transform: scaleX 驱动，值用 0–1 的 CSS 变量传给 drawer.css
+                          '--kb-progress': Math.max(0, Math.min(100, card.progress.percent ?? 0)) / 100,
+                        } as CSSProperties
+                      }
+                    />
+                  </div>
+                  <span className="kb-progress__label">
+                    {card.progress.total ? `${card.progress.step}/${card.progress.total}` : `${card.progress.percent ?? 0}%`}
+                    {card.progress.text ? ` · ${card.progress.text}` : ''}
+                  </span>
                 </div>
-                <span className="kb-progress__label">
-                  {card.progress.total ? `${card.progress.step}/${card.progress.total}` : `${card.progress.percent ?? 0}%`}
-                  {card.progress.text ? ` · ${card.progress.text}` : ''}
-                </span>
-              </div>
+              ) : null}
             </section>
           ) : null}
 
@@ -545,12 +627,17 @@ export function DetailDrawer({
           </section>
 
           {resolvedApprovals.length ? (
-            <section className="kb-drawer__section">
-              <h3 className="kb-drawer__section-title">{t('drawer.approvals')}</h3>
-              {resolvedApprovals.map((approval) => (
-                <ApprovalPanel key={approval.id} approval={approval} busy={false} now={now} onResolve={() => undefined} />
-              ))}
-            </section>
+            <details className="kb-drawer__section kb-drawer__details">
+              <summary className="kb-drawer__details-summary">
+                <span className="kb-drawer__section-title">{t('drawer.approvals')}</span>
+                <span className="kb-drawer__details-meta">{resolvedApprovals.length}</span>
+              </summary>
+              <div className="kb-drawer__details-body">
+                {resolvedApprovals.map((approval) => (
+                  <ApprovalPanel key={approval.id} approval={approval} busy={false} now={now} onResolve={() => undefined} />
+                ))}
+              </div>
+            </details>
           ) : null}
 
           {card.artifacts.length ? (
@@ -607,49 +694,58 @@ export function DetailDrawer({
           ) : null}
 
           {card.handoff ? (
-            <section className="kb-drawer__section kb-drawer__section--handoff" aria-label={t('handoff.title')}>
-              <div className="kb-drawer__section-head">
-                <h3 className="kb-drawer__section-title">{t('handoff.title')}</h3>
-                <button
-                  type="button"
-                  className="kb-btn kb-btn--sm kb-btn--ghost kb-handoff__copy"
-                  onClick={() => void copyHandoff()}
-                >
-                  <span className="kb-icon" aria-hidden="true">
-                    <IconCopy />
-                  </span>
-                  {handoffCopied ? t('handoff.copied') : t('handoff.copy')}
-                </button>
-              </div>
-              <p className="kb-handoff__summary">{card.handoff.summary}</p>
-              {card.handoff.nextSteps ? (
-                <div className="kb-handoff__next">
-                  <span className="kb-handoff__label">{t('handoff.nextSteps')}</span>
-                  <p>{card.handoff.nextSteps}</p>
+            <details
+              className="kb-drawer__section kb-drawer__details kb-drawer__section--handoff"
+              aria-label={t('handoff.title')}
+              open={card.status === 'needs_you'}
+            >
+              <summary className="kb-drawer__details-summary">
+                <span className="kb-drawer__section-title">{t('handoff.title')}</span>
+                <span className="kb-drawer__details-meta">{formatDateTime(card.handoff.at, lang)}</span>
+              </summary>
+              <div className="kb-drawer__details-body">
+                <div className="kb-drawer__section-head">
+                  <p className="kb-handoff__summary">{card.handoff.summary}</p>
+                  <button
+                    type="button"
+                    className="kb-btn kb-btn--sm kb-btn--ghost kb-handoff__copy"
+                    onClick={() => void copyHandoff()}
+                  >
+                    <span className="kb-icon" aria-hidden="true">
+                      <IconCopy />
+                    </span>
+                    {handoffCopied ? t('handoff.copied') : t('handoff.copy')}
+                  </button>
                 </div>
-              ) : null}
-              <dl className="kb-handoff__meta">
-                <div>
-                  <dt>{t('handoff.writtenAt')}</dt>
-                  <dd>{formatDateTime(card.handoff.at, lang)}</dd>
-                </div>
-                <div>
-                  <dt>{t('handoff.sourceSession')}</dt>
-                  <dd>
-                    {card.handoff.sessionId
-                      ? sessions.find((session) => session.id === card.handoff?.sessionId)?.title ??
-                        card.handoff.sessionId
-                      : t('common.none')}
-                  </dd>
-                </div>
-                {card.handoff.by ? (
-                  <div>
-                    <dt>{t('handoff.by')}</dt>
-                    <dd>{card.handoff.by.name}</dd>
+                {card.handoff.nextSteps ? (
+                  <div className="kb-handoff__next">
+                    <span className="kb-handoff__label">{t('handoff.nextSteps')}</span>
+                    <p>{card.handoff.nextSteps}</p>
                   </div>
                 ) : null}
-              </dl>
-            </section>
+                <dl className="kb-handoff__meta">
+                  <div>
+                    <dt>{t('handoff.writtenAt')}</dt>
+                    <dd>{formatDateTime(card.handoff.at, lang)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('handoff.sourceSession')}</dt>
+                    <dd>
+                      {card.handoff.sessionId
+                        ? sessions.find((session) => session.id === card.handoff?.sessionId)?.title ??
+                          card.handoff.sessionId
+                        : t('common.none')}
+                    </dd>
+                  </div>
+                  {card.handoff.by ? (
+                    <div>
+                      <dt>{t('handoff.by')}</dt>
+                      <dd>{card.handoff.by.name}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </div>
+            </details>
           ) : null}
 
           <section className="kb-drawer__section">
@@ -675,77 +771,83 @@ export function DetailDrawer({
             />
           </section>
 
-          <section className="kb-drawer__section">
-            <h3 className="kb-drawer__section-title">{t('drawer.metadata')}</h3>
-            <dl className="kb-meta-grid">
-              <div>
-                <dt>{t('drawer.toolCalls')}</dt>
-                <dd>{card.metadata.toolCalls}</dd>
-              </div>
-              <div>
-                <dt>{t('drawer.searches')}</dt>
-                <dd>{card.metadata.searches}</dd>
-              </div>
-              <div>
-                <dt>{t('drawer.elapsed')}</dt>
-                <dd>{formatDuration(elapsed, lang)}</dd>
-              </div>
-              {typeof card.metadata.tokensIn === 'number' || typeof card.metadata.tokensOut === 'number' ? (
+          <details className="kb-drawer__section kb-drawer__details" open={cwdState === 'invalid'}>
+            <summary className="kb-drawer__details-summary">
+              <span className="kb-drawer__section-title">{t('drawer.metadata')}</span>
+              <span className="kb-drawer__details-meta">
+                {formatDuration(elapsed, lang)} · {formatRelative(card.updatedAt, now, lang)}
+              </span>
+            </summary>
+            <div className="kb-drawer__details-body">
+              <dl className="kb-meta-grid">
                 <div>
-                  <dt>{t('drawer.tokens')}</dt>
+                  <dt>{t('drawer.toolCalls')}</dt>
+                  <dd>{card.metadata.toolCalls}</dd>
+                </div>
+                <div>
+                  <dt>{t('drawer.searches')}</dt>
+                  <dd>{card.metadata.searches}</dd>
+                </div>
+                <div>
+                  <dt>{t('drawer.elapsed')}</dt>
+                  <dd>{formatDuration(elapsed, lang)}</dd>
+                </div>
+                {typeof card.metadata.tokensIn === 'number' || typeof card.metadata.tokensOut === 'number' ? (
+                  <div>
+                    <dt>{t('drawer.tokens')}</dt>
+                    <dd>
+                      {card.metadata.tokensIn ?? 0} / {card.metadata.tokensOut ?? 0}
+                    </dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>{t('drawer.createdAt')}</dt>
+                  <dd>{formatDateTime(card.createdAt, lang)}</dd>
+                </div>
+                <div>
+                  <dt>{t('drawer.updatedAt')}</dt>
+                  <dd>{formatDateTime(card.updatedAt, lang)}</dd>
+                </div>
+                {card.startedAt ? (
+                  <div>
+                    <dt>{t('drawer.startedAt')}</dt>
+                    <dd>{formatDateTime(card.startedAt, lang)}</dd>
+                  </div>
+                ) : null}
+                {card.completedAt ? (
+                  <div>
+                    <dt>{t('drawer.completedAt')}</dt>
+                    <dd>{formatDateTime(card.completedAt, lang)}</dd>
+                  </div>
+                ) : null}
+                {/* v0.21.0 #16：工作目录一行总是显示；失效时给警示标签，可重新绑定 */}
+                <div className="kb-meta-grid__wide kb-drawer__cwd-row">
+                  <dt>{t('drawer.workspace')}</dt>
                   <dd>
-                    {card.metadata.tokensIn ?? 0} / {card.metadata.tokensOut ?? 0}
+                    {card.cwd ? (
+                      <code className="kb-meta-grid__code" title={card.cwd}>
+                        {card.cwd}
+                      </code>
+                    ) : (
+                      <span className="kb-drawer__cwd-missing">{t('drawer.cwdMissing')}</span>
+                    )}
+                    {cwdState === 'invalid' ? (
+                      <span className="kb-pill kb-pill--warn kb-drawer__cwd-invalid">{t('drawer.cwdInvalid')}</span>
+                    ) : null}
+                    {onRebindDir ? (
+                      <button
+                        type="button"
+                        className="kb-btn kb-btn--sm kb-btn--ghost kb-drawer__cwd-rebind"
+                        onClick={() => onRebindDir(card)}
+                      >
+                        {t('drawer.rebindCwd')}
+                      </button>
+                    ) : null}
                   </dd>
                 </div>
-              ) : null}
-              <div>
-                <dt>{t('drawer.createdAt')}</dt>
-                <dd>{formatDateTime(card.createdAt, lang)}</dd>
-              </div>
-              <div>
-                <dt>{t('drawer.updatedAt')}</dt>
-                <dd>{formatDateTime(card.updatedAt, lang)}</dd>
-              </div>
-              {card.startedAt ? (
-                <div>
-                  <dt>{t('drawer.startedAt')}</dt>
-                  <dd>{formatDateTime(card.startedAt, lang)}</dd>
-                </div>
-              ) : null}
-              {card.completedAt ? (
-                <div>
-                  <dt>{t('drawer.completedAt')}</dt>
-                  <dd>{formatDateTime(card.completedAt, lang)}</dd>
-                </div>
-              ) : null}
-              {/* v0.21.0 #16：工作目录一行总是显示；失效时给警示标签，可重新绑定 */}
-              <div className="kb-meta-grid__wide kb-drawer__cwd-row">
-                <dt>{t('drawer.workspace')}</dt>
-                <dd>
-                  {card.cwd ? (
-                    <code className="kb-meta-grid__code" title={card.cwd}>
-                      {card.cwd}
-                    </code>
-                  ) : (
-                    <span className="kb-drawer__cwd-missing">{t('drawer.cwdMissing')}</span>
-                  )}
-                  {cwdState === 'invalid' ? (
-                    <span className="kb-pill kb-pill--warn kb-drawer__cwd-invalid">{t('drawer.cwdInvalid')}</span>
-                  ) : null}
-                  {onRebindDir ? (
-                    <button
-                      type="button"
-                      className="kb-btn kb-btn--sm kb-btn--ghost kb-drawer__cwd-rebind"
-                      onClick={() => onRebindDir(card)}
-                    >
-                      {t('drawer.rebindCwd')}
-                    </button>
-                  ) : null}
-                </dd>
-              </div>
-            </dl>
-            <p className="kb-drawer__updated">{formatRelative(card.updatedAt, now, lang)}</p>
-          </section>
+              </dl>
+            </div>
+          </details>
         </div>
 
         <footer className="kb-drawer__footer">
