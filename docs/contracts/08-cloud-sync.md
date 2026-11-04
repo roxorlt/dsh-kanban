@@ -36,7 +36,7 @@
 
 1. **不做云主机/云端执行**：不在 Worker、Durable Objects 或任意云函数里跑量化、跑代码、开 worktree。
 2. **不做双向合并**：云端不是第二个写者，不存在字段级合并；冲突全部退化为「客户端 pull 后用本地权威状态重算 delta」。
-3. **不把被管理项目的代码仓上云**：`dsh-kanban` 只镜像**看板控制面**（含卡片标题/摘要等脱敏文本）；rQuant 及未来管理的 coding/非 coding 项目仅作为卡片承载内容出现，其 `cwd`、worktree 路径、运行进程、日志均留在本地。
+3. **不把被管理项目的代码仓上云**：`dsh-kanban` 只镜像**看板控制面**（含卡片标题/摘要等脱敏文本）；被管理业务项目及未来管理的 coding/非 coding 项目仅作为卡片承载内容出现，其 `cwd`、worktree 路径、运行进程、日志均留在本地。
 4. **不做多租户 / 多用户权限体系**：一个部署 = 一条个人 Bearer 令牌；多客户端写属于单写者假设外，见 §5.4。
 5. **不镜像决策日志 `decisions.jsonl`**：它只追加、体积大、含审批上下文，留在本地（如需，另卡设计）。
 6. **不镜像 Web 前端产物与静态资源**：Worker 不托管看板 UI（UI 仍在本地 127.0.0.1）。
@@ -390,7 +390,7 @@ SELECT … FROM cards
 ```json
 {
   "protocolVersion": 1,
-  "clientId": "macbook-roxor",
+  "clientId": "macbook-pro",
   "pushId": "push-3f2a…（32 位十六进制，hashPushId 生成）",
   "baseRevision": 12,
   "epoch": "8f3a1c2d5e6b7a90",
@@ -448,9 +448,9 @@ curl -sS "$BASE/v1/sync/pull?since=13&until=13" -H "Authorization: Bearer $TOKEN
 
 # 3) 领取入站事件并 ACK
 curl -sS "$BASE/v1/inbox/claim" -H "Authorization: Bearer $TOKEN" \
-  -H 'content-type: application/json' -d '{"consumerId":"macbook-roxor","limit":20,"leaseSeconds":120}'
+  -H 'content-type: application/json' -d '{"consumerId":"macbook-pro","limit":20,"leaseSeconds":120}'
 curl -sS "$BASE/v1/inbox/ack" -H "Authorization: Bearer $TOKEN" \
-  -H 'content-type: application/json' -d '{"consumerId":"macbook-roxor","results":[{"id":"in-…","outcome":"acked"}]}'
+  -H 'content-type: application/json' -d '{"consumerId":"macbook-pro","results":[{"id":"in-…","outcome":"acked"}]}'
 ```
 
 ### 6.6 客户端推送状态机（C3）
@@ -537,8 +537,8 @@ flowchart TB
 | Bearer 头 | `Bearer abcdef…` | `Bearer ****` |
 | URL 查询凭据 | `?access_token=…` / `?sign=…` / `?key=…` | `?access_token=****` |
 | 赋值式密钥 | `password=…` / `token: …` / `secret=…` | `password=****` |
-| 用户目录（macOS/Linux） | `/Users/roxor/Desktop/dsh` | `~/Desktop/dsh` |
-| 用户目录（Windows） | `C:\Users\roxor\Desktop` | `~\Desktop` |
+| 用户目录（macOS/Linux） | `/Users/alice/Desktop/dsh` | `~/Desktop/dsh` |
+| 用户目录（Windows） | `C:\Users\alice\Desktop` | `~\Desktop` |
 
 > 说明：`~` 只隐藏用户名，保留相对路径，便于云端仍能看懂「哪个仓/哪个工作副本」；这比整段删除更有用。若某路径本身包含敏感项目名，请把该项目名加入自定义脱敏词表（后续扩展点，本期不做）。
 
@@ -586,7 +586,7 @@ Mac 合盖休眠时本地服务不可达。IM（钉钉/飞书/企微/微信 cc2i
 
 ### 8.4 `POST /v1/inbox/claim` —— 领取待回放事件（Bearer）
 
-请求：`{"consumerId":"macbook-roxor","limit":20,"leaseSeconds":120}`；`limit` 夹紧到 `[1,20]`，`leaseSeconds` 夹紧到 `[30,900]`。
+请求：`{"consumerId":"macbook-pro","limit":20,"leaseSeconds":120}`；`limit` 夹紧到 `[1,20]`，`leaseSeconds` 夹紧到 `[30,900]`。
 
 响应：
 
@@ -612,7 +612,7 @@ Mac 合盖休眠时本地服务不可达。IM（钉钉/飞书/企微/微信 cc2i
 3. 汇总结果调用 ACK：
 
 ```json
-{ "consumerId": "macbook-roxor",
+{ "consumerId": "macbook-pro",
   "results": [
     { "id": "in-…", "outcome": "acked" },
     { "id": "in-…", "outcome": "retry", "error": "本地 502" }
@@ -763,7 +763,7 @@ stateDiagram-v2
 - [x] 入站：claim → `buildLocalIngressRequest` → 本地 ingress → ACK；本地 2xx=acked、已处理类 4xx=acked、其它 4xx=dead、5xx/网络=retry（服务端 `nextIngressAttempt` 退避，20 次后 dead）。
 - [x] 本地状态不因云端响应而改变（除「已推送镜像」缓存）；状态接口 `GET /api/kanban/cloud/status` 只读暴露同步/回放状态，令牌仅掩码。
 - [x] 离线可运行：云端不可达时本地看板功能零影响（只记日志 + 指数退避），未配置 `cloud-config.json` 时不建定时器、不发任何网络请求。
-- [x] 端到端验收（`test/cloud-sync-client.test.mjs` 20 例，真实 Worker + 真实迁移 SQL + 内存 D1 + 真实本地 HTTP 路由）：**本地离线期间云端暂存 IM 任务 → 本地恢复自动 claim/回放建卡 → ACK → 状态双端镜像一致**；另覆盖 409 revision 自愈、云端 D1 重建 reset 自愈、401 停止重试、退避增长、413 二分重推、>200 实体 pull 分页、防抖合并、唤醒探测、sync/ingress 子开关、ACK 丢失补发不重复回放、本地回放限回环与静默降级。
+- [x] 端到端验收（`test/cloud-sync-client.test.mjs` 25 例，真实 Worker + 真实迁移 SQL + 内存 D1 + 真实本地 HTTP 路由）：**本地离线期间云端暂存 IM 任务 → 本地恢复自动 claim/回放建卡 → ACK → 状态双端镜像一致**；另覆盖 409 revision 自愈、云端 D1 重建 reset 自愈、401 停止重试、退避增长、413 深度二分重推、>200 实体 pull 分页、防抖合并、唤醒探测、sync/ingress 子开关、ACK 丢失补发不重复回放、本地回放限回环与静默降级。
 
 ### 11.4 协议层导出索引（C2/C3 直接引用）
 
@@ -786,14 +786,14 @@ stateDiagram-v2
 - `lib/cloud-sync-client.js`：`createCloudSyncClient`（push / pull / ingress 三条后台循环 + 状态机 + 退避调度）；构造零 I/O，只有 `start()` 在配置就绪后才建定时器与发请求。
 - `lib/index.js`：插件启动时创建守护器并交给 `ctx.effect` 管理启停；`config.cloudSync:false` 可完全关闭，`config.cloudSync:{...}` 可覆盖客户端选项（测试/高级用法）。
 - `lib/routes.js`：新增 `GET /api/kanban/cloud/status`（§11.5.9）；未挂载守护器时也返回 200 + `enabled:false`。
-- 测试：`test/cloud-sync-client.test.mjs`（20 例，含端到端验收）+ `test/index.test.mjs`（+2 例挂载/静默降级）+ `test/cloud-worker-harness.mjs`（把 C2 的内存 D1 测试底座抽出共享，C2 单测同步改为复用，语义不变）。
+- 测试：`test/cloud-sync-client.test.mjs`（25 例，含端到端验收）+ `test/index.test.mjs`（+2 例挂载/静默降级）+ `test/cloud-worker-harness.mjs`（把 C2 的内存 D1 测试底座抽出共享，C2 单测同步改为复用，语义不变）。
 
 **实施口径补全（本文其余章节未覆盖的部分）**
 
 1. **配置读取三态静默降级**：`readCloudConfig` 返回 `missing | disabled | invalid | ready`；前三种状态**零定时器、零网络**，只记一条日志，状态接口可查原因。`invalid` 包括：JSON 非法、`normalizeCloudConfig` 校验失败、POSIX 下权限不是 `0600`（含 group/other 位即拒绝启用，避免令牌被同机其它用户读取）。配置只在 `start()` 读取一次，修改后需重启插件（与 §4.2 轮换说明一致）。
 2. **本地看板地址发现（不新增配置字段）**：守护器读 `<dataDir>/runtime-endpoint.json` 的 `origin`（看板服务在客户端请求时自动写入），缺失时回退 `http://127.0.0.1:4599`；构造选项 `localOrigin` / `setLocalOrigin()` 可显式覆盖（测试与多实例场景）。本地回放仍走本地 HTTP 路由 `/api/kanban/ingress`（复用 `handleIngressEvent` 的业务幂等，不在守护器里二次实现建卡/审批逻辑）。
-3. **冷启动顺序**：先 `GET /v1/sync/pull?since=0` 分页重建「已推送镜像」（冻结 `until` + 原样回传 `cursor`），再 diff 本地权威快照推送；pull 结果只进内存镜像，不写本地 `data.json`。
-4. **push 响应语义**：只有 `applied` / `duplicate` 更新镜像与 `baseRevision`；`noop` 只刷新节流时间，**不覆盖**「上一次真正推送」的状态字段；`413 PAYLOAD_TOO_LARGE` 时按实体二分重推（每片独立分配 revision、串行推进 `baseRevision`，语义不变）；`400/404` 等业务性错误不自动重试（等下一次本地变更或人工处理）。
+3. **冷启动顺序**：先 `GET /v1/sync/pull?since=0` 分页重建「已推送镜像」（冻结 `until` + 原样回传 `cursor`，硬上限 10000 页 ≈ 200 万实体，触顶报可诊断错误），再 diff 本地权威快照推送；pull 结果只进内存镜像，不写本地 `data.json`。
+4. **push 响应语义**：只有 `applied` / `duplicate` 更新镜像与 `baseRevision`；`noop` 只刷新节流时间，**不覆盖**「上一次真正推送」的状态字段；`413 PAYLOAD_TOO_LARGE` 时按实体二分重推，最多 8 层（200 实体 → 100 → 50 → 25 → 13 → 7 → 4 → 2 → 1），每片独立分配 revision、串行推进 `baseRevision`，语义不变；拆到单实体仍超 256 KiB 时停止自动重试（`haltedCode=PAYLOAD_TOO_LARGE`，状态接口带可操作提示，等人工处理异常巨大的卡片/时间线字段）；`400/404` 等业务性错误不自动重试（等下一次本地变更或人工处理）。
 5. **epoch 重建的 reset 细节（对 §5.2/§6.3 的必然推论）**：Worker 的 epoch 校验先于一切写操作，**带旧 epoch 的 reset 请求也会被 409 拒绝**。因此客户端收到 `SYNC_EPOCH_MISMATCH` 后，用 409 `details.serverRevision` 作为新 `baseRevision`，并且 reset 请求**不携带旧 epoch**；拿不到 `details` 时先 pull 一次（pull 不携带 epoch，可安全使用）再 reset。
 6. **退避策略**：`429 / 5xx / 网络错误` 指数退避（1s→60s，±20% 抖动，纯函数 `cloudRetryDelay`）；`401` 立即停止重试并置 `paused`（状态接口暴露 `pauseReason:"unauthorized"`，提示修 `cloud-config.json` 后重启）；业务性错误不自动重试。
 7. **唤醒/重连探测**：Node 定时器在合盖休眠期间不累积触发，唤醒后第一次 tick 的实际间隔会明显拉长。守护器在每次定时 tick 记录时刻，若实际间隔 > `2 × 配置间隔 + 5s` 即视为唤醒/重连：清空退避并立即 push + claim；也提供 `handleWake()` 供宿主/测试手动触发。启动时以启动时刻初始化该基准，避免「启动后、首次 tick 前休眠」漏判。
@@ -815,7 +815,8 @@ stateDiagram-v2
 11. **测试底座复用**：C3 端到端测试不 mock SQL——使用真实 `cloudflare/worker.mjs` + 真实迁移 SQL + `node:sqlite` 内存 D1（与 C2 共用 `test/cloud-worker-harness.mjs`），本地看板起真实 HTTP 路由；因此「离线暂存 → 唤醒回放建卡 → ACK → 双端镜像一致」是端到端真实验证，而非桩验证。
 12. **两个子开关的独立生效**：`sync.enabled:false` 只关闭状态镜像（不 pull/push、不建同步定时器），`ingress.enabled:false` 只关闭入站回放（不 claim），另一侧继续工作；两者都不影响本地看板。
 13. **ACK 丢失的补发窗口**：本地消费成功但 `POST /v1/inbox/ack` 网络失败时，结果留在守护器内存，下一轮 claim **之前先补发 ACK**，避免租约到期后云端重发导致重复回放（IM 文本任务在本地业务层不是天然幂等的）；进程崩溃时该内存丢失，仍由「至少一次投递 + 本地幂等逻辑」兜底，属于契约 §8.7 的已知窗口。
-14. **本地回放目标限回环**：`runtime-endpoint.json` 与 `localOrigin` 只接受 `http(s)://127.0.0.1 | localhost | ::1`，否则按「本地地址未知」重试——防止被篡改的端点文件把云端暂存的入站载荷（可能含 IM 消息内容）POST 到任意远端。ACK 结果携带 claim 的 `leaseToken`。
+14. **本地回放目标限回环**：`runtime-endpoint.json` 与 `localOrigin` 只接受 `http(s)://127.0.0.1 | localhost | ::1`，否则按「本地地址未知」重试——防止被篡改的端点文件把云端暂存的入站载荷（可能含 IM 消息内容）POST 到任意远端。
+15. **stop 语义（守护器停止不拖住插件卸载）**：`stop()` 置停止标志后，claim 批次在**每一条之前**检查标志，不再为剩余条目新建本地回放请求；已消费（含被中断后判定为 retry）的结果仍补发一次 ACK，未消费条目保持租约、到期后由下一次启动重新 claim。停止时先给当前在途条目最多 `stopClaimGraceMs=2.5s` 收尾宽限，再中止在途 HTTP 请求；残留 ACK 补发最多等 `stopFlushAckMs=2s`，随后再次中止全部在途请求，保证进程/插件卸载时没有挂起连接。因此 `stop()` 既不会被 `20 × 请求超时` 拖住，也不会被云端 ACK 网络黑洞拖到单次请求超时。
 
 ---
 
@@ -837,7 +838,7 @@ stateDiagram-v2
   "enabled": true,
   "workerUrl": "https://dsh-kanban-sync.example.workers.dev",
   "token": "<与 Worker secret CLOUD_SYNC_TOKEN 相同，32+ 字节随机串>",
-  "clientId": "macbook-roxor",
+  "clientId": "macbook-pro",
   "sync": { "enabled": true, "pushDebounceMs": 2000, "pullIntervalMs": 30000 },
   "ingress": { "enabled": true, "claimIntervalMs": 30000, "batchSize": 20, "leaseSeconds": 120 }
 }

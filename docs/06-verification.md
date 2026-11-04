@@ -245,13 +245,13 @@
 
 | 项 | 结果 |
 | --- | --- |
-| 现象（真实宿主 `/dsh-kanban/`，1440×900，卡片 cwd=`/Users/roxor/Desktop/dsh/dsh kanban`） | 详情抽屉 →「新建会话」表单里，「执行目录」输入框只显示到 `/Users/roxor/Desktop/dsh/dsf`：输入框内容宽 196px、路径需 247px，末尾 51px 被裁；1028×1800 竖屏（抽屉 380px）只显示到 `/Users/roxor/Desktop/dsh/ds`，裁约 81px。新建/编辑卡片弹窗同字段输入框 233px、裁 14px（`…/dsh kanb`）。三处都没有 hover 提示 |
+| 现象（真实宿主 `/dsh-kanban/`，1440×900，卡片 cwd=`/Users/dev/workspace/dsh-kanban`） | 详情抽屉 →「新建会话」表单里，「执行目录」输入框只显示到 `/Users/dev/workspace/dsf`：输入框内容宽 196px、路径需 247px，末尾 51px 被裁；1028×1800 竖屏（抽屉 380px）只显示到 `/Users/dev/workspace/ds`，裁约 81px。新建/编辑卡片弹窗同字段输入框 233px、裁 14px（`…/dsh kanb`）。三处都没有 hover 提示 |
 | 根因 | 两处表单都用 `.kb-form__row` 两列栅格并排「工作区 + 执行目录」。抽屉正文内容宽 428px（460 抽屉）/348px（380 抽屉），减表单内边距 20 后两列各 203px / 166px；12px 等宽字体下该路径需 247px，输入框单行显示时末尾被裁。弹窗固定 520px、两列各 233px，同样差 14px |
 | 修复 | 路径类字段改整行：新增 `.kb-form__row--stack`（单列栅格），抽屉「新建会话」表单与新建/编辑卡片弹窗都变成「工作区」一整行 +「执行目录」一整行 + 建议 chips。改后输入框宽 344–478px，`scrollWidth = clientWidth`（0 裁切） |
 | hover 提示 | 执行目录输入框（抽屉/弹窗）、详情元数据「工作目录」、抽屉会话标题截断处、产物路径补 `title`；工作区下拉的每个选项也带完整 `title`（含 workspace path）；产物路径允许行内换行，长路径不再顶出抽屉 |
 | 抽屉宽度（按卡片「右侧抽屉样式」拍板 option-1） | `clamp(380px, 34vw, 460px)` → `clamp(400px, 36vw, 520px)`：1440px 下 460→518.4px、1512→520px、1028 竖屏 380→400px、900→400px；<720 仍是底部弹层全宽。同一张 17 段正文的长卡片在 1440：平均行数 3.00 → 2.59（**-14%**）、最高 13 → 11 行；会话标题可用宽 328 → 388px（完整显示需 358px 的会话名） |
 | 自动化实测（CDP + 真实 Chrome，隔离 dev-server，同一张测试卡） | 加宽后抽屉：1440×900 = **518.4px**（表单 1 列 464px、输入 462px、裁切 **0**）、1512×982 = **520px**、1028×1800 = **400px**（表单 346px、输入 344px、裁切 0）、900×900 = 400px、390×844 = 底部弹层 390px（输入 334px、裁切 0）；卡片弹窗 520px（输入 478px、裁切 0）。上述尺寸 × 中英 × 亮暗下元数据「工作目录」`scrollWidth = clientWidth`、抽屉内无任何截断元素缺 `title`；`title` 与完整值逐字一致；console 0 error |
-| 真实宿主实测（`/dsh-kanban/`，真实 42 张卡，刷新即生效） | 打开「右侧抽屉样式」：1440×900 抽屉 **518.4px**，「元数据 / 工作目录」= `/Users/roxor/Desktop/dsh/dsh kanban` 完整、带 `title`；新建会话表单 1 列 464.4px、执行目录输入 462px、裁切 **0**；会话标题被截断处有 `title`；抽屉内**无任何截断元素缺 `title`**。1028×1800（抽屉 **400px**）：表单 346px、输入 344px、裁切 0。真实最长卡片（「一直用看板新建卡片…」）在 1440：平均正文行数 3.0 → 2.0、最高 7 → 6 行、摘要 7 → 6 行；会话标题从 328px（截 36px）变为 386px（完整）；抽屉加宽前后同屏对比见截图 |
+| 真实宿主实测（`/dsh-kanban/`，真实 42 张卡，刷新即生效） | 打开「右侧抽屉样式」：1440×900 抽屉 **518.4px**，「元数据 / 工作目录」= `/Users/dev/workspace/dsh-kanban` 完整、带 `title`；新建会话表单 1 列 464.4px、执行目录输入 462px、裁切 **0**；会话标题被截断处有 `title`；抽屉内**无任何截断元素缺 `title`**。1028×1800（抽屉 **400px**）：表单 346px、输入 344px、裁切 0。真实最长卡片（「一直用看板新建卡片…」）在 1440：平均正文行数 3.0 → 2.0、最高 7 → 6 行、摘要 7 → 6 行；会话标题从 328px（截 36px）变为 386px（完整）；抽屉加宽前后同屏对比见截图 |
 | 自测 | Web vitest 16 文件 / 110 测试；tsc 0 error；令牌 lint 8 CSS 0/0；build 成功；服务端 71/71 |
 | 分支 | `fix/drawer-path-width` 提交 `4a2978b`（基于 v0.8.0，含 dist/文档/CHANGELOG/截图，便于单独合并） |
 | 截图 | `design/screens/web-drawer-cwd-before-1440.png` / `-after-1440.png`（同一张卡，抽屉 460→518px 且路径由截断变完整）、`web-drawer-cwd-before-1028.png` / `-after-1028.png`（380→400px）、`web-card-modal-cwd-before-1440.png` / `-after-1440.png`、`web-card-modal-cwd-after-1028.png`；真实宿主：`web-drawer-cwd-real-host-after-1440.png`、`web-drawer-cwd-real-host-after-1028.png` |
@@ -554,12 +554,12 @@
 
 | 项 | 结果 |
 |---|---|
-| 用户问题（卡片 `card-d60ae026`） | ① 绑定会话选项应按工作区分组；② 太长，可按工作区折叠展开；③ 为什么选不到 rea L2 的会话？补充：「好像只列出本工作区下的会话就行了」 |
-| ③ 排查结论 | 下拉框数据源是宿主会话列表、无工作区过滤；`rea L2` 会话 `session-b423633c-…` 在宿主列表 + 工作区注册表里都存在，但选项只显示标题（「阅读交接文件并规划未完成工作」，不含工作区字样），原生 select 平铺上百条且无搜索 → 无法定位；已绑定当前卡片的会话被排除，易被误认为缺失 |
+| 用户问题（卡片 `card-d60ae026`） | ① 绑定会话选项应按工作区分组；② 太长，可按工作区折叠展开；③ 为什么选不到 `api-server` 的会话？补充：「好像只列出本工作区下的会话就行了」 |
+| ③ 排查结论 | 下拉框数据源是宿主会话列表、无工作区过滤；`api-server` 会话 `session-b423633c-…` 在宿主列表 + 工作区注册表里都存在，但选项只显示标题（「阅读交接文件并规划未完成工作」，不含工作区字样），原生 select 平铺上百条且无搜索 → 无法定位；已绑定当前卡片的会话被排除，易被误认为缺失 |
 | Web 实现 | 新增 `components/SessionPicker.tsx` + `lib/sessionPicker.ts`；默认范围「本工作区」（workspaceId → cwd 最长前缀 → 已绑定会话推断），可切「所有工作区」（工作区分组 + 折叠 + 打开时展开卡片所属工作区）；搜索匹配标题/会话 ID/cwd/工作区名/路径；行内短 ID + 状态徽标；工作区注册表兜底行；底部「按会话 ID 绑定」；Esc/外点/滚动关闭、焦点归还 |
 | 测试 | 服务端 **216/216**（无改动）；Web **28 文件 / 346 例**（+33：分组顺序/无归属/排除已绑定/折叠默认/搜索（标题·工作区名·路径·ID·cwd）/范围推断（workspaceId·cwd·绑定会话·注册表）/注册表兜底/短 ID）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning |
-| 真实浏览器验收（隔离 harness：真 `lib/routes.js` + 隔离 data.json + 同源父页面桥替身 + Chromium 1440×900 DPR2 / 390×844） | **25/25 断言全过**、console error 0 / 4xx 0：绑定区原生 `<select>` 已消失、触发器「选择会话」；默认「本工作区」只列 rea L2 的 2 条（真会话 + 注册表兜底行）、无分组头、计数「2 个会话」；切「所有工作区」6 组顺序正确、rea L2 默认展开、其余折叠；搜 `rea` 只剩该组、搜「交接」命中 1 条；组头折叠/再展开行数正确；点会话后浮层关闭、抽屉出现该会话、服务端 `sessionIds` 写入；移动端浮层不超视口、范围切换可见 |
-| 截图 | `docs/assets/screens/session-picker-scoped.png`（默认本工作区）、`session-picker-grouped.png`（所有工作区分组）、`session-picker-search.png`（搜索）、`session-picker-mobile-390.png`（390 底部弹层） |
+| 真实浏览器验收（隔离 harness：真 `lib/routes.js` + 隔离 data.json + 同源父页面桥替身 + Chromium 1440×900 DPR2 / 390×844） | **25/25 断言全过**、console error 0 / 4xx 0：绑定区原生 `<select>` 已消失、触发器「选择会话」；默认「本工作区」只列 `api-server` 的 2 条（真会话 + 注册表兜底行）、无分组头、计数「2 个会话」；切「所有工作区」6 组顺序正确、`api-server` 默认展开、其余折叠；搜 `api` 只剩该组、搜「交接」命中 1 条；组头折叠/再展开行数正确；点会话后浮层关闭、抽屉出现该会话、服务端 `sessionIds` 写入；移动端浮层不超视口、范围切换可见 |
+| 截图 | `docs/assets/screens/session-picker-mobile-390.png`（390 底部弹层） |
 | 生效方式 | 纯前端改动（含 `web/dist` 重新构建），**合入 main 后刷新看板即生效，无需重启 DSH** |
 | 分支 | `feat/session-picker`（基于 `8e6a808`）；版本 0.19.0 |
 
@@ -599,8 +599,8 @@
 | 16 重新绑定工作目录 | 详情抽屉「工作目录」行总是显示：无 `cwd` →「未设置工作目录」；目录已失效 → 追加「工作目录已失效（可能已被清理）」警示标签；行尾「重新绑定目录」。工作区「未指定」块每张卡行尾同入口。对话框候选顺序 = 绑定会话执行目录（按 `sessionIds`）→ 各仓库主工作副本 → linked worktree（排除 `prunable`、按 path 去重），支持搜索、当前项标「当前」并禁用、逐行「使用此目录」；提交 `PATCH /cards/:id` 改 `cwd`（已完成 / 已取消卡片也允许）→ 写评论节点「重新绑定工作目录：旧 → 新」→ 刷新卡片与工作区 + toast；乐观锁冲突走版本冲突人话 |
 | 测试 | 服务端 **228/228**（+4：终态卡片不阻塞清理 / 终态 cwd 仍在探测允许集合 / 混入未完成卡片 409 且 count 只数未完成 / PATCH 已完成·已取消卡片 cwd）；Web **30 文件 / 392 例**（+37：`useWorkspaces` +15〔`findWorktreeForCwd` 3、#14 归属 8、#15 清理 4〕、`rebindDir` 13、`worktreeCleanupNudge` 9）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning；并入主线（与 v0.20.1 合并）后全量 **259/259**、Web **31 文件 / 412 例** 全绿 |
 | 隔离 dev-server 验收（真 `lib/routes.js` + 演示仓库真 git 工作副本 + headless Chrome 1440×900 DPR2 / 390×844） | ① 移卡前 feat/done 行「有卡片在跑，先等它完成」→ 移到已完成后同行变「可安全清理」且「清理」可点（终态卡片不再阻塞）；② 移入已完成同时出现两条 toast：普通「已移动到「已完成」」+ 可操作清理提示（含「打开工作区」按钮），点按钮切到工作区视图；③ 清理 feat/done 成功（回收站出现 `repo / feat-done` 可恢复条目，toast「已清理并删除本地分支 feat/done（回收站保留 7 天）」），两处行消失；④ 清理后原卡片进「未指定」块，行尾出现「重新绑定目录」；⑤ 对话框候选 = 主工作副本 · repo / feat/graph / feat/long（`prunable` 排除），当前项标「当前」且禁用，搜索 `long` 只剩 feat/long；⑥ 选主工作副本 → toast「已重新绑定工作目录」、卡片 `cwd` 更新为 `/private/tmp/.../repo`、工作区 main 行卡片数 +1、时间线出现评论「重新绑定工作目录：/tmp/.../.worktrees/feat-done → /private/tmp/.../repo」；⑦ 已完成卡片在详情抽屉里看到「工作目录已失效」警示 + 重新绑定入口，从抽屉改绑 feat/graph 成功、警示消失；⑧ 390×844 对话框变底部弹层（x=0、宽 390）、无横向溢出；⑨ 全程 console error 0。<br>注：dev-server 以 `HOME=/tmp/dsh-kanban-v021-home` 启动（回收站目录 `~/.dsh-kanban/trash` 需可写）；14 需要宿主会话列表，独立预览没有会话数据，故在真实宿主复验 |
-| 真实宿主重启复验（2026-10-29 20:09 重启后） | ① `/api/kanban/health` = **0.21.0**，静态资源为新构建（`index-C0nxc9Jf.js` / `index-DNp5WrIE.css`）；② #14：真实数据（80 卡 / 2 仓库 / 13 工作副本）下，卡片 `cwd` 为主仓库、绑定会话 `cwd` 指向真实 linked 工作副本 `.agents/worktrees/feat/workspace-batch2` → 工作区该工作副本行的卡片带「按会话归属」标签，`title` 显示会话执行目录；③ #15：真实卡片移入已完成后出现可操作 toast「卡片完成：工作副本「.agents/worktrees/verify-v021」已并入主线且干净，可清理」+「打开工作区」；同一工作副本行从「有卡片在跑」变「可安全清理」，清理成功（真实 v0.21.0 服务端在只有终态卡片占用时允许清理，回收站出现可恢复条目）；④ #16：清理后该已完成卡详情「工作目录」显示原路径 +「工作目录已失效（可能已被清理）」+ 重新绑定入口；对话框列出 12 个真实候选（rea L2 主副本 + dsh kanban 主副本 + 10 个 linked 工作副本），选主副本重绑成功 → 服务端 `cwd` 更新、时间线新增评论节点「重新绑定工作目录：旧 → 新」、抽屉警示消失；⑤ 全程 console error 0。<br>说明：宿主 webview 内的真实会话列表无法脚本读取，本次用同源父页面桥替身指向**真实存在的 linked 工作副本路径**，其余（卡片 / 仓库 / 工作副本 / 服务端写入）均为真实宿主数据；临时验证卡、工作副本、回收站条目已清理（卡片归档、分支删除、trash 彻底删除） |
-| 截图 | 隔离验收：`workspace-cleanup-nudge.png`（完成卡片可清理 toast）、`workspace-rebind-dialog.png`（重新绑定目录对话框）、`drawer-cwd-rebind.png`（已完成卡片失效 cwd + 重绑入口）、`workspace-rebind-390.png`（390 底部弹层）；真实宿主：`workspace-v021-real-session-attribution.png`（按会话归属标签）、`workspace-v021-real-done-nudge.png`（完成卡片可清理 toast）、`workspace-v021-real-rebind-dialog.png`（清理后重绑候选） |
+| 真实宿主重启复验（2026-10-29 20:09 重启后） | ① `/api/kanban/health` = **0.21.0**，静态资源为新构建（`index-C0nxc9Jf.js` / `index-DNp5WrIE.css`）；② #14：真实数据（80 卡 / 2 仓库 / 13 工作副本）下，卡片 `cwd` 为主仓库、绑定会话 `cwd` 指向真实 linked 工作副本 `.agents/worktrees/feat/workspace-batch2` → 工作区该工作副本行的卡片带「按会话归属」标签，`title` 显示会话执行目录；③ #15：真实卡片移入已完成后出现可操作 toast「卡片完成：工作副本「.agents/worktrees/verify-v021」已并入主线且干净，可清理」+「打开工作区」；同一工作副本行从「有卡片在跑」变「可安全清理」，清理成功（真实 v0.21.0 服务端在只有终态卡片占用时允许清理，回收站出现可恢复条目）；④ #16：清理后该已完成卡详情「工作目录」显示原路径 +「工作目录已失效（可能已被清理）」+ 重新绑定入口；对话框列出 12 个真实候选（`api-server` 主副本 + dsh kanban 主副本 + 10 个 linked 工作副本），选主副本重绑成功 → 服务端 `cwd` 更新、时间线新增评论节点「重新绑定工作目录：旧 → 新」、抽屉警示消失；⑤ 全程 console error 0。<br>说明：宿主 webview 内的真实会话列表无法脚本读取，本次用同源父页面桥替身指向**真实存在的 linked 工作副本路径**，其余（卡片 / 仓库 / 工作副本 / 服务端写入）均为真实宿主数据；临时验证卡、工作副本、回收站条目已清理（卡片归档、分支删除、trash 彻底删除） |
+| 截图 | 隔离验收：`workspace-cleanup-nudge.png`（完成卡片可清理 toast）、`workspace-rebind-dialog.png`（重新绑定目录对话框）、`drawer-cwd-rebind.png`（已完成卡片失效 cwd + 重绑入口）、`workspace-rebind-390.png`（390 底部弹层） |
 | 生效方式 | 含服务端改动，**已合入 main（merge `0a27ddf`），需重启 DSH 生效**（纯前端部分刷新看板即可） |
 
 ## 1.39 v0.22.0（卡片收敛机制：拆卡纪律 + 父子卡/依赖 hook + 收敛巡检 + 归档箱，2026-10-29）
@@ -626,7 +626,7 @@
 | 背景 | v0.22.0 合并视觉/动效碎片后，保留卡丢失源卡 cwd/workspaceId；历史卡仍有「有 cwd、缺 workspaceId」，用户要求 agent 建卡与旧卡补全都不再人工 |
 | 服务端 | `mergeCards`：target 缺 `cwd`/`workspaceId`/`project` 时从 source 继承（不覆盖已有值；dryRun 报告提示）；新增 `lib/workspace-backfill.js`：启动时按 `workspaceRegistry.resolveByPath`（canonical 精确）回填未归档且缺 workspaceId 的卡，幂等、静默、跳过解析失败的卡，注册表未注入时 5×2s 重试；`config.workspaceBackfill:false` 可关 |
 | 测试 | 服务端 **294/294**（288 + 6：workspace-backfill 4 + domain 合并继承 2）；Web 无改动 |
-| 真实数据验证 | 手动回填 13 张 backlog 卡（dsh-kanban→ws 9a9515a1…；rea L2→ws a0f27190…）后：活跃 28 张中 workspace 覆盖 4→17、cwd 18→24、backlog workspace/cwd 14/14；重启后启动回填会把剩余旧卡（含 done）自动补齐 |
+| 真实数据验证 | 手动回填 13 张 backlog 卡（dsh-kanban→ws 9a9515a1…；api-server→ws a0f27190…）后：活跃 28 张中 workspace 覆盖 4→17、cwd 18→24、backlog workspace/cwd 14/14；重启后启动回填会把剩余旧卡（含 done）自动补齐 |
 | 生效方式 | 含服务端改动，**需重启 DSH 后生效**；分支 `feat/binding-backfill`（基于 `66da715`），**已合入 main（merge `7c0da1d`）** |
 
 ## 1.41 v0.23.0（「工作线」总览视图 方案 2 + 390 竖屏工具栏高度修复，2026-11-02）
@@ -652,8 +652,7 @@
 | 桥（父页面） | 新增 `host.capabilities` → `{revealPath:boolean}`（true 缓存 30s / false 缓存 5s）；`host.revealPath {path}` → `{ok:true}`；错误码 `REVEAL_BAD_PATH` / `REVEAL_UNAVAILABLE` / `REVEAL_FAILED`。权限边界：只接受绝对路径（POSIX `/…` 或 Windows `C:\…`），拒绝空值 / >1024 字符 / 控制字符 / 含 `..` 段，随后 DSH 宿主再 `verifyDesktopPath` 复核路径映射 |
 | Web | 工作副本路径行新增按钮（`IconFolder` + `workspace.revealInFinder`，中英各 3 键）；能力探测失败 / `UNKNOWN_METHOD` / 独立预览 → 不渲染按钮；点击前用 `web/src/lib/revealPath.ts` 精确校验路径属于服务端 `/git/workspaces` 工作区地图（仓库根 / 工作副本路径），不在集合内 toast「只允许打开看板工作副本目录」；失败 toast「无法在 Finder 中打开：{message}」 |
 | 测试 | 服务端 **308/308**（v0.23.0 基线 294 + 14 例 `test/client-reveal.test.mjs`：能力探测 / 缓存 / 调用参数 `{path, action:'reveal'}` / Windows 盘符 / 旧宿主降级 / 非桌面 / 非法路径 6 组 / 宿主拒绝与抛错映射 / 异源消息 / `UNKNOWN_METHOD`）；Web **35 文件 / 473 例**（+1 文件 6 例 `revealPath.test.ts`）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS 0/0 |
-| 真实 DSH 验收（宿主 `0.2.1-rc.3`，未重启；`client-hmr` 自动重载客户端 bundle rev `9fff0c220f58`） | headless Chromium + 真实 GUI（`http://127.0.0.1:58638/`）打开看板 → 工作区视图：两条工作副本行各出现「在 Finder 中打开」（`aria-label` 断言），`host.capabilities` → `{revealPath:true}`；点 `dsh kanban` 行的按钮 → 桥响应 `{ok:true}`，**macOS 窗口列表新增标题为「dsh kanban」的 Finder 窗口**（点击前 Finder 窗口 = 3×`rea L2`，点击后 = `dsh kanban` + 3×`rea L2`），`window.__DSH_KANBAN__.errors` 无新增；绕过前端直接以绝对路径 `/etc/hosts` 调桥被宿主拒绝 `REVEAL_FAILED / Path has no verified Host path`（第二道边界）。无桥场景：同源直接打开 `/dsh-kanban/`（`window.parent === window`，独立预览）→ 2 个工作副本行、`revealCount=0`、复制路径按钮仍在（功能不受影响） |
-| 截图 | `docs/assets/screens/workspace-reveal-finder.png`（真实宿主工作区视图 + 中英文「在 Finder 中打开」）、`workspace-reveal-hidden.png`（独立预览无桥：无按钮、复制路径仍在）、`finder-reveal-window.png`（点击后 Finder 定位到 dsh kanban 目录） |
+| 真实 DSH 验收（宿主 `0.2.1-rc.3`，未重启；`client-hmr` 自动重载客户端 bundle rev `9fff0c220f58`） | headless Chromium + 真实 GUI（`http://127.0.0.1:58638/`）打开看板 → 工作区视图：两条工作副本行各出现「在 Finder 中打开」（`aria-label` 断言），`host.capabilities` → `{revealPath:true}`；点 `dsh kanban` 行的按钮 → 桥响应 `{ok:true}`，**macOS 窗口列表新增标题为「dsh kanban」的 Finder 窗口**，`window.__DSH_KANBAN__.errors` 无新增；绕过前端直接以绝对路径 `/etc/hosts` 调桥被宿主拒绝 `REVEAL_FAILED / Path has no verified Host path`（第二道边界）。无桥场景：同源直接打开 `/dsh-kanban/`（`window.parent === window`，独立预览）→ 2 个工作副本行、`revealCount=0`、复制路径按钮仍在（功能不受影响） |
 | 生效方式 | **纯客户端改动**：DSH 的 `client-hmr` 会检测 `lib/client.js` 变化并重载插件（已实测 bundle rev 自动更新），刷新看板即加载新 UI；不涉及服务端，不需要重启 DSH。分支 `feat/finder-reveal`，**已合入 main（merge `03767c0`）** |
 
 ## 1.43 视觉后续 V2–V6 收口（DESIGN.md + 批次1–3 + 验收矩阵，2026-11-02，工作副本快照）
@@ -711,7 +710,7 @@
 | 审计（保持不改） | 看板全局空态（board / filtered / noMatchShort）、列表分组空态、工作区 / 工作线空态与 `noReposHint`、归档箱、会话选择器（含按工作区为空）、筛选「暂无项目」、详情时间线、批量归档对话框、卡内会话区：均为准确说明「这里会出现什么」或下一步，无同类误导。`empty.board`（看板为 null）与 `archive.empty`（空归档箱整块隐藏）现有数据路径下基本不可达，不动。 |
 | 测试 | 服务端 **310/310**（`npm test`）；Web **37 文件 / 489 例**（`npm --prefix web run test`）；`tsc --noEmit` 0 error、`vite build` 通过（JS gzip 152.25KB / CSS gzip 20.70KB）、令牌 lint **11 CSS 0 error / 0 warning**。 |
 | 浏览器验收 | 零依赖 CDP + Chrome for Testing（临时脚本 `.tmp/copy-audit/`，未入库）：隔离 dev-server `--seed empty` 空看板（1440×900 亮/暗、390×844）+ 列表 / 工作线 / 工作区空态；真实宿主 `http://127.0.0.1:63506/dsh-kanban/` 刷新后「待你确认」列空态 = `这一列还没有卡片\n新建卡片`，`body.innerText` 中/英旧文案均为 `false`；重新绑定目录对话框显示新文案、旧句 `false`；中/英双语、两种环境 console error **0**、未捕获异常 0。截图见下。 |
-| 截图 | `docs/assets/screens/empty-state-copy/`：`before-board-empty-1440-light.png`（改前四列空态含旧提示）→ `board-empty-1440-light/dark.png`、`board-empty-390-light.png`、`list-empty-1440-light.png`、`worklines-empty-1440-light.png`、`workspaces-empty-1440-light.png`、`rebind-no-candidates-1440-light.png`、`real-host-board-1440-light.png`（真实宿主待你确认列）。 |
+| 截图 | `docs/assets/screens/empty-state-copy/`：`before-board-empty-1440-light.png`（改前四列空态含旧提示）→ `board-empty-1440-light/dark.png`、`board-empty-390-light.png`、`list-empty-1440-light.png`、`worklines-empty-1440-light.png`、`workspaces-empty-1440-light.png`、`rebind-no-candidates-1440-light.png`。 |
 | 生效方式 | 纯前端：合入 main 后刷新看板即生效，无需重启 DSH；`web/dist` 已重建（index 资源哈希更新）。 |
 | 提交状态 | 分支 `fix/empty-state-copy`（`4cb8b99`）→ **已合入 main（merge `5e3d971`，`--no-ff`，2026-11-03）**；合入后整树复跑服务端 **310/310**、Web **37 文件 / 489 例**、`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS 0/0，`web/dist` 重建后无 diff（构建产物与合并后源码一致）。 |
 
@@ -751,7 +750,7 @@ $ npm --prefix web run lint:tokens
 export DSH_HOME=/tmp/dsh-kanban-e2e
 mkdir -p "$DSH_HOME" && cp ~/.dsh/.credentials.yaml "$DSH_HOME/"
 dsh --profile kanban-dev --from-default-profile web --dump-default-config > /dev/null
-dsh plugin --profile kanban-dev add "/Users/roxor/Desktop/dsh/dsh kanban"
+dsh plugin --profile kanban-dev add "/Users/dev/workspace/dsh-kanban"
 dsh --profile kanban-dev --patch /tmp/dsh-kanban-e2e/kanban-e2e.yml --port 5599 --no-open
 # → dsh web: http://127.0.0.1:5599/?token=...
 ```
@@ -918,7 +917,7 @@ node /tmp/realhost-verify/verify.mjs --base http://127.0.0.1:<新端口> \
   --out /tmp/lead-v013/shots-realhost --cleanup --expect-version 0.13.0 --real-card card-a57f6dbf
 #    API：42 项断言（health / dist 一致性 / 真实卡 4 工作树 / 演示仓库分叉 / 不可用原因 / 旧接口回归）
 python3 /tmp/lead-v013/realhost-check.py --base http://127.0.0.1:<新端口> \
-  --repo "/Users/roxor/Desktop/dsh/dsh kanban" --demo-root /tmp/dsh-kanban-git-demo \
+  --repo "/Users/dev/workspace/dsh-kanban" --demo-root /tmp/dsh-kanban-git-demo \
   --expect-version 0.13.0 --real-card card-a57f6dbf --out /tmp/lead-v013/realhost-results.json
 #    结果与证据见 §1.27；重启口径：需 ⌘Q / 菜单「退出」真正结束宿主进程，仅关窗口不会重载服务端
 

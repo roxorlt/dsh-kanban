@@ -5,15 +5,15 @@ describe('collectRevealablePaths', () => {
   it('collects repo roots and worktree paths', () => {
     const paths = collectRevealablePaths([
       {
-        root: '/Users/roxor/Desktop/dsh/dsh kanban',
+        root: '/Users/dev/workspace/dsh-kanban',
         worktrees: [
-          { path: '/Users/roxor/Desktop/dsh/dsh kanban' },
-          { path: '/Users/roxor/Desktop/dsh/dsh kanban-wt/a' },
+          { path: '/Users/dev/workspace/dsh-kanban' },
+          { path: '/Users/dev/workspace/dsh-kanban-wt/a' },
         ],
       },
     ]);
     expect(paths).toEqual(
-      new Set(['/Users/roxor/Desktop/dsh/dsh kanban', '/Users/roxor/Desktop/dsh/dsh kanban-wt/a']),
+      new Set(['/Users/dev/workspace/dsh-kanban', '/Users/dev/workspace/dsh-kanban-wt/a']),
     );
   });
 
@@ -33,16 +33,16 @@ describe('collectRevealablePaths', () => {
 });
 
 describe('isRevealablePath', () => {
-  const allowed = new Set(['/Users/roxor/Desktop/dsh/dsh kanban', '/tmp/wt']);
+  const allowed = new Set(['/Users/dev/workspace/dsh-kanban', '/tmp/wt']);
 
   it('accepts exact known worktree paths', () => {
-    expect(isRevealablePath('/Users/roxor/Desktop/dsh/dsh kanban', allowed)).toBe(true);
+    expect(isRevealablePath('/Users/dev/workspace/dsh-kanban', allowed)).toBe(true);
     expect(isRevealablePath('/tmp/wt', allowed)).toBe(true);
   });
 
   it('rejects unknown paths, prefixes and empty values', () => {
-    expect(isRevealablePath('/Users/roxor/Desktop/dsh/dsh kanban-other', allowed)).toBe(false);
-    expect(isRevealablePath('/Users/roxor/Desktop/dsh', allowed)).toBe(false);
+    expect(isRevealablePath('/Users/dev/workspace/dsh-kanban-other', allowed)).toBe(false);
+    expect(isRevealablePath('/Users/dev/workspace', allowed)).toBe(false);
     expect(isRevealablePath('/tmp/wt/sub', allowed)).toBe(false);
     expect(isRevealablePath('/etc', allowed)).toBe(false);
     expect(isRevealablePath('', allowed)).toBe(false);

@@ -118,7 +118,7 @@ const cardRunning = makeCard({
   priority: 'high',
   labels: ['mvp', 'ui', 'bridge'],
   project: 'dsh-kanban',
-  cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
+  cwd: '/Users/dev/workspace/dsh-kanban',
   sessionIds: ['session-7f3a91', 'session-91c2d3'],
   agent: { name: 'DSH Agent' },
   handoff: {

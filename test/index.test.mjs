@@ -378,12 +378,26 @@ test('apply 挂载云同步守护器：未配置/已关闭/配置非法都零网
   await closeEffects(invalidCtx.state)
 })
 
-test('apply cloudSync:false：不创建守护器 effect（完全关闭云同步）', async t => {
-  const dir = await tempDir(t)
-  const { ctx, state } = fakeContext()
-  apply(ctx, { dataDir: dir, seed: 'empty', cloudSync: false, sessionFailureSync: false })
+test('apply cloudSync:false：不创建守护器 effect（默认会多 1 个云同步 effect）', async t => {
+  // 默认（未配置 cloud-config.json）也会创建守护器并注册 1 个启停 effect（start 静默返回）
+  const defaultDir = await tempDir(t)
+  const defaultCtx = fakeContext()
+  apply(defaultCtx.ctx, { dataDir: defaultDir, seed: 'empty', sessionFailureSync: false })
   await flush()
-  // 两条前缀路由 + 工具注册，cloudSync:false 时不应额外注册云同步相关 effect
-  assert.equal(state.routes.length, 2)
-  await closeEffects(state)
+  assert.equal(defaultCtx.state.routes.length, 2)
+  const effectsWithCloud = defaultCtx.state.effects.length
+  await closeEffects(defaultCtx.state)
+
+  // cloudSync:false 时不创建实例、不注册该 effect
+  const offDir = await tempDir(t)
+  const offCtx = fakeContext()
+  apply(offCtx.ctx, { dataDir: offDir, seed: 'empty', cloudSync: false, sessionFailureSync: false })
+  await flush()
+  assert.equal(offCtx.state.routes.length, 2)
+  assert.equal(
+    effectsWithCloud - offCtx.state.effects.length,
+    1,
+    '默认应比 cloudSync:false 多注册恰好 1 个云同步守护器 effect',
+  )
+  await closeEffects(offCtx.state)
 })

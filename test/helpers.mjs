@@ -9,7 +9,19 @@ import { createRoutes } from '../lib/routes.js'
 
 export async function tempDir(t, prefix = 'dsh-kanban-test-') {
   const dir = await mkdtemp(join(tmpdir(), prefix))
-  t.after(() => rm(dir, { recursive: true, force: true }))
+  // 清理加少量重试：插件卸载后的异步收尾（自动归档写入 / 看板 watcher）可能刚好又生成文件，
+  // 高并发跑全仓测试时偶发 ENOTEMPTY；重试几次即可，不掩盖真正的清理失败。
+  t.after(async () => {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        await rm(dir, { recursive: true, force: true })
+        return
+      } catch (error) {
+        if (attempt === 4) throw error
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
+    }
+  })
   return dir
 }
 

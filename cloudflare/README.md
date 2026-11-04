@@ -76,7 +76,7 @@ cat > ~/.dsh-kanban/cloud-config.json <<'JSON'
   "enabled": true,
   "workerUrl": "https://dsh-kanban-sync.<account>.workers.dev",
   "token": "<与 CLOUD_SYNC_TOKEN 相同的随机串>",
-  "clientId": "macbook-roxor",
+  "clientId": "macbook-pro",
   "sync":    { "enabled": true, "pushDebounceMs": 2000, "pullIntervalMs": 30000 },
   "ingress": { "enabled": true, "claimIntervalMs": 30000, "batchSize": 20, "leaseSeconds": 120 }
 }
@@ -279,7 +279,7 @@ npx wrangler secret put CLOUD_SYNC_TOKEN --config cloudflare/wrangler.toml
 # C2 专项（68 例：鉴权/错误信封/push CAS/幂等/窗口分页/墓碑/四来源验签/去重/租约/退避/dead/零丢失回放/Cron 清理/端到端）
 node --test test/cloud-worker.test.mjs
 
-# C3 专项（20 例：静默降级/防抖 push/revision 与 epoch 自愈/401 暂停/退避/413 二分/pull 分页/唤醒探测/端到端离线回放）
+# C3 专项（25 例：静默降级/防抖 push/revision 与 epoch 自愈/401 暂停/退避/413 二分/pull 分页/唤醒探测/端到端离线回放）
 node --test test/cloud-sync-client.test.mjs
 
 # 全仓回归

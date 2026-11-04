@@ -648,8 +648,8 @@ it('纵深防御：push 载荷即使含本地执行面字段/密钥，云端也�
   t.after(() => env.DB.close())
   const dirtyCard = {
     ...cardFixture('card-dirty'),
-    title: '连接 /Users/roxor/proj 使用 sk-abcdefghijklmnop1234567890',
-    cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
+    title: '连接 /Users/alice/proj 使用 sk-abcdefghijklmnop1234567890',
+    cwd: '/Users/alice/workspace/dsh-kanban',
     workspaceId: 'ws-secret',
     sessionIds: ['session-secret'],
     runtime: { pid: 4242 },
@@ -1455,7 +1455,7 @@ it('端到端（C1 协议层 + C2 Worker）：本地快照 → push → pull 还
       labels: ['cloud'],
       createdAt: NOW - 9_000,
       updatedAt: NOW - 1_000,
-      cwd: '/Users/roxor/Desktop/dsh/dsh kanban',
+      cwd: '/Users/alice/workspace/dsh-kanban',
       workspaceId: 'ws-local',
       sessionIds: ['session-local'],
     }, {
@@ -1474,7 +1474,7 @@ it('端到端（C1 协议层 + C2 Worker）：本地快照 → push → pull 还
       actor: { kind: 'agent', name: 'DSH', id: 'actor-local' },
       text: '开始实现',
       at: NOW - 3_000,
-      data: { sessionId: 'session-local', cwd: '/Users/roxor/Desktop/dsh/dsh kanban/proj' },
+      data: { sessionId: 'session-local', cwd: '/Users/alice/workspace/dsh-kanban/proj' },
     }],
   }
 

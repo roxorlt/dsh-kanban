@@ -33,7 +33,7 @@
     "mode": "light",
     "tokens": 23,
     "count": 3,
-    "cwd": "/Users/roxor/Desktop/dsh/dsh kanban",
+    "cwd": "/Users/dev/workspace/dsh-kanban",
     "sessionId": "session-4b3bfc0d-8872-4343-aab6-2707bb557dff"
   },
   "theme_parent": {
@@ -93,7 +93,7 @@
     "ok": true,
     "plugin": "dsh-kanban-spike",
     "pid": 5584,
-    "cwd": "/Users/roxor/Desktop/dsh/dsh kanban",
+    "cwd": "/Users/dev/workspace/dsh-kanban",
     "count": 4,
     "cards": [
       {

@@ -641,7 +641,7 @@ test('Super-Agent 常驻入口会话保护 + 双层意图路由器（闲聊直�
     sessionId: 'session-worker-1',
   }, { now: t0 + 10 })
   requestApproval(draft, approvalCard.id, {
-    title: '是否开启 80 股档灰度？',
+    title: '是否开启新批次灰度？',
     options: [
       { id: 'yes', label: '立即开启', tone: 'primary' },
       { id: 'no', label: '暂缓', tone: 'danger' },
@@ -664,25 +664,25 @@ test('多端 IM 消息模板引擎（飞书 / 钉钉 / 企微 / OneBot / Generic
   // 1) GitHub Issue Webhook 入站幂等建卡 + 评论唤醒 + 关闭收口
   const opened = handleIngressEvent(draft, {
     action: 'opened',
-    repository: { full_name: 'roxor/dsh-kanban' },
+    repository: { full_name: 'acme/dsh-kanban' },
     issue: {
       number: 42,
       title: '支持 MCP Server 与多端 IM 桥',
       body: '让外部 Agent 也能通过 MCP 访问看板。',
       labels: [{ name: 'enhancement' }],
-      user: { login: 'roxor' },
+      user: { login: 'alice' },
     },
     cwd: '/workspace/dsh-kanban',
   }, { now: t0, githubEvent: 'issues' })
   assert.equal(opened.kind, 'github_issue_created')
-  assert.equal(opened.card.externalRef, 'github:roxor/dsh-kanban#42')
+  assert.equal(opened.card.externalRef, 'github:acme/dsh-kanban#42')
 
   const commented = handleIngressEvent(draft, {
     action: 'created',
-    repository: { full_name: 'roxor/dsh-kanban' },
+    repository: { full_name: 'acme/dsh-kanban' },
     issue: { number: 42, title: '支持 MCP Server 与多端 IM 桥' },
     comment: { id: 9001, body: '请同时补充 stdio 与 HTTP 两种传输方式。' },
-    sender: { login: 'roxor' },
+    sender: { login: 'alice' },
   }, { now: t0 + 1000, githubEvent: 'issue_comment' })
   assert.equal(commented.kind, 'github_issue_comment')
   assert.equal(commented.card.id, opened.card.id)
@@ -690,7 +690,7 @@ test('多端 IM 消息模板引擎（飞书 / 钉钉 / 企微 / OneBot / Generic
 
   // 2) 入口 1 通过入口 5（定时任务轮询 `gh issue list`）批量幂等对账
   const pollSync = handleIngressEvent(draft, {
-    repo: 'roxor/dsh-kanban',
+    repo: 'acme/dsh-kanban',
     githubIssues: [
       { number: 42, title: '支持 MCP Server 与多端 IM 桥（已更新）', state: 'closed' },
       { number: 43, title: '新增飞书卡片签名校验', state: 'open', labels: ['im'] },
@@ -883,18 +883,18 @@ test('解耦可扩展路由管道（router.js）：支持 MCP 零代码写入规
       arguments: {
         action: 'upsert',
         rule: {
-          id: 'rquant-rule',
-          name: 'rQuant 量化自动归档与派发',
+          id: 'stream-rule',
+          name: '流式引擎自动归档与派发',
           mode: 'observe',
           priority: 200,
-          match: { keywords: ['rquant', '80股'] },
+          match: { keywords: ['stream-engine', '压测'] },
           action: {
             route: 'task_dispatch',
             cardDefaults: {
-              project: 'rQuant L2',
-              cwd: '/workspace/rquant-l2',
+              project: 'stream-engine',
+              cwd: '/workspace/stream-engine',
               priority: 'p1',
-              labels: ['quant'],
+              labels: ['perf'],
               autoStart: true,
             },
           },
@@ -911,12 +911,12 @@ test('解耦可扩展路由管道（router.js）：支持 MCP 零代码写入规
     method: 'tools/call',
     params: {
       name: 'kanban_route_intent',
-      arguments: { text: 'rQuant 今天 80股 怎么样？' },
+      arguments: { text: 'stream-engine 今天 压测 怎么样？' },
     },
   })
   const observedDecision = JSON.parse(observedRoute.result.content[0].text).decision
   assert.equal(observedDecision.route, 'direct_reply')
-  assert.equal(observedDecision.observations?.[0]?.ruleId, 'rquant-rule')
+  assert.equal(observedDecision.observations?.[0]?.ruleId, 'stream-rule')
   assert.equal(observedDecision.observations?.[0]?.wouldRoute, 'task_dispatch')
 
   // 2) 将规则切换为 mode: 'auto'，再次路由自动命中并补齐 project / cwd / labels
@@ -929,18 +929,18 @@ test('解耦可扩展路由管道（router.js）：支持 MCP 零代码写入规
       arguments: {
         action: 'upsert',
         rule: {
-          id: 'rquant-rule',
-          name: 'rQuant 量化自动归档与派发',
+          id: 'stream-rule',
+          name: '流式引擎自动归档与派发',
           mode: 'auto',
           priority: 200,
-          match: { keywords: ['rquant', '80股'] },
+          match: { keywords: ['stream-engine', '压测'] },
           action: {
             route: 'task_dispatch',
             cardDefaults: {
-              project: 'rQuant L2',
-              cwd: '/workspace/rquant-l2',
+              project: 'stream-engine',
+              cwd: '/workspace/stream-engine',
               priority: 'p1',
-              labels: ['quant'],
+              labels: ['perf'],
               autoStart: true,
             },
           },
@@ -954,14 +954,14 @@ test('解耦可扩展路由管道（router.js）：支持 MCP 零代码写入规
     setSuperAgentSessionId(draft, 'session-super-coord')
     const res = handleIngressEvent(draft, {
       provider: 'dingtalk',
-      text: 'rQuant 跑一下 80股 10x 离线回放基准',
+      text: 'stream-engine 跑一下 压测 10x 离线回放基准',
     }, { dataDir: dir })
     routedCard = res.card
     return null
   })
   assert.ok(routedCard)
-  assert.equal(routedCard.project, 'rQuant L2')
-  assert.equal(routedCard.cwd, '/workspace/rquant-l2')
+  assert.equal(routedCard.project, 'stream-engine')
+  assert.equal(routedCard.cwd, '/workspace/stream-engine')
   assert.equal(routedCard.priority, 'high')
   assert.equal(routedCard.runtime?.priorityWake, 'person')
 
@@ -974,8 +974,8 @@ test('解耦可扩展路由管道（router.js）：支持 MCP 零代码写入规
       name: 'kanban_handback_card',
       arguments: {
         cardId: routedCard.id,
-        reason: '用户追加要求改造期权行情网关，超出股票 L2 回放卡范围',
-        suggestedFollowupTitle: '期权 L2 行情网关适配',
+        reason: '用户追加要求改造边缘网关鉴权，超出回放基准卡范围',
+        suggestedFollowupTitle: '边缘网关鉴权适配',
       },
     },
   })
@@ -1132,7 +1132,7 @@ test('cc2im 微信通道 Spoke 桥接（ndjson 双工流协议）：自动注册
   fakeClient.emit('data', Buffer.from(JSON.stringify({
     type: 'message',
     userId: 'wx_user_001@im.wechat',
-    text: '[weixin wx_user_001@im.wechat] 帮我排查 rQuant 40股种子超时问题\n- 录制原始帧\n- 输出诊断报告',
+    text: '[weixin wx_user_001@im.wechat] 帮我排查网关连接池超时问题\n- 录制采样帧\n- 输出诊断报告',
   }) + '\n'))
 
   await wait(() => hubReceived.some(f => f.type === 'reply' && f.userId === 'wx_user_001@im.wechat'))

@@ -51,15 +51,15 @@ GET /api/kanban/cards/:cardId/git[?cwd=<绝对路径>]
     "available": true,
     "reason": null,                // available:false 时为下方枚举之一
     "message": null,               // 可选，调试用人类可读原因（不进正式 UI 文案）
-    "dir": "/Users/roxor/Desktop/dsh/dsh kanban",       // 实际采集目录（realpath）
+    "dir": "/Users/dev/workspace/dsh-kanban",       // 实际采集目录（realpath）
     "requestedDir": "/Users/.../.agents/worktrees/feat/x", // 传入的 ?cwd=（未传则 null；未采用时也返回原值）
     "repo": {
       "name": "dsh kanban",                              // 主工作树目录名
-      "root": "/Users/roxor/Desktop/dsh/dsh kanban",     // 主工作树根（worktree list 里 isMain 的那项）
-      "commonDir": "/Users/roxor/Desktop/dsh/dsh kanban/.git"
+      "root": "/Users/dev/workspace/dsh-kanban",     // 主工作树根（worktree list 里 isMain 的那项）
+      "commonDir": "/Users/dev/workspace/dsh-kanban/.git"
     },
     "current": {
-      "worktree": "/Users/roxor/Desktop/dsh/dsh kanban", // dir 所在工作树根
+      "worktree": "/Users/dev/workspace/dsh-kanban", // dir 所在工作树根
       "isWorktree": false,                                // true = linked worktree（非主工作树）
       "isMainWorktree": true,
       "branch": "main",                                   // detached 时为 null
@@ -90,7 +90,7 @@ GET /api/kanban/cards/:cardId/git[?cwd=<绝对路径>]
     },
     "worktrees": [
       {
-        "path": "/Users/roxor/Desktop/dsh/dsh kanban",
+        "path": "/Users/dev/workspace/dsh-kanban",
         "branch": "main",
         "detached": false,
         "sha": "f65b4f19…",

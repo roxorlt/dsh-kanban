@@ -15,7 +15,7 @@ $ curl -c c2.txt -o /dev/null "$BASE/?token=$TOKEN" && curl -b c2.txt -s "$BASE/
 dsh-kanban-spike/client.js
 
 $ curl -s "$BASE/api/kanban-spike/state"
-{"ok":true,"plugin":"dsh-kanban-spike","pid":7166,"cwd":"/Users/roxor/Desktop/dsh/dsh kanban","count":3,"cards":[{"id":"card-1","title":"侧栏入口 + main keyed 面板","column":"doing","source":"seed"},{"id":"card-2","title":"同源 iframe + 主题令牌桥","column":"doing","source":"seed"},{"id":"card-3","title":"iframe → 父页面 → session.prompt","column":"todo","source":"seed"}],"serverTime":1792544173904}
+{"ok":true,"plugin":"dsh-kanban-spike","pid":7166,"cwd":"/Users/dev/workspace/dsh-kanban","count":3,"cards":[{"id":"card-1","title":"侧栏入口 + main keyed 面板","column":"doing","source":"seed"},{"id":"card-2","title":"同源 iframe + 主题令牌桥","column":"doing","source":"seed"},{"id":"card-3","title":"iframe → 父页面 → session.prompt","column":"todo","source":"seed"}],"serverTime":1792544173904}
 $ curl -s -D - -o /dev/null "$BASE/kanban-spike"
 HTTP/1.1 200 OK
 content-type: text/html; charset=utf-8

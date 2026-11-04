@@ -100,7 +100,7 @@ description: Use when 需要把多步任务放上 DSH 看板、查看/继续看�
 { "title": "实现看板 SSE 实时刷新", "summary": "卡片状态变化 150ms 内同步到 UI", "project": "dsh-kanban", "priority": "high", "labels": ["server"] }
 ```
 ```json
-{ "title": "rQuant L2：补系统通知识别测试", "summary": "独立项目的子任务，需要自己的会话", "project": "rQuant L2", "sessionMode": "new", "cwd": "/path/to/rquant-l2" }
+{ "title": "api-server：补系统通知识别测试", "summary": "独立项目的子任务，需要自己的会话", "project": "api-server", "sessionMode": "new", "cwd": "/path/to/api-server" }
 ```
 ```json
 { "cardId": "card-1a2b3c4d", "column": "running", "text": "开始实现" }

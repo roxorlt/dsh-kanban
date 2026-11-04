@@ -95,7 +95,7 @@
 - **Web UI**：工作副本路径行在「复制路径」旁新增「在 Finder 中打开」（`IconFolder`；中英 i18n 各 +3 键 `workspace.revealInFinder` / `revealFailed` / `revealForbidden`）。能力探测失败、旧版宿主（`UNKNOWN_METHOD`）或独立预览模式 → **不渲染按钮**，其它功能完全不受影响；点击前用 `web/src/lib/revealPath.ts` 精确校验路径属于服务端 `/git/workspaces` 工作区地图里的仓库根 / 工作副本路径（不做前缀匹配，任意路径 / 子目录 / 命令串都进不了允许集合），不在集合内 toast「只允许打开看板工作副本目录」；宿主失败时 toast「无法在 Finder 中打开：{message}」。
 - 契约：`docs/contracts/03-client-bridge.md` §2 方法表 + 新增 §8（能力、桥方法、两道权限边界、错误码、降级、调用顺序）。
 - 测试：服务端 **308/308**（v0.23.0 基线 294 + 14 例 `test/client-reveal.test.mjs`，覆盖能力探测/缓存/调用参数/Windows 盘符/旧宿主降级/非桌面/6 组非法路径/宿主拒绝与抛错/异源消息/`UNKNOWN_METHOD`）；Web **35 文件 / 473 例**（+`revealPath.test.ts` 6 例）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 11 CSS 0/0。
-- 真实 DSH 验收（宿主 `0.2.1-rc.3`，未重启；`client-hmr` 自动重载客户端 bundle）：真实 GUI + headless Chromium 打开看板 → 工作区视图两条工作副本行都出现按钮，`host.capabilities` → `{revealPath:true}`；点 `dsh kanban` 行的按钮 → 桥响应 `{ok:true}`，**macOS 窗口列表新增标题为「dsh kanban」的 Finder 窗口**，`window.__DSH_KANBAN__.errors` 无新增；绕过前端直接以 `/etc/hosts` 调桥被宿主拒绝 `Path has no verified Host path`；同源直接打开 `/dsh-kanban/`（独立预览，无父页面）时 2 个工作副本行 **0 个按钮**、复制路径仍在。截图 `docs/assets/screens/workspace-reveal-finder.png`、`workspace-reveal-hidden.png`、`finder-reveal-window.png`（docs/06 §1.42）。
+- 真实 DSH 验收（宿主 `0.2.1-rc.3`，未重启；`client-hmr` 自动重载客户端 bundle）：真实 GUI + headless Chromium 打开看板 → 工作区视图两条工作副本行都出现按钮，`host.capabilities` → `{revealPath:true}`；点 `dsh kanban` 行的按钮 → 桥响应 `{ok:true}`，**macOS 窗口列表新增标题为「dsh kanban」的 Finder 窗口**，`window.__DSH_KANBAN__.errors` 无新增；绕过前端直接以 `/etc/hosts` 调桥被宿主拒绝 `Path has no verified Host path`；同源直接打开 `/dsh-kanban/`（独立预览，无父页面）时 2 个工作副本行 **0 个按钮**、复制路径仍在（docs/06 §1.42）。
 - 生效方式：**纯客户端改动**，合入 main 后 DSH 的 `client-hmr` 会自动重载客户端 bundle（实测 rev 由 `9cf82bc58ea8` → `9fff0c220f58`），刷新看板即生效，**无需重启 DSH**；`web/dist` 已重新构建。
 - 已知限制：① 只在「工作区」视图的工作副本行提供（「工作线」总览的行是整体可点的筛选按钮，不嵌套按钮）；② 依赖宿主桌面能力，SSH / 无桌面后端时 `canOpenWorkspacePath=false`、入口隐藏；③ 目录已被手动删除（prunable）时点击会得到宿主失败提示，不会静默成功。
 - 分支：`feat/finder-reveal`（基于 `df82d31`），**已合入 main（merge `03767c0`）**。
@@ -201,17 +201,17 @@
 
 ### 改进：卡片「绑定会话」下拉框——默认只列本工作区 + 按工作区分组 / 折叠 / 搜索
 
-- 反馈（卡片 `card-d60ae026`）：① 选项应该也按工作区分组；② 太长了，可以按工作区折叠展开；③ 为什么无法选到 rea L2 的会话？随后在看板补充「好像只列出本工作区下的会话就行了……maybe」。
-- 问题 ③ 排查结论：绑定下拉框的数据源是宿主会话列表，**没有任何按工作区过滤**；`rea L2` 的会话 `session-b423…` 在宿主列表与工作区注册表里都存在，但选项只显示会话标题——该会话标题是「阅读交接文件并规划未完成工作」，不含工作区字样，加上原生 `<select>` 平铺上百条且没有搜索，实际无法定位；另外已绑定到当前卡片的会话会被排除，容易被误认为「缺失」。
+- 反馈（卡片 `card-d60ae026`）：① 选项应该也按工作区分组；② 太长了，可以按工作区折叠展开；③ 为什么无法选到 `api-server` 的会话？随后在看板补充「好像只列出本工作区下的会话就行了……maybe」。
+- 问题 ③ 排查结论：绑定下拉框的数据源是宿主会话列表，**没有任何按工作区过滤**；`api-server` 的会话 `session-b423…` 在宿主列表与工作区注册表里都存在，但选项只显示会话标题——该会话标题是「阅读交接文件并规划未完成工作」，不含工作区字样，加上原生 `<select>` 平铺上百条且没有搜索，实际无法定位；另外已绑定到当前卡片的会话会被排除，容易被误认为「缺失」。
 - Web（纯前端：新增 `components/SessionPicker.tsx`、`lib/sessionPicker.ts`，改 `SessionSection`）：
   - 原生 `<select>` 换成选择器浮层：**默认「本工作区」**（按卡片 workspaceId → cwd 最长前缀 → 已绑定会话推断），只列该工作区的会话，一屏选完；
   - 可切「所有工作区」：按 DSH 工作区注册表分组（组头 = 工作区名 + 路径 + 会话数），组头可折叠 / 展开，打开时自动展开卡片所属工作区；
-  - 搜索同时匹配会话标题 / 会话 ID / cwd / 工作区名 / 工作区路径（搜 `rea` 直接命中 `rea L2`）；
+  - 搜索同时匹配会话标题 / 会话 ID / cwd / 工作区名 / 工作区路径（搜 `api` 直接命中 `api-server`）；
   - 行内显示短会话 ID + 相对时间 + 运行中 / 已归档 / 待确认徽标；已绑定到当前卡片的会话排除；
   - 工作区注册表有、宿主会话列表未给出的会话补兜底行（「工作区名 · 短 ID」，标注「宿主会话列表未列出」）；
   - 底部「按会话 ID 绑定」兜底：任何会话 ID 都能直接绑；Esc / 外点 / 滚动关闭，搜索框方向键进入列表，关闭归还焦点。
 - 测试：服务端 **216/216**（无改动）；Web **28 文件 / 346 例**（+33：分组 / 折叠默认 / 搜索 / 范围推断 / 注册表兜底 / 排除已绑定）；`tsc --noEmit` 0 error、`vite build` 通过、令牌 lint 10 CSS 0 error / 0 warning。
-- 验证（真 `lib/routes.js` + 隔离数据 + 同源父页面桥替身 + Chromium 1440×900 DPR2 / 390×844，**25 项断言全过**、console 0 error / 4xx 0）：默认只列 rea L2 的 2 条会话（真实会话 + 注册表兜底行）；切「所有工作区」6 组、rea L2 默认展开；搜 `rea` 只剩该组、搜标题命中；组头折叠 / 展开；点会话绑定后抽屉出现该会话、服务端 `sessionIds` 写入；移动端浮层不超视口、范围切换可见。截图 `docs/assets/screens/session-picker-*.png`，详见 docs/06 §1.36。
+- 验证（真 `lib/routes.js` + 隔离数据 + 同源父页面桥替身 + Chromium 1440×900 DPR2 / 390×844，**25 项断言全过**、console 0 error / 4xx 0）：默认只列 `api-server` 的 2 条会话（真实会话 + 注册表兜底行）；切「所有工作区」6 组、`api-server` 默认展开；搜 `api` 只剩该组、搜标题命中；组头折叠 / 展开；点会话绑定后抽屉出现该会话、服务端 `sessionIds` 写入；移动端浮层不超视口、范围切换可见。截图 `docs/assets/screens/session-picker-mobile-390.png`，详见 docs/06 §1.36。
 - 生效方式：纯前端改动，**合入 main 后刷新看板即生效，无需重启 DSH**。
 - 已知限制：选择器每次打开都回到「本工作区」，不记忆上次范围；工作区会话数依赖宿主 `workspaces.list`，宿主不提供时退回「所有工作区」；更早绑定的失效会话只出现在已绑定行。
 - 分支：`feat/session-picker`（基于 `8e6a808`）。
@@ -480,7 +480,7 @@
 
 ### 修复：详情抽屉「执行目录」路径被截断 + 抽屉加宽一档（右侧抽屉样式）
 
-- 现象（1440×900，卡片 cwd=`/Users/roxor/Desktop/dsh/dsh kanban`）：打开卡片详情抽屉 →「新建会话」，「执行目录」输入框只显示到 `/Users/roxor/Desktop/dsh/dsf`——输入框内容宽 196px、路径需 247px，末尾 **51px 被裁**；1028 竖屏（抽屉 380px）下裁约 81px。新建/编辑卡片弹窗同字段 233px，裁 14px（`…/dsh kanb`）。三处都没有 hover 提示，看不到完整路径。
+- 现象（1440×900，卡片 cwd=`/Users/dev/workspace/dsh-kanban`）：打开卡片详情抽屉 →「新建会话」，「执行目录」输入框只显示到前半截路径——输入框内容宽 196px、路径需 247px，末尾 **51px 被裁**；1028 竖屏（抽屉 380px）下裁约 81px。新建/编辑卡片弹窗同字段 233px，裁 14px（`…/dsh-kanb`）。三处都没有 hover 提示，看不到完整路径。
 - 根因：两处表单都用 `.kb-form__row` 两列栅格并排「工作区 + 执行目录」。抽屉正文内容宽 428px（460 抽屉）/348px（380 抽屉），减表单内边距 20 后每列只剩 203px / 166px；该路径在 12px 等宽字体下需要 247px，单行输入框末尾被裁。弹窗固定 520px、每列 233px，同样差 14px。另外元数据「工作目录」行本身是自动换行、不截断，缺的只是 hover 提示。
 - 修复 A（路径完整展示）：新增 `.kb-form__row--stack` 单列栅格，抽屉「新建会话」表单与新建/编辑卡片弹窗都改为「工作区」一整行 +「执行目录」一整行 + 建议 chips。改后输入框 344–478px，路径 `scrollWidth = clientWidth`（0 裁切）。
 - 修复 B（完整值入口）：执行目录输入框（抽屉/弹窗）、详情元数据「工作目录」、会话标题截断处、产物路径都补 `title`；工作区下拉的每个选项带完整 `title`（含 workspace path）；产物路径允许行内换行，长路径不再顶出抽屉。

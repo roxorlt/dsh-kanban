@@ -101,7 +101,7 @@ export function apply(ctx) {
 | 实测尺寸 | `x=280,y=0, 1160×900`（只占中心列，侧栏仍可见） | `0,0 1440×900`（真覆盖全窗口） |
 | 布局关系 | 官方布局的一部分：`selectPanel(id)` 切换，`selectPanel(null)` 回 Conversation | 叠在 `.overlayLayer` 上，与主布局无关 |
 | 侧栏联动 | 高亮当前面板（`usePanelInfo`）；点任意会话自动 `selectPanel(null)` | 无选中态；要自建关闭按钮/遮罩 |
-| 焦点/键盘 | 内联面板，Tab 顺序自然 | 无官方焦点陷阱/Esc，要自己实现（video-companion 即如此） |
+| 焦点/键盘 | 内联面板，Tab 顺序自然 | 无官方焦点陷阱/Esc，要自己实现 |
 | 状态 | 切走卸载组件（React state/iframe 页面状态丢失） | 关闭即卸载 |
 | 结论 | **主看板用它**：有侧栏选中态、与官方导航一致 | 临时全屏/浮层查看；做模态必须补焦点管理 |
 
@@ -216,7 +216,7 @@ ctx.tools.register({
 # 1) 初始化 scratch profile（仅首次；从官方 web 模板拿到 base+web-app 两层）
 dsh --profile kanban-spike --from-default-profile web --dump-default-config > /dev/null
 # 2) 安装本地插件（路径可含空格，加引号）
-dsh plugin --profile kanban-spike add "/Users/roxor/Desktop/dsh/dsh kanban/spike/dsh-kanban-spike"
+dsh plugin --profile kanban-spike add "/path/to/dsh-kanban/spike/dsh-kanban-spike"
 # 3) 查看 / 组合树 / 更新 / 卸载
 dsh plugin --profile kanban-spike list --depth 0
 dsh --profile kanban-spike --dump-config | grep -A2 kanban-spike

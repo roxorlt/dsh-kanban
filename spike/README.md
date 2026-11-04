@@ -35,7 +35,7 @@ dsh-kanban-spike/
 dsh --profile kanban-spike --from-default-profile web --dump-default-config > /dev/null
 
 # 2) 安装本插件（本地路径；路径含空格也可以，注意引号）
-dsh plugin --profile kanban-spike add "/Users/roxor/Desktop/dsh/dsh kanban/spike/dsh-kanban-spike"
+dsh plugin --profile kanban-spike add "/path/to/dsh-kanban/spike/dsh-kanban-spike"
 
 # 3) 确认安装结果
 dsh plugin --profile kanban-spike list --depth 0
@@ -99,7 +99,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Origin: http://evil.example
 - 卡片仓库是**进程内存**，重启归零；生产要换持久化（JSON/SQLite）并考虑多窗口一致性。
 - 自定义 `/api/kanban-spike/*` 路由比官方 `/api` 前缀更长，会**绕过** client-connection 的 cookie 认证与 Host/Origin 防区，因此本插件自建了同源校验；生产必须保留并加固。
 - iframe 内的 UI 不参与 DSH 主题 CSS 继承，只能靠主题桥；桥固定同步 23 个令牌，令牌清单要随 DSH 版本维护。
-- `shell.overlay` 浮层没有官方焦点陷阱/Esc 关闭，本 spike 未实现；生产若用作模态，需要自己补（可参考 dsh-video-companion 的 `LibraryOverlay`）。
+- `shell.overlay` 浮层没有官方焦点陷阱/Esc 关闭，本 spike 未实现；生产若用作模态，需要自己补焦点与键盘退出处理。
 - 服务端 `lib/index.js` 改动**不会热重载**，必须重启 `dsh` 进程；客户端 `lib/client.js` 改动会被 `dsh-client-hmr` 自动热替换（实测 1→2 版本无刷新，见 `hmr-result.json`）。
 
 ## 卸载 / 清理

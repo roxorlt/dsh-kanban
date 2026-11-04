@@ -379,8 +379,8 @@ describe('buildForkGraph 边界', () => {
 
 describe('shortenPath', () => {
   it('保留末尾两段（抽屉窄，完整路径靠 title）', () => {
-    expect(shortenPath('/Users/roxor/Desktop/dsh/dsh kanban')).toBe('dsh/dsh kanban');
-    expect(shortenPath('/Users/roxor/Desktop/dsh/dsh kanban/')).toBe('dsh/dsh kanban');
+    expect(shortenPath('/Users/dev/workspace/dsh kanban')).toBe('workspace/dsh kanban');
+    expect(shortenPath('/Users/dev/workspace/dsh kanban/')).toBe('workspace/dsh kanban');
     expect(shortenPath('/repo/.agents/worktrees/feat/x')).toBe('feat/x');
     expect(shortenPath('C:\\work\\project\\')).toBe('work/project');
     expect(shortenPath('/repo')).toBe('repo');

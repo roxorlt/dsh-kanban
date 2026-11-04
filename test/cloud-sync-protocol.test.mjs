@@ -57,7 +57,7 @@ import {
   verifyBearer,
 } from '../lib/cloud-sync-protocol.js'
 
-const HOME = '/Users/roxor'
+const HOME = '/Users/alice'
 
 // ---------------------------------------------------------------------------
 // fixtures
@@ -67,7 +67,7 @@ function card(overrides = {}) {
   return {
     id: 'card-aaaa0001',
     boardId: 'board-default',
-    title: '实现云端同步：修 /Users/roxor/Desktop/dsh 的令牌 sk-abcdefghijklmnop1234567890',
+    title: '实现云端同步：修 /Users/alice/Desktop/dsh 的令牌 sk-abcdefghijklmnop1234567890',
     summary: '本地优先镜像，token: abcdefgh12345678 不落云端',
     currentAction: '正在写 diff',
     result: '已完成',
@@ -229,11 +229,11 @@ test('redactText：密钥、URL 凭据、home 路径全部清洗', () => {
   assert.equal(redactText('JWT eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop'), 'JWT eyJ****')
   assert.equal(redactText('password=supersecret123'), 'password=****')
   assert.equal(redactText(`路径 ${HOME}/Desktop/dsh 结束`), '路径 ~/Desktop/dsh 结束')
-  assert.equal(redactText('C:\\Users\\roxor\\Desktop\\secret'), '~\\Desktop\\secret')
+  assert.equal(redactText('C:\\Users\\alice\\Desktop\\secret'), '~\\Desktop\\secret')
   // 普通中文不受影响
-  assert.equal(redactText('普通中文摘要，没有密钥。'), '普通中文摘要，没有密钥。')
+  assert.equal(redactText('普通中文不受影响，没有密钥。'), '普通中文不受影响，没有密钥。')
   // 幂等
-  const sample = '令牌 sk-abcdefghijklmnop1234567890 在 /Users/roxor/a'
+  const sample = '令牌 sk-abcdefghijklmnop1234567890 在 /Users/alice/a'
   assert.equal(redactText(redactText(sample)), redactText(sample))
   // 非字符串安全降级
   assert.equal(redactText(undefined), '')
@@ -866,14 +866,14 @@ const VALID_TOKEN = 'a'.repeat(32)
 test('normalizeCloudConfig：合法配置规范化与默认值', () => {
   const config = normalizeCloudConfig({
     enabled: true,
-    workerUrl: 'https://dsh-kanban-sync.roxor.workers.dev/',
+    workerUrl: 'https://dsh-kanban-sync.example.workers.dev/',
     token: VALID_TOKEN,
-    clientId: 'macbook-roxor',
+    clientId: 'macbook-pro',
   })
   assert.equal(config.enabled, true)
-  assert.equal(config.workerUrl, 'https://dsh-kanban-sync.roxor.workers.dev')
+  assert.equal(config.workerUrl, 'https://dsh-kanban-sync.example.workers.dev')
   assert.equal(config.token, VALID_TOKEN)
-  assert.equal(config.clientId, 'macbook-roxor')
+  assert.equal(config.clientId, 'macbook-pro')
   assert.deepEqual(config.sync, { enabled: true, pushDebounceMs: 2000, pullIntervalMs: 30_000 })
   assert.deepEqual(config.ingress, { enabled: true, claimIntervalMs: 30_000, batchSize: 20, leaseSeconds: 120 })
 

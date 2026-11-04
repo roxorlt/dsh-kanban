@@ -290,7 +290,7 @@ test('host.capabilities：能力成功结果有缓存（30s 内不重复探测�
 // ================= 在 Finder 中打开 =================
 test('host.revealPath：调用宿主 openWorkspacePath({path, action:"reveal"})', async (t) => {
   const env = setup(t)
-  const path = '/Users/roxor/Desktop/dsh/dsh kanban'
+  const path = '/Users/dev/workspace/dsh-kanban'
   const response = await call(env, 'host.revealPath', { path })
   assert.equal(response.ok, true, JSON.stringify(response))
   assert.deepEqual(response.data, { ok: true })

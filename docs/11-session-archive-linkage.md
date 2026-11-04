@@ -25,7 +25,7 @@
 | 指标 | 数值 | 来源 |
 | --- | --- | --- |
 | 全部宿主会话目录 | 91 个，共 173 MB | `~/.dsh/sessions` |
-| 本看板工作区会话目录 | 17 个，共 25 MB | `~/.dsh/sessions/--Users-roxor-Desktop-dsh-dsh~0020kanban--` |
+| 本看板工作区会话目录 | 17 个，共 25 MB | `~/.dsh/sessions/--Users-dev-workspace-dsh-kanban--` |
 | 本看板卡片 | 37 张（待办 11 / 进行中 4 / 待确认 1 / 已完成 21） | `kanban_boards` |
 | 卡片自动归档策略 | 已完成 30 天后自动归档（仅卡片） | `lib/index.js:25-26` |
 

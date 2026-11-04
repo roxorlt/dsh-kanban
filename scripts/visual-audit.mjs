@@ -23,13 +23,16 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { writeFile, mkdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
-const CHROME_DEFAULT =
-  '/Users/roxor/Library/Caches/ms-playwright/chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
+const CHROME_DEFAULT = join(
+  homedir(),
+  'Library/Caches/ms-playwright/chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
+);
 
 const VIEWPORTS = {
   desktop: { width: 1440, height: 900, label: '1440×900' },

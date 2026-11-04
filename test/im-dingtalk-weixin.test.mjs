@@ -78,20 +78,20 @@ async function startTestServer(t, options) {
 test('钉钉自定义机器人 Markdown 规范渲染：行首 ### 不被关键词破坏、无反引号裸露、双换行分段', () => {
   const card = {
     id: 'card-a1b2c3d4',
-    title: 'rQuant 原始帧录制器验收',
-    project: 'rQuant L2',
+    title: '日志流采样录制器验收',
+    project: 'stream-engine',
     status: 'needs_you',
-    currentAction: '等待确认盘中采样窗口配置',
+    currentAction: '等待确认采样窗口配置',
     result: '已完成 Zstd 帧写入与 CRC 校验',
   }
   const approval = {
     id: 'ap-11223344',
     status: 'pending',
-    title: '是否启用全市场 Level-2 录制？',
+    title: '是否启用全量采样录制？',
     detail: '开启后预计单日磁盘写入约 `1.8GB`',
     options: [
       { id: 'enable_all', label: '立即开启', description: '全量录制并自动归档' },
-      { id: 'core_only', label: '仅核心池', description: '只录 80 股标的池' },
+      { id: 'core_only', label: '仅核心服务', description: '只录核心链路节点' },
     ],
   }
 
@@ -101,7 +101,7 @@ test('钉钉自定义机器人 Markdown 规范渲染：行首 ### 不被关键�
         template: tpl,
         card,
         approval,
-        reason: '盘中行情网关连接超时',
+        reason: '上游网关连接超时',
         counts: { running: 2, needs_you: 1, backlog: 3, done: 8 },
         highlights: ['`card-a1b2c3d4` 正在等待确认'],
       },
@@ -308,7 +308,7 @@ test('原生独立微信通道（腾讯 iLink Bot 协议）：扫码登录 + 入
         status: 'confirmed',
         bot_token: 'wx-bot-secret-token',
         ilink_bot_id: 'wxbot_kanban@im.bot',
-        ilink_user_id: 'wxuser_roxor@im.wechat',
+        ilink_user_id: 'wxuser_demo@im.wechat',
         baseurl: 'https://ilinkai.weixin.qq.com',
       }), { status: 200 })
     }
@@ -366,25 +366,25 @@ test('原生独立微信通道（腾讯 iLink Bot 协议）：扫码登录 + 入
   // 2) 模拟收到用户微信入站消息：工程任务自动建卡并携带 context_token 回复用户
   const inboundTask = await weixinChannel.handleRawUpdateMessage({
     message_id: 'wx-msg-1001',
-    from_user_id: 'wxuser_roxor@im.wechat',
+    from_user_id: 'wxuser_demo@im.wechat',
     message_type: 1, // USER
     context_token: 'ctx-token-live-abc',
     item_list: [
-      { type: 1, text_item: { text: '帮我新建任务：实现 rQuant 盘后 10x 确定性回放基准测试' } },
+      { type: 1, text_item: { text: '帮我新建任务：实现日志引擎 10x 确定性回放基准测试' } },
     ],
   })
   assert.equal(inboundTask.handled, true)
   assert.ok(inboundTask.cardId)
   assert.equal(sentMessages.length, 1)
   assert.equal(sentMessages[0].headers.Authorization, 'Bearer wx-bot-secret-token')
-  assert.equal(sentMessages[0].body.msg.to_user_id, 'wxuser_roxor@im.wechat')
+  assert.equal(sentMessages[0].body.msg.to_user_id, 'wxuser_demo@im.wechat')
   assert.equal(sentMessages[0].body.msg.context_token, 'ctx-token-live-abc')
   assert.ok(sentMessages[0].body.msg.item_list[0].text_item.text.includes(inboundTask.cardId))
 
   // 重复消息去重幂等
   const dupRes = await weixinChannel.handleRawUpdateMessage({
     message_id: 'wx-msg-1001',
-    from_user_id: 'wxuser_roxor@im.wechat',
+    from_user_id: 'wxuser_demo@im.wechat',
     message_type: 1,
     context_token: 'ctx-token-live-abc',
     item_list: [{ type: 1, text_item: { text: '重复投递' } }],
@@ -408,8 +408,8 @@ test('原生独立微信通道（腾讯 iLink Bot 协议）：扫码登录 + 入
     requestApproval(draft, card.id, {
       title: '回放数据源选择',
       options: [
-        { id: 'sample_40', label: '先跑 40 股样本', outcome: 'running' },
-        { id: 'full_80', label: '直接跑 80 股样本', outcome: 'running' },
+        { id: 'sample_40', label: '先跑小规模样本', outcome: 'running' },
+        { id: 'full_80', label: '直接跑全量样本', outcome: 'running' },
       ],
     })
   })
@@ -423,7 +423,7 @@ test('原生独立微信通道（腾讯 iLink Bot 协议）：扫码登录 + 入
   // 用户在微信回复数字 "2" 一键拍板第 2 个选项
   const numericReply = await weixinChannel.handleRawUpdateMessage({
     message_id: 'wx-msg-1002',
-    from_user_id: 'wxuser_roxor@im.wechat',
+    from_user_id: 'wxuser_demo@im.wechat',
     message_type: 1,
     context_token: 'ctx-token-live-def',
     item_list: [{ type: 1, text_item: { text: '2' } }],
@@ -481,7 +481,7 @@ test('全局「自动推进（Autopilot）」总开关（REST + MCP + Watchdog +
     cardA = createCard(draft, {
       title: '前置录制卡 R1',
       status: 'running',
-      cwd: '/workspace/rquant',
+      cwd: '/workspace/stream-engine',
       sessionId: 'sess-r1',
     }).card
     cardB = createCard(draft, {
@@ -489,7 +489,7 @@ test('全局「自动推进（Autopilot）」总开关（REST + MCP + Watchdog +
       status: 'blocked',
       dependsOn: [cardA.id],
       autoStart: true,
-      cwd: '/workspace/rquant',
+      cwd: '/workspace/stream-engine',
       sessionId: 'sess-r2',
     }).card
   })
@@ -843,12 +843,12 @@ test('微信入站真实 ★ Super Agent 推理闭环（调用 kanban_cards/kanb
   let depBlockedCardId = ''
   await store.update(draft => {
     const c1 = createCard(draft, {
-      title: '40 股种子回执与消费吞吐排查',
-      project: 'rQuant L2',
+      title: '连接池回执与消费吞吐排查',
+      project: 'stream-engine',
       status: 'running',
-      externalThreadId: 'weixin:wxuser_roxor@im.wechat',
+      externalThreadId: 'weixin:wxuser_demo@im.wechat',
       checklists: [
-        { text: '复盘 scale40-C 回执', done: true },
+        { text: '复盘压测批次 C 回执', done: true },
         { text: '改造 feed.py 流控', done: false },
       ],
     }, { allowUnboundCard: true }).card
@@ -856,12 +856,12 @@ test('微信入站真实 ★ Super Agent 推理闭环（调用 kanban_cards/kanb
     runningCardId = c1.id
 
     const c2 = createCard(draft, {
-      title: '80 股档位压测',
-      project: 'rQuant L2',
+      title: '高并发档位压测',
+      project: 'stream-engine',
       status: 'running',
       dependsOn: [c1.id],
     }, { allowUnboundCard: true }).card
-    c2.currentAction = '等待 40 股流控补丁合入后点火'
+    c2.currentAction = '等待流控补丁合入后点火'
     c2.runtime = {
       generation: 1,
       watchdog: { state: 'stalled', nudgesUsed: 1, retriesUsed: 0 },
@@ -885,7 +885,7 @@ test('微信入站真实 ★ Super Agent 推理闭环（调用 kanban_cards/kanb
         status: 'confirmed',
         bot_token: 'wx-sa-token',
         ilink_bot_id: 'wxbot_sa@im.bot',
-        ilink_user_id: 'wxuser_roxor@im.wechat',
+        ilink_user_id: 'wxuser_demo@im.wechat',
         baseurl: 'https://ilinkai.weixin.qq.com',
       }), { status: 200 })
     }
@@ -994,7 +994,7 @@ test('微信入站真实 ★ Super Agent 推理闭环（调用 kanban_cards/kanb
   // 1) 用户在微信询问「看板里有哪些进行中的卡片，分别有什么卡点」→ 触发 ★ Super Agent 调 kanban_cards + kanban_card
   const queryRes = await weixinChannel.handleRawUpdateMessage({
     message_id: 'wx-sa-q1',
-    from_user_id: 'wxuser_roxor@im.wechat',
+    from_user_id: 'wxuser_demo@im.wechat',
     message_type: 1,
     context_token: 'ctx-sa-1',
     item_list: [{ type: 1, text_item: { text: '看板里有哪些进行中的卡片，分别有什么卡点' } }],
@@ -1013,7 +1013,7 @@ test('微信入站真实 ★ Super Agent 推理闭环（调用 kanban_cards/kanb
   controllerOnline = false
   const fallbackRes = await weixinChannel.handleRawUpdateMessage({
     message_id: 'wx-sa-q2',
-    from_user_id: 'wxuser_roxor@im.wechat',
+    from_user_id: 'wxuser_demo@im.wechat',
     message_type: 1,
     context_token: 'ctx-sa-2',
     item_list: [{ type: 1, text_item: { text: '看板里有哪些进行中的卡片，分别有什么卡点' } }],
@@ -1022,7 +1022,7 @@ test('微信入站真实 ★ Super Agent 推理闭环（调用 kanban_cards/kanb
   assert.equal(fallbackRes.route, 'board_query')
   assert.ok(fallbackRes.replyText.includes('进展：已定位 75 号请求越过 15s 守卫'))
   assert.ok(fallbackRes.replyText.includes('Watchdog 静默停滞熔断'))
-  assert.ok(fallbackRes.replyText.includes('等待前置卡：40 股种子回执与消费吞吐排查'))
+  assert.ok(fallbackRes.replyText.includes('等待前置卡：连接池回执与消费吞吐排查'))
 
   // 3) 验证 GET /api/kanban/im/status 暴露 MCP 接入元数据供前端面板直接展示与复制
   const statusRes = await fetch(`${origin}/api/kanban/im/status`)

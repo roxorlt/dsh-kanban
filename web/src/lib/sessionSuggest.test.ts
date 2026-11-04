@@ -41,12 +41,12 @@ function makeWorkspace(overrides: Partial<WorkspaceRow> & { workspaceId: string 
   };
 }
 
-const KANBAN_PATH = '/Users/roxor/Desktop/dsh/dsh kanban';
-const REA_PATH = '/Users/roxor/Documents/ChatGPT/rea L2';
+const KANBAN_PATH = '/Users/dev/workspace/dsh kanban';
+const API_PATH = '/Users/dev/projects/api-server';
 
 const workspaces: WorkspaceRow[] = [
   makeWorkspace({ workspaceId: 'ws-kanban', title: 'dsh kanban', path: KANBAN_PATH }),
-  makeWorkspace({ workspaceId: 'ws-rea', title: 'rea L2', path: REA_PATH }),
+  makeWorkspace({ workspaceId: 'ws-api', title: 'api-server', path: API_PATH }),
   makeWorkspace({ workspaceId: 'ws-empty', title: '空工作区', path: '/work/empty' }),
 ];
 
@@ -54,12 +54,12 @@ const NO_IDS: ReadonlySet<string> = new Set();
 
 describe('resolveCardWorkspace', () => {
   it('优先按 card.workspaceId 命中工作区', () => {
-    expect(resolveCardWorkspace({ workspaceId: 'ws-rea' }, workspaces)?.workspaceId).toBe('ws-rea');
+    expect(resolveCardWorkspace({ workspaceId: 'ws-api' }, workspaces)?.workspaceId).toBe('ws-api');
   });
 
   it('没有 workspaceId 时按卡片 cwd 最长前缀匹配', () => {
-    expect(resolveCardWorkspace({ cwd: `${REA_PATH}/sub` }, workspaces)?.workspaceId).toBe('ws-rea');
-    expect(resolveCardWorkspace({ cwd: `${REA_PATH}/sub`, workspaceId: 'ws-kanban' }, workspaces)?.workspaceId).toBe(
+    expect(resolveCardWorkspace({ cwd: `${API_PATH}/sub` }, workspaces)?.workspaceId).toBe('ws-api');
+    expect(resolveCardWorkspace({ cwd: `${API_PATH}/sub`, workspaceId: 'ws-kanban' }, workspaces)?.workspaceId).toBe(
       'ws-kanban',
     );
   });
@@ -72,7 +72,7 @@ describe('resolveCardWorkspace', () => {
 
 describe('findProjectWorkspaces', () => {
   it('project 与工作区 title 或目录 basename 相等时命中（忽略大小写与空白）', () => {
-    expect(findProjectWorkspaces('rea L2', workspaces).map((workspace) => workspace.workspaceId)).toEqual(['ws-rea']);
+    expect(findProjectWorkspaces('api-server', workspaces).map((workspace) => workspace.workspaceId)).toEqual(['ws-api']);
     expect(findProjectWorkspaces(' dsh KANBAN ', workspaces).map((workspace) => workspace.workspaceId)).toEqual([
       'ws-kanban',
     ]);
@@ -80,7 +80,7 @@ describe('findProjectWorkspaces', () => {
 
   it('project 为空或只是包含关系时不命中', () => {
     expect(findProjectWorkspaces(undefined, workspaces)).toEqual([]);
-    expect(findProjectWorkspaces('rea', workspaces)).toEqual([]);
+    expect(findProjectWorkspaces('api', workspaces)).toEqual([]);
   });
 });
 
@@ -90,7 +90,7 @@ describe('suggestSessionToBind — 同工作区优先', () => {
       card: makeCard({ id: 'c1', workspaceId: 'ws-kanban', cwd: KANBAN_PATH }),
       sessions: [
         makeSession({ id: 's-kanban-old', title: '旧看板会话', workspaceId: 'ws-kanban', updatedAt: 10 }),
-        makeSession({ id: 's-rea-new', title: '新 rea 会话', workspaceId: 'ws-rea', updatedAt: 999 }),
+        makeSession({ id: 's-api-new', title: '新 api 会话', workspaceId: 'ws-api', updatedAt: 999 }),
         makeSession({ id: 's-orphan', title: '无关会话', cwd: '/tmp/elsewhere', updatedAt: 1000 }),
       ],
       workspaces,
@@ -103,17 +103,17 @@ describe('suggestSessionToBind — 同工作区优先', () => {
 
   it('卡片没有 workspaceId 时按卡片 cwd 最长前缀找到工作区', () => {
     const suggestion = suggestSessionToBind({
-      card: makeCard({ id: 'c1', cwd: `${REA_PATH}/sub` }),
+      card: makeCard({ id: 'c1', cwd: `${API_PATH}/sub` }),
       sessions: [
-        makeSession({ id: 's-rea', title: 'rea 会话', cwd: REA_PATH, updatedAt: 5 }),
+        makeSession({ id: 's-api', title: 'api 会话', cwd: API_PATH, updatedAt: 5 }),
         makeSession({ id: 's-kanban', title: '看板会话', workspaceId: 'ws-kanban', updatedAt: 900 }),
       ],
       workspaces,
       archivedSessionIds: NO_IDS,
     });
-    expect(suggestion?.session.id).toBe('s-rea');
+    expect(suggestion?.session.id).toBe('s-api');
     expect(suggestion?.reason).toBe('workspace');
-    expect(suggestion?.workspaceTitle).toBe('rea L2');
+    expect(suggestion?.workspaceTitle).toBe('api-server');
   });
 
   it('工作区注册表里没有卡片记录的 workspaceId 时，按会话自带 workspaceId 兜底', () => {
@@ -176,17 +176,17 @@ describe('suggestSessionToBind — 同 cwd', () => {
 describe('suggestSessionToBind — 项目匹配', () => {
   it('卡片 project 对应到工作区时，推荐该工作区的会话', () => {
     const suggestion = suggestSessionToBind({
-      card: makeCard({ id: 'c1', project: 'rea L2' }),
+      card: makeCard({ id: 'c1', project: 'api-server' }),
       sessions: [
         makeSession({ id: 's-kanban', title: '看板会话', workspaceId: 'ws-kanban', updatedAt: 999 }),
-        makeSession({ id: 's-rea', title: 'rea 会话', workspaceId: 'ws-rea', updatedAt: 1 }),
+        makeSession({ id: 's-api', title: 'api 会话', workspaceId: 'ws-api', updatedAt: 1 }),
       ],
       workspaces,
       archivedSessionIds: NO_IDS,
     });
-    expect(suggestion?.session.id).toBe('s-rea');
+    expect(suggestion?.session.id).toBe('s-api');
     expect(suggestion?.reason).toBe('project');
-    expect(suggestion?.workspaceTitle).toBe('rea L2');
+    expect(suggestion?.workspaceTitle).toBe('api-server');
   });
 
   it('project 与工作区目录 basename 相等也能命中', () => {
@@ -248,7 +248,7 @@ describe('suggestSessionToBind — 排除与空结果', () => {
         card: makeCard({ id: 'c1' }),
         sessions: [
           makeSession({ id: 's-kanban', workspaceId: 'ws-kanban', updatedAt: 999 }),
-          makeSession({ id: 's-rea', workspaceId: 'ws-rea', updatedAt: 900 }),
+          makeSession({ id: 's-api', workspaceId: 'ws-api', updatedAt: 900 }),
           makeSession({ id: 's-recent', title: '最近活跃但无关', cwd: '/tmp/elsewhere', updatedAt: 1000 }),
         ],
         workspaces,

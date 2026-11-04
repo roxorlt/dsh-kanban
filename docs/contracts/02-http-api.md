@@ -56,7 +56,7 @@
   "priority": "medium",
   "labels": ["mvp"],
   "project": "dsh-kanban",
-  "workspaceId": "...", "cwd": "/Users/roxor/Desktop/dsh/dsh kanban",
+  "workspaceId": "...", "cwd": "/Users/dev/workspace/dsh-kanban",
   "sessionId": "session-...",
   "agent": {"name": "DSH Agent"},
   "summaryOnly": false

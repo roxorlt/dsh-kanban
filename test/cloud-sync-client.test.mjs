@@ -28,6 +28,7 @@ import {
 } from '../lib/cloud-sync-protocol.js'
 import {
   DINGTALK_SIGN_SECRET,
+  GENERIC_TOKEN,
   HAS_SQLITE,
   MemoryD1,
   MIGRATION_SQL,
@@ -804,6 +805,231 @@ it('本地回放地址安全护栏：只接受回环 origin（防入站载荷被
   assert.equal(client.setLocalOrigin('http://evil.example.com'), '')
   assert.equal(client.setLocalOrigin('http://127.0.0.1:1234/'), 'http://127.0.0.1:1234')
   await client.stop()
+})
+
+it('push 413：字节超限时二分到单实体仍能同步（不再到 25 实体就挂起）', async t => {
+  const { store, dir } = await testStore(t, { seedMode: 'empty' })
+  const env = makeWorkerEnv({ CLOUD_SYNC_TOKEN: CLIENT_TOKEN })
+  const cloud = createWorkerCloud(env)
+  await writeCloudConfig(dir)
+  const client = clientFor(store, dir, cloud)
+  t.after(() => client.stop())
+  await client.start()
+  await waitFor(() => client.status().baseRevision >= 1, { label: '初始同步完成' })
+
+  // 20 张大载荷卡（每张 summary 600 字）。按单个实体大小动态设「模拟字节上限」：
+  // 单实体必须能过，两实体必超 → 二分必须一路拆到单实体才能全部上云。
+  const ids = []
+  await store.update(draft => {
+    for (let index = 0; index < 20; index++) {
+      const card = createCard(draft, {
+        title: `大载荷卡 ${index}`,
+        summary: 'x'.repeat(600),
+        status: 'backlog',
+        autoStart: false,
+      }, { now: Date.now() }).card
+      ids.push(card.id)
+    }
+    return null
+  })
+  const localSnapshot = toCloudSnapshot(await store.read())
+  const oneEntityBytes = Buffer.byteLength(JSON.stringify(localSnapshot.cards[0]), 'utf8')
+  const limitBytes = oneEntityBytes + Math.ceil(oneEntityBytes * 0.3)
+  cloud.state.intercept = entry => {
+    if (!entry.url.includes('/v1/sync/push')) return undefined
+    if (Buffer.byteLength(String(entry.body || ''), 'utf8') <= limitBytes) return undefined
+    return new Response(JSON.stringify({ ok: false, error: { code: 'PAYLOAD_TOO_LARGE', message: '模拟 256KiB 上限' } }), {
+      status: 413,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  await waitFor(async () => {
+    const snapshot = await pullCloudSnapshot(env)
+    return ids.every(id => snapshot.cards.some(item => item.id === id))
+  }, { timeout: 10000, label: '深度二分后 20 张卡全部上云' })
+
+  const pushes = cloud.state.calls.filter(entry => entry.url.includes('/v1/sync/push'))
+  assert.ok(pushes.filter(entry => entry.status === 413).length >= 2, '应经历多轮 413 二分')
+  assert.ok(pushes.filter(entry => entry.status === 200).length >= 10, '应拆成多个小分片成功推送')
+  assert.equal(client.status().haltedCode, '', '不应因 413 永久挂起')
+  assert.equal(client.status().sync.lastError, null)
+  assert.equal(cardRows(env).length, 20)
+  await client.stop()
+})
+
+it('stop() 中断 claim 批次：不再为剩余条目建回放请求，已消费结果仍 ACK', async t => {
+  const { store, dir } = await testStore(t, { seedMode: 'empty' })
+  const env = makeWorkerEnv({ CLOUD_SYNC_TOKEN: CLIENT_TOKEN })
+  const cloud = createWorkerCloud(env)
+  await writeCloudConfig(dir)
+  let localRequests = 0
+  const client = clientFor(store, dir, cloud, {
+    // 本地回放慢一点（80ms/条），才能观察 stop 是否会继续跑剩余 19 条
+    localFetchImpl: async () => {
+      localRequests += 1
+      await new Promise(resolve => setTimeout(resolve, 80))
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } })
+    },
+    timing: { ...FAST_TIMING, pullIntervalMs: 60000, claimIntervalMs: 60000 },
+  })
+  t.after(() => client.stop())
+  await client.start()
+  await waitFor(() => client.status().baseRevision >= 1, { label: '初始同步完成' })
+
+  // 预置 20 条入站事件（generic 来源，body 各不相同 → 去重键不同）
+  for (let index = 0; index < 20; index++) {
+    const result = await callWorker(env, '/v1/ingress/generic', {
+      method: 'POST',
+      token: null,
+      headers: { 'content-type': 'application/json', 'x-kanban-ingress-token': GENERIC_TOKEN },
+      body: { provider: 'generic', seq: index, kind: 'stop-test' },
+      now: Date.now(),
+    })
+    assert.equal(result.status, 202, result.text)
+  }
+  void client.claimInboxNow()
+  await waitFor(() => localRequests >= 1, { label: '第一条本地回放开始' })
+  const requestsAtStop = localRequests
+  const startedAt = Date.now()
+  await client.stop()
+  const stopMs = Date.now() - startedAt
+  assert.ok(stopMs < 1500, `stop 不应被整批拖住（实际 ${stopMs}ms）`)
+  assert.ok(
+    localRequests - requestsAtStop <= 1,
+    `stop 后不应继续为剩余条目建回放请求（新增 ${localRequests - requestsAtStop} 次）`,
+  )
+  // 已消费条目仍被 ACK；未消费条目保持租约，等下一次启动重领
+  const rows = ingressRows(env)
+  assert.ok(rows.filter(row => row.status === 'acked').length >= 1, '已消费结果应补发 ACK')
+  assert.ok(rows.filter(row => row.status !== 'acked').length >= 15, '未消费条目应留在租约中')
+  assert.equal(client.status().phase, 'stopped')
+})
+
+it('claim 失败映射：500 指数退避后自动恢复，401 停止重试并标记 paused', async t => {
+  const { store, dir } = await testStore(t, { seedMode: 'empty' })
+  const env = makeWorkerEnv({ CLOUD_SYNC_TOKEN: CLIENT_TOKEN })
+  const cloud = createWorkerCloud(env)
+  await writeCloudConfig(dir)
+  const client = clientFor(store, dir, cloud, {
+    timing: { ...FAST_TIMING, pullIntervalMs: 60000, claimIntervalMs: 40 },
+  })
+  t.after(() => client.stop())
+  await client.start()
+  await waitFor(() => client.status().baseRevision >= 1, { label: '初始同步完成' })
+
+  // 500：claim 失败计入退避；移除注入后自动恢复
+  let inject500 = true
+  cloud.state.intercept = entry => {
+    if (!inject500 || !entry.url.includes('/v1/inbox/claim')) return undefined
+    return new Response(JSON.stringify({ ok: false, error: { code: 'INTERNAL', message: '注入 claim 失败' } }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  await waitFor(() => client.status().ingress.consecutiveFailures >= 1, { timeout: 3000, label: 'claim 500 计入失败' })
+  assert.ok(client.status().ingress.nextRetryAt > 0)
+  assert.equal(client.status().ingress.lastError.code, 'INTERNAL')
+  inject500 = false
+  await waitFor(
+    () => client.status().ingress.consecutiveFailures === 0 && client.status().ingress.lastClaimAt > 0,
+    { timeout: 3000, label: '退避后 claim 自动恢复' },
+  )
+
+  // 401：立即 paused，ingress.lastError 记录 UNAUTHORIZED；此后零网络
+  cloud.state.intercept = entry => {
+    if (!entry.url.includes('/v1/inbox/claim')) return undefined
+    return new Response(JSON.stringify({ ok: false, error: { code: 'UNAUTHORIZED', message: '令牌不匹配' } }), {
+      status: 401,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+  await waitFor(() => client.status().paused === true, { timeout: 3000, label: 'claim 401 后 paused' })
+  assert.equal(client.status().pauseReason, 'unauthorized')
+  assert.equal(client.status().ingress.lastError.code, 'UNAUTHORIZED')
+  const callsAtPause = cloud.state.calls.length
+  await new Promise(resolve => setTimeout(resolve, 200))
+  assert.equal(cloud.state.calls.length, callsAtPause, 'paused 后不应再发起云端请求')
+  await client.stop()
+})
+
+it('未挂载守护器时状态接口仍可用：200 + enabled:false（not-configured）', async t => {
+  const { store } = await testStore(t, { seedMode: 'empty' })
+  const server = await startServer(t, { store })
+  const http = await api(server, '/api/kanban/cloud/status')
+  assert.equal(http.status, 200)
+  assert.equal(http.json.ok, true)
+  assert.equal(http.json.cloud.enabled, false)
+  assert.equal(http.json.cloud.configured, false)
+  assert.equal(http.json.cloud.running, false)
+  assert.equal(http.json.cloud.configStatus, 'not-configured')
+  assert.equal(typeof http.json.revision, 'number')
+})
+
+it('ACK 网络黑洞：stop() 有上限（不等待 10s 请求超时），返回后零网络', async t => {
+  const { store, dir } = await testStore(t, { seedMode: 'empty' })
+  const env = makeWorkerEnv({ CLOUD_SYNC_TOKEN: CLIENT_TOKEN })
+  await writeCloudConfig(dir)
+  let localRequests = 0
+  let ackRequests = 0
+  // ACK 端点模拟网络黑洞：永不返回，但尊重 AbortSignal（被 stop 中止时立即失败）
+  const hangingFetch = async (url, init = {}) => {
+    if (String(url).includes('/v1/inbox/ack')) {
+      ackRequests += 1
+      return new Promise((resolve, reject) => {
+        const signal = init.signal
+        if (!signal) return
+        if (signal.aborted) return reject(new Error('aborted'))
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      })
+    }
+    return handleRequest(new Request(String(url), init), env, { now: Date.now() })
+  }
+  const client = clientFor(store, dir, { fetchImpl: hangingFetch }, {
+    localFetchImpl: async () => {
+      localRequests += 1
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } })
+    },
+    timing: {
+      ...FAST_TIMING,
+      pullIntervalMs: 60000,
+      claimIntervalMs: 60000,
+      stopClaimGraceMs: 60,
+      stopFlushAckMs: 60,
+      // 普通请求超时保持默认 10s：本用例验证 stop 不依赖它
+      requestTimeoutMs: 10000,
+    },
+  })
+  t.after(() => client.stop())
+  await client.start()
+  await waitFor(() => client.status().baseRevision >= 1, { label: '初始同步完成' })
+
+  const enqueued = await callWorker(env, '/v1/ingress/generic', {
+    method: 'POST',
+    token: null,
+    headers: { 'content-type': 'application/json', 'x-kanban-ingress-token': GENERIC_TOKEN },
+    body: { provider: 'generic', kind: 'ack-blackhole' },
+    now: Date.now(),
+  })
+  assert.equal(enqueued.status, 202, enqueued.text)
+  void client.claimInboxNow()
+  await waitFor(() => localRequests >= 1 && ackRequests >= 1, { label: '本地回放完成、ACK 开始挂起' })
+
+  const startedAt = Date.now()
+  // stop 内部的宽限计时器是 unref 的（生产上不阻塞进程退出），测试里补一个 ref 计时器让事件循环保持存活
+  const keepAlive = setInterval(() => {}, 10)
+  try {
+    await client.stop()
+  } finally {
+    clearInterval(keepAlive)
+  }
+  const stopMs = Date.now() - startedAt
+  // 若 stop 依赖 10s 请求超时，这里会 >10000ms；有上限后应为 ~2×60ms + 少量调度开销
+  assert.ok(stopMs < 1500, `ACK 黑洞时 stop 不应被 10s 超时拖住（实际 ${stopMs}ms）`)
+  assert.equal(client.status().phase, 'stopped')
+  const acksAtStop = ackRequests
+  await new Promise(resolve => setTimeout(resolve, 250))
+  assert.equal(ackRequests, acksAtStop, 'stop 返回后不应再发起任何请求')
+  assert.ok(ackRequests >= 2, '应有一次原始 ACK + 一次补发尝试')
 })
 
 // 保证 MemoryD1/MIGRATION_SQL 在本文件被引用（node:sqlite 不可用时 skip 提示更明确）
