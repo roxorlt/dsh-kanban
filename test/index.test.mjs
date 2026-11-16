@@ -8,7 +8,11 @@ import { apply, inject, name } from '../lib/index.js'
 import { TOOL_NAMES } from '../lib/tools.js'
 import { createStore } from '../lib/store.js'
 import { createCard, createSeed, normalizeStore } from '../lib/domain.js'
+import { handleRequest } from '../cloudflare/worker.mjs'
+import { HAS_SQLITE, TOKEN as CLIENT_TOKEN, makeWorkerEnv } from './cloud-worker-harness.mjs'
 import { tempDir } from './helpers.mjs'
+
+const WORKER_URL = 'https://kanban-sync.example.workers.dev'
 
 function fakeContext() {
   const state = { routes: [], tools: [], effects: [], events: new Map(), routeDisposers: 0, toolDisposers: 0 }
@@ -401,3 +405,95 @@ test('apply cloudSync:false：不创建守护器 effect（默认会多 1 个云�
   )
   await closeEffects(offCtx.state)
 })
+
+test('apply 进程内回放云端 MCP 写队列：即使宿主 runtime-endpoint.json 指向需鉴权端口也能零 HTTP 损耗回放并同步回 D1', { skip: !HAS_SQLITE }, async t => {
+  const env = makeWorkerEnv({ CLOUD_SYNC_TOKEN: CLIENT_TOKEN })
+  t.after(() => env.DB.close())
+
+  // 模拟 DSH Desktop 宿主 webServer 拦截未带桌面会话 Cookie 的裸回环请求（返回 401）
+  const authGatedHost = createServer((_req, res) => {
+    res.writeHead(401, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Host session required' } }))
+  })
+  await new Promise(resolve => authGatedHost.listen(0, '127.0.0.1', resolve))
+  t.after(() => new Promise(resolve => authGatedHost.close(resolve)))
+  const gatedOrigin = `http://127.0.0.1:${authGatedHost.address().port}`
+
+  const dir = await tempDir(t)
+  await writeFile(join(dir, 'runtime-endpoint.json'), JSON.stringify({ origin: gatedOrigin, updatedAt: Date.now() }), { mode: 0o600 })
+  await writeFile(join(dir, 'cloud-config.json'), JSON.stringify({
+    version: 1,
+    enabled: true,
+    workerUrl: WORKER_URL,
+    token: CLIENT_TOKEN,
+    clientId: 'dsh-desktop-test',
+    sync: { enabled: true, pushDebounceMs: 30, pullIntervalMs: 120 },
+    ingress: { enabled: true, claimIntervalMs: 50, batchSize: 20, leaseSeconds: 120 },
+  }), { mode: 0o600 })
+
+  const workerFetch = async (url, init = {}) => {
+    const target = String(url)
+    if (target.startsWith(WORKER_URL)) {
+      return handleRequest(new Request(target, init), env, { now: Date.now() })
+    }
+    return fetch(target, init)
+  }
+
+  const { ctx, state } = fakeContext()
+  apply(ctx, {
+    dataDir: dir,
+    seed: 'empty',
+    imLocalPort: false,
+    sessionFailureSync: false,
+    cloudSync: {
+      fetchImpl: workerFetch,
+      timing: { pushDebounceMs: 25, pullIntervalMs: 80, claimIntervalMs: 40, retryBaseMs: 30, retryMaxMs: 200 },
+    },
+  })
+  t.after(() => closeEffects(state))
+
+  // 通过远程 Worker /v1/mcp 连续投递建卡 + 改卡两条 mcp_tool_call
+  const createRes = await handleRequest(new Request(`${WORKER_URL}/v1/mcp`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${CLIENT_TOKEN}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'kanban_create_card', arguments: { title: '进程内回放验证卡', project: 'rQuant L2', priority: 'high' } },
+    }),
+  }), env, { now: Date.now() })
+  assert.equal(createRes.status, 200)
+  const createdPayload = JSON.parse((await createRes.json()).result.content[0].text)
+  const cardId = createdPayload.cardId
+  assert.match(cardId, /^card-[a-f0-9]{8}$/)
+
+  const updateRes = await handleRequest(new Request(`${WORKER_URL}/v1/mcp`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${CLIENT_TOKEN}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'kanban_update_card', arguments: { cardId, progress: 85, currentAction: 'PR #460 已合入 main' } },
+    }),
+  }), env, { now: Date.now() })
+  assert.equal(updateRes.status, 200)
+
+  // 等待进程内回放落盘并同步回 D1
+  const synced = await waitForFile(async () => {
+    const rows = env.DB.all('SELECT status FROM ingress_inbox ORDER BY seq')
+    const cardRow = env.DB.one('SELECT payload FROM cards WHERE id = ?', cardId)
+    if (rows.length !== 2 || !rows.every(r => r.status === 'acked') || !cardRow) return false
+    const parsed = JSON.parse(cardRow.payload)
+    return parsed.progress?.percent === 85 && parsed.currentAction === 'PR #460 已合入 main'
+  }, { timeout: 4000 })
+  assert.equal(synced, true, '两条远程 MCP 写操作均应进程内回放成功并同步至 D1（不得被宿主 401 标为 dead）')
+
+  const localData = JSON.parse(await readFile(join(dir, 'data.json'), 'utf8'))
+  const localCard = localData.cards.find(c => c.id === cardId)
+  assert.ok(localCard)
+  assert.equal(localCard.progress?.percent, 85)
+  assert.equal(localCard.currentAction, 'PR #460 已合入 main')
+})
+

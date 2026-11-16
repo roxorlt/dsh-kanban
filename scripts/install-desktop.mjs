@@ -10,7 +10,7 @@
 //   node scripts/install-desktop.mjs            # 安装到默认 desktop profile
 //   node scripts/install-desktop.mjs --dry-run  # 只打印将要做的改动
 //   node scripts/install-desktop.mjs --remove   # 移除
-import { readFile, writeFile, mkdir, symlink, unlink, access } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, symlink, unlink, access, lstat, readlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,6 +31,17 @@ function fail(message) {
 
 async function exists(path) {
   try { await access(path); return true; } catch { return false; }
+}
+
+async function inspectLink(path) {
+  try {
+    const stat = await lstat(path);
+    if (!stat.isSymbolicLink()) return { present: true, target: null };
+    const rawTarget = await readlink(path);
+    return { present: true, target: resolve(dirname(path), rawTarget) };
+  } catch {
+    return { present: false, target: null };
+  }
 }
 
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
@@ -54,8 +65,10 @@ if (remove) {
 const changes = [];
 if (JSON.stringify(manifest) !== JSON.stringify(next)) changes.push(manifestPath);
 const linkPath = join(profileDir, 'node_modules', PACKAGE_NAME);
-const linkExists = await exists(linkPath);
-if (remove ? linkExists : !linkExists) changes.push(linkPath);
+const linkInfo = await inspectLink(linkPath);
+if (remove ? linkInfo.present : (!linkInfo.present || linkInfo.target !== repoRoot)) {
+  changes.push(linkPath);
+}
 
 if (dryRun) {
   console.log(JSON.stringify({ profileDir, repoRoot, remove, changes, next }, null, 2));
@@ -70,8 +83,10 @@ if (!remove) {
   const backup = `${manifestPath}.bak-dsh-kanban`;
   if (!(await exists(backup))) await writeFile(backup, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
   await mkdir(join(profileDir, 'node_modules'), { recursive: true });
-  if (linkExists) await unlink(linkPath).catch(() => {});
+  if (linkInfo.present) await unlink(linkPath).catch(() => {});
   await symlink(repoRoot, linkPath);
+} else if (linkInfo.present) {
+  await unlink(linkPath).catch(() => {});
 }
 await writeFile(manifestPath, JSON.stringify(next, null, 2) + '\n', 'utf8');
 
