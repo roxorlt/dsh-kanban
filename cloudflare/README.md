@@ -38,16 +38,31 @@
 | `.dev.vars.example` | 本地 `wrangler dev` 的密钥模板（复制为 `.dev.vars`，已被 .gitignore 忽略） |
 | `../test/cloud-worker.test.mjs` | 端到端单测（68 例）：node:sqlite 内存库实现 D1 兼容层，执行真实迁移 SQL |
 
-## 3. 首次部署（约 5 分钟）
+## 3. 首次部署（推荐一键脚本，约 1 分钟）
 
-前置：Node ≥ 22、`npx wrangler` 可执行、Cloudflare 账号。
+前置：Node ≥ 22、Cloudflare 账号（免费计划即可）。
+
+```bash
+cd "/path/to/dsh-kanban"
+npm run cloud:setup
+```
+
+`npm run cloud:setup` 会自动完成全部步骤（且**绝不修改 Git 跟踪文件 `cloudflare/wrangler.toml`**，而是生成已加入 `.gitignore` 的私有 `cloudflare/wrangler.local.toml`）：
+1. 检查 Cloudflare 登录态（未登录自动拉起浏览器一次性 OAuth 授权）；
+2. 查找或创建私有 D1 数据库 `dsh-kanban-sync` 并幂等执行表迁移；
+3. 部署 Worker（含 `/v1/mcp` 远程 MCP 控制面）；
+4. 生成 256-bit 随机 `CLOUD_SYNC_TOKEN` 上传至 Worker Secret，并以 `0600` 权限写入 `~/.dsh-kanban/cloud-config.json`；
+5. 当场将本机现有 `~/.dsh-kanban/data.json` 卡片同步至 D1、热通知本机运行中的 DSH 守护器，并做 `/v1/mcp` 端到端冒烟验证后输出可直接填入 MCP 客户端的域名与凭据。
+
+<details>
+<summary>展开查看底层分步手工命令（等价参考）</summary>
 
 ```bash
 cd "/path/to/dsh kanban"
 
 # 1) 建库（个人默认用免费额度）
 npx wrangler d1 create dsh-kanban-sync
-#    → 把输出里的 database_id 填进 cloudflare/wrangler.toml（替换 <REPLACE_WITH_D1_DATABASE_ID>）
+#    → 把输出里的 database_id 填进 cloudflare/wrangler.local.toml（复制自 wrangler.toml 并替换 <REPLACE_WITH_D1_DATABASE_ID>）
 #    → 同一段输出里的 database_name 如与模板不同，也一并改掉
 
 # 2) 应用迁移（读取 wrangler.toml 的 migrations_dir）
@@ -86,7 +101,9 @@ chmod 600 ~/.dsh-kanban/cloud-config.json
 # 7) 冒烟（见 §5）
 ```
 
-> 部署完成后验证 D1 是否就绪：`wrangler d1 execute dsh-kanban-sync --remote --config cloudflare/wrangler.toml --command "SELECT id, epoch, revision FROM sync_meta"`，应有一行 `id=1`、16 位 hex epoch、revision=0。
+> 部署完成后验证 D1 是否就绪：`wrangler d1 execute dsh-kanban-sync --remote --config cloudflare/wrangler.local.toml --command "SELECT id, epoch, revision FROM sync_meta"`，应有一行 `id=1`、16 位 hex epoch、revision=0。
+
+</details>
 
 ### 3.1 本地开发（wrangler dev，不碰线上 D1）
 

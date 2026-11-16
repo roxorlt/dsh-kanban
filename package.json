@@ -52,6 +52,7 @@
     "dev:server": "node scripts/dev-server.mjs --port 4599",
     "dev:web": "npm --prefix web run dev",
     "build": "npm --prefix web run build",
+    "cloud:setup": "node scripts/setup-cloud.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dsh": {

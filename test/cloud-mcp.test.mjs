@@ -12,6 +12,12 @@ import { join } from 'node:path'
 import { createCard, requestApproval } from '../lib/domain.js'
 import { handleRequest } from '../cloudflare/worker.mjs'
 import { createCloudSyncClient } from '../lib/cloud-sync-client.js'
+import {
+  buildInitialCloudConfig,
+  extractD1Uuid,
+  extractWorkerUrl,
+  renderLocalWranglerToml,
+} from '../scripts/setup-cloud.mjs'
 import { HAS_SQLITE, TOKEN, callWorker, makeWorkerEnv } from './cloud-worker-harness.mjs'
 import { api, startServer, testStore } from './helpers.mjs'
 
@@ -523,3 +529,66 @@ it('覆盖请求审批、卡片合并与归档/恢复写工具回放及参数校
   await syncClient.claimInboxNow()
   assert.equal((await store.read()).cards.find(c => c.id === c2).archived, false)
 })
+
+it('一键配置辅助与热重载：setup-cloud 纯函数安全渲染 + /api/kanban/cloud/reload 零重启激活同步', async t => {
+  const sampleUuid = '12345678-9abc-4def-8123-456789abcdef'
+  const rendered = renderLocalWranglerToml(
+    'name = "dsh-kanban-sync"\ndatabase_name = "dsh-kanban-sync"\ndatabase_id = "<REPLACE_WITH_D1_DATABASE_ID>"\n',
+    sampleUuid,
+  )
+  assert.equal(rendered.includes(sampleUuid), true)
+  assert.equal(rendered.includes('<REPLACE_WITH_D1_DATABASE_ID>'), false)
+
+  assert.equal(
+    extractD1Uuid(JSON.stringify([{ name: 'other', uuid: '00000000-0000-0000-0000-000000000000' }, { name: 'dsh-kanban-sync', uuid: sampleUuid }])),
+    sampleUuid,
+  )
+  assert.equal(
+    extractD1Uuid(`Created DB!\ndatabase_id = "${sampleUuid}"\n`),
+    sampleUuid,
+  )
+  assert.equal(
+    extractWorkerUrl('Uploaded dsh-kanban-sync\n  https://dsh-kanban-sync.demo-acct.workers.dev\nCurrent Version ID: abc'),
+    'https://dsh-kanban-sync.demo-acct.workers.dev',
+  )
+  const cfg = buildInitialCloudConfig({
+    workerUrl: 'https://dsh-kanban-sync.demo-acct.workers.dev/',
+    token: TOKEN,
+    clientId: 'My MacBook.local',
+  })
+  assert.equal(cfg.workerUrl, 'https://dsh-kanban-sync.demo-acct.workers.dev')
+  assert.equal(cfg.clientId, 'My-MacBook.local')
+
+  // 验证未配置 cloud-config.json 启动后，写入配置并 POST /api/kanban/cloud/reload 即可零重启激活同步并能在 /v1/mcp 读到
+  const env = makeWorkerEnv()
+  t.after(() => env.DB.close())
+
+  const { store, dir } = await testStore(t, { seedMode: 'empty' })
+  await store.update(draft => createCard(draft, { title: '热重载前已存在的本地卡片', project: 'acme-api' }))
+
+  const cloud = createWorkerCloud(env)
+  const syncClient = createCloudSyncClient({
+    store,
+    dataDir: dir,
+    fetchImpl: cloud.fetchImpl,
+    localFetchImpl: (...args) => globalThis.fetch(...args),
+    logger: quietLogger(),
+    timing: FAST_TIMING,
+  })
+  const server = await startServer(t, { store, cloudSync: syncClient })
+  syncClient.setLocalOrigin(server.url)
+  await syncClient.start()
+  t.after(() => syncClient.stop())
+  assert.equal(syncClient.status().enabled, false)
+
+  await writeCloudConfig(dir)
+  const reloadRes = await api(server, '/api/kanban/cloud/reload', { method: 'POST', body: {} })
+  assert.equal(reloadRes.status, 200)
+  assert.equal(reloadRes.json.cloud.enabled, true)
+
+  await syncClient.syncNow()
+  const cardsRes = await callMcpTool(env, 'kanban_cards', { project: 'acme-api' })
+  assert.equal(cardsRes.payload.total, 1)
+  assert.equal(cardsRes.payload.cards[0].title, '热重载前已存在的本地卡片')
+})
+
