@@ -38,16 +38,31 @@
 | `.dev.vars.example` | 本地 `wrangler dev` 的密钥模板（复制为 `.dev.vars`，已被 .gitignore 忽略） |
 | `../test/cloud-worker.test.mjs` | 端到端单测（68 例）：node:sqlite 内存库实现 D1 兼容层，执行真实迁移 SQL |
 
-## 3. 首次部署（约 5 分钟）
+## 3. 首次部署（推荐一键脚本，约 1 分钟）
 
-前置：Node ≥ 22、`npx wrangler` 可执行、Cloudflare 账号。
+前置：Node ≥ 22、Cloudflare 账号（免费计划即可）。
+
+```bash
+cd "/path/to/dsh-kanban"
+npm run cloud:setup
+```
+
+`npm run cloud:setup` 会自动完成全部步骤（且**绝不修改 Git 跟踪文件 `cloudflare/wrangler.toml`**，而是生成已加入 `.gitignore` 的私有 `cloudflare/wrangler.local.toml`）：
+1. 检查 Cloudflare 登录态（未登录自动拉起浏览器一次性 OAuth 授权）；
+2. 查找或创建私有 D1 数据库 `dsh-kanban-sync` 并幂等执行表迁移；
+3. 部署 Worker（含 `/v1/mcp` 远程 MCP 控制面）；
+4. 生成 256-bit 随机 `CLOUD_SYNC_TOKEN` 上传至 Worker Secret，并以 `0600` 权限写入 `~/.dsh-kanban/cloud-config.json`；
+5. 当场将本机现有 `~/.dsh-kanban/data.json` 卡片同步至 D1、热通知本机运行中的 DSH 守护器，并做 `/v1/mcp` 端到端冒烟验证后输出可直接填入 MCP 客户端的域名与凭据。
+
+<details>
+<summary>展开查看底层分步手工命令（等价参考）</summary>
 
 ```bash
 cd "/path/to/dsh kanban"
 
 # 1) 建库（个人默认用免费额度）
 npx wrangler d1 create dsh-kanban-sync
-#    → 把输出里的 database_id 填进 cloudflare/wrangler.toml（替换 <REPLACE_WITH_D1_DATABASE_ID>）
+#    → 把输出里的 database_id 填进 cloudflare/wrangler.local.toml（复制自 wrangler.toml 并替换 <REPLACE_WITH_D1_DATABASE_ID>）
 #    → 同一段输出里的 database_name 如与模板不同，也一并改掉
 
 # 2) 应用迁移（读取 wrangler.toml 的 migrations_dir）
@@ -86,7 +101,9 @@ chmod 600 ~/.dsh-kanban/cloud-config.json
 # 7) 冒烟（见 §5）
 ```
 
-> 部署完成后验证 D1 是否就绪：`wrangler d1 execute dsh-kanban-sync --remote --config cloudflare/wrangler.toml --command "SELECT id, epoch, revision FROM sync_meta"`，应有一行 `id=1`、16 位 hex epoch、revision=0。
+> 部署完成后验证 D1 是否就绪：`wrangler d1 execute dsh-kanban-sync --remote --config cloudflare/wrangler.local.toml --command "SELECT id, epoch, revision FROM sync_meta"`，应有一行 `id=1`、16 位 hex epoch、revision=0。
+
+</details>
 
 ### 3.1 本地开发（wrangler dev，不碰线上 D1）
 
@@ -104,6 +121,7 @@ BASE=http://127.0.0.1:8787 TOKEN=<.dev.vars 里的 CLOUD_SYNC_TOKEN>   # 供 §5
 | 名称 | 必填 | 用途 | 未配置时行为 |
 | --- | --- | --- | --- |
 | `CLOUD_SYNC_TOKEN` | **是** | 状态面 Bearer 令牌（常量时间比较） | 状态面所有接口 `503 UNAVAILABLE`（fail-closed） |
+| `MCP_BEARER_TOKEN` | 否 | `/v1/mcp` 远程 MCP 独立 Bearer 令牌（配置后与 `CLOUD_SYNC_TOKEN` 隔离，随时单独轮换） | 默认回退复用 `CLOUD_SYNC_TOKEN`；两者皆空则 `/v1/mcp` `503` |
 | `GITHUB_WEBHOOK_SECRET` | 按需 | GitHub Webhook HMAC-SHA256 验签 | GitHub ingress `503` |
 | `FEISHU_VERIFICATION_TOKEN` | 按需 | 飞书 challenge/事件 token 校验 | 飞书 ingress `503` |
 | `FEISHU_ENCRYPT_KEY` | 按需 | 飞书事件 `X-Lark-Signature` 校验（sha256(ts+nonce+key+body)） | 不启用签名校验（若同时无 token 则 `503`） |
@@ -166,6 +184,11 @@ curl -s -X POST "$BASE/v1/inbox/claim" -H "Authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' -d '{"consumerId":"smoke","limit":20,"leaseSeconds":120}' | jq .
 curl -s -X POST "$BASE/v1/inbox/ack" -H "Authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' -d '{"consumerId":"smoke","results":[{"id":"in-…","outcome":"acked"}]}' | jq .
+
+# 9) 远程 Streamable HTTP MCP 冒烟（云端 AI Agent 如 Antigravity / Claude / Cursor 直连）
+curl -s -X POST "$BASE/v1/mcp" \
+  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"kanban_boards","arguments":{}}}' | jq .
 ```
 
 ## 6. API 摘要
@@ -180,6 +203,7 @@ curl -s -X POST "$BASE/v1/inbox/ack" -H "Authorization: Bearer $TOKEN" \
 | POST | `/v1/ingress/:provider` | 来源验签 | `github/feishu/dingtalk/wecom/onebot/weixin/generic`；202 秒回，飞书 challenge 直通 200 |
 | POST | `/v1/inbox/claim` | Bearer | `{consumerId,limit≤20,leaseSeconds∈[30,900]}` → 带租约 items（按 seq 升序） |
 | POST | `/v1/inbox/ack` | Bearer | `{consumerId,results:[{id,outcome:acked\|retry\|dead,error?}]}`；`results ≤200`（服务端按 90 id/查询分块回查，规避 D1 单查询 ≤100 绑定参数上限） |
+| POST / DELETE | `/v1/mcp`（别名 `/mcp`） | Bearer（`MCP_BEARER_TOKEN` 或 `CLOUD_SYNC_TOKEN`） | MCP Streamable HTTP（`2025-03-26` / `2024-11-05`）：4 个只读工具直查 D1（Mac 合盖也可读），8 个写工具在边缘校验剥离后入 `ingress_inbox` 由本地回放（**无需 D1 结构迁移**） |
 
 补充语义（C2 复核后加固）：
 - 同步面（pull/push/claim/ack）成功响应与错误信封都带 `protocolVersion:1`，所有响应带 `x-request-id` 头；ingress 回执保持来源平台最小字段（飞书 challenge 只回 `{challenge}`）。
