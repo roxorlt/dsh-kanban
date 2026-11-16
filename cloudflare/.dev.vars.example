@@ -5,6 +5,9 @@
 # 状态面 Bearer 令牌（必填；openssl rand -hex 32）
 CLOUD_SYNC_TOKEN="replace-with-openssl-rand-hex-32"
 
+# 远程 MCP 专用令牌（可选；若不配置则 /v1/mcp 默认复用 CLOUD_SYNC_TOKEN；若配置则仅接受此独立令牌）
+# MCP_BEARER_TOKEN="replace-with-dedicated-mcp-bearer-token"
+
 # 入站来源密钥（按需；不配置 = 该来源 fail-closed 503）
 # GITHUB_WEBHOOK_SECRET="replace-with-github-webhook-secret"
 # FEISHU_VERIFICATION_TOKEN="replace-with-feishu-verification-token"

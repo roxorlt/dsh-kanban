@@ -14,6 +14,7 @@
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
     "./mcp": "./lib/mcp-server.js",
+    "./cloud-mcp": "./lib/cloud-mcp.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -34,6 +35,7 @@
     "lib/watchdog.js",
     "lib/cloud-sync-protocol.js",
     "lib/cloud-sync-client.js",
+    "lib/cloud-mcp.js",
     "lib/router.js",
     "lib/im-gateway.js",
     "lib/im-notifier.js",

@@ -20,11 +20,17 @@
 //   POST /v1/ingress/:provider  Webhook 暂存入口（github/feishu/dingtalk/wecom/onebot/weixin/generic）
 //   POST /v1/inbox/claim     领取待回放事件（写租约）
 //   POST /v1/inbox/ack       回执消费结果（acked / retry 退避 / dead）
+//   POST /v1/mcp（别名 /mcp） 远程 Streamable HTTP MCP（Bearer 鉴权；读工具直查 D1，写工具入队回放）
 //
-// 测试：test/cloud-worker.test.mjs（node:sqlite 内存库模拟 D1，执行真实迁移 SQL）。
+// 测试：test/cloud-worker.test.mjs & test/cloud-mcp.test.mjs（node:sqlite 内存库模拟 D1）。
 // ============================================================================
 
 import { createHash, createHmac } from 'node:crypto'
+import {
+  assertCloudMcpAuthorized,
+  buildCloudMcpIngressPayload,
+  handleCloudMcpJsonRpc,
+} from '../lib/cloud-mcp.js'
 import {
   CLOUD_INGRESS_PROVIDERS,
   CLOUD_PROTOCOL_VERSION,
@@ -1281,6 +1287,117 @@ async function handleAck(request, env, options) {
 }
 
 // ---------------------------------------------------------------------------
+// 五（续）、POST /v1/mcp —— 远程 Streamable HTTP MCP 控制面（只读直连 D1 + 写入队回放）
+// ---------------------------------------------------------------------------
+
+async function handleMcp(request, env, options) {
+  // 鉴权必须在方法检查前执行：未配置令牌时一律 503，缺/错 Bearer 一律 401（绝不泄漏端点能力）
+  assertCloudMcpAuthorized(request, env)
+  const method = String(request.method || 'GET').toUpperCase()
+  if (method === 'DELETE') {
+    return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } })
+  }
+  if (method !== 'POST') {
+    throw methodNotAllowed(method, 'POST, DELETE')
+  }
+
+  const db = requireDb(env)
+  const rawText = await readTextBody(request, {
+    maxBytes: CLOUD_SYNC_LIMITS.ingressPayloadBytes,
+    code: 'PAYLOAD_TOO_LARGE',
+  })
+
+  let parsedBody
+  try {
+    parsedBody = rawText.trim() ? JSON.parse(rawText) : null
+  } catch {
+    return jsonResponse(
+      { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } },
+      { status: 200 },
+    )
+  }
+  if (parsedBody === null) {
+    return jsonResponse(
+      { jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Invalid Request' } },
+      { status: 200 },
+    )
+  }
+
+  const now = nowOf(options)
+  const agentName = cleanString(request.headers.get('x-kanban-agent')).slice(0, 80) || 'Cloud MCP Agent'
+  const harness = cleanString(request.headers.get('x-kanban-harness')).slice(0, 40) || 'cloud-mcp'
+  const idempotencyHeader = cleanString(request.headers.get('x-kanban-mcp-call-id')).slice(0, 160)
+  let writeCallIndex = 0
+
+  const enqueueWrite = async ({ tool, args, preferredCardId, agentName: callAgentName, now: callNow }) => {
+    writeCallIndex += 1
+    const suppliedCallId = idempotencyHeader
+      ? (writeCallIndex === 1 ? idempotencyHeader : `${idempotencyHeader}-${writeCallIndex}`)
+      : ''
+    const { mcpCallId, payload: envelopePayload } = buildCloudMcpIngressPayload({
+      tool,
+      args,
+      preferredCardId,
+      agentName: callAgentName || agentName,
+      ...(suppliedCallId ? { mcpCallId: suppliedCallId } : {}),
+      now: callNow ?? now,
+    })
+    const envelope = normalizeIngressEnvelope({
+      provider: 'generic',
+      headers: {},
+      payload: JSON.stringify(envelopePayload),
+      eventType: 'mcp_tool_call',
+      deliveryId: mcpCallId,
+      now: callNow ?? now,
+    })
+    const insert = db.prepare(INGRESS_INSERT_SQL).bind(
+      envelope.id,
+      envelope.provider,
+      envelope.eventType || null,
+      envelope.deliveryId || null,
+      envelope.dedupeKey,
+      JSON.stringify(envelope.headers),
+      envelope.payload,
+      envelope.payloadBytes,
+      CLOUD_SYNC_LIMITS.ingressMaxAttempts,
+      envelope.receivedAt,
+      envelope.expiresAt,
+    )
+    const select = db.prepare(
+      'SELECT seq, id, status, received_at FROM ingress_inbox WHERE dedupe_key = ?',
+    ).bind(envelope.dedupeKey)
+    const [insertResult, selectResult] = await d1(db.batch([insert, select]))
+    const row = rowsOf(selectResult)[0]
+    if (!row) throw new CloudSyncError('INTERNAL', 'MCP 写事件入队后未能读取记录（请检查 D1 可用性）')
+    const duplicate = changedCount(insertResult) === 0
+    logEvent(env, 'info', 'cloud_mcp_write_enqueued', {
+      tool,
+      id: String(row.id),
+      seq: toInt(row.seq),
+      duplicate,
+    })
+    return {
+      id: String(row.id),
+      seq: toInt(row.seq),
+      duplicate,
+      receivedAt: toInt(row.received_at),
+    }
+  }
+
+  const rpcResponse = await handleCloudMcpJsonRpc(parsedBody, {
+    db,
+    enqueueWrite,
+    now,
+    agentName,
+    harness,
+  })
+  if (rpcResponse === null) {
+    return new Response(null, { status: 202, headers: { 'cache-control': 'no-store' } })
+  }
+  return jsonResponse(rpcResponse, { status: 200 })
+}
+
+// ---------------------------------------------------------------------------
 // 六、Cron 清理（契约 §3.9 / 迁移文件头注释）
 // ---------------------------------------------------------------------------
 
@@ -1333,6 +1450,9 @@ export async function handleRequest(request, env = {}, options = {}) {
     const url = new URL(request.url)
     path = url.pathname.replace(/\/+$/, '') || '/'
 
+    if (path === '/v1/mcp' || path === '/mcp') {
+      return withRequestId(await handleMcp(request, env, options), requestId)
+    }
     if (path === '/v1/sync/pull') {
       if (method !== 'GET') throw methodNotAllowed(method, 'GET')
       return withRequestId(await handlePull(request, env, url, options), requestId)
@@ -1375,7 +1495,10 @@ export async function handleRequest(request, env = {}, options = {}) {
         console.error('[cloud-worker]', path, error, error?.cause ?? '')
       }
     }
-    return jsonResponse(body, { status, requestId })
+    const extraHeaders = status === 405 && error instanceof CloudSyncError && error.details?.allowed
+      ? { allow: String(error.details.allowed) }
+      : undefined
+    return jsonResponse(body, { status, requestId, extraHeaders })
   }
 }
 

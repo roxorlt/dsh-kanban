@@ -8,6 +8,7 @@
 #   2) wrangler d1 migrations apply dsh-kanban-sync --remote
 #      （本文件已声明 migrations_dir，默认读取 cloudflare/migrations/）
 #   3) wrangler secret put CLOUD_SYNC_TOKEN
+#      可选远程 MCP 独立令牌：MCP_BEARER_TOKEN（不设则 /v1/mcp 复用 CLOUD_SYNC_TOKEN）
 #      可选来源密钥：GITHUB_WEBHOOK_SECRET / FEISHU_VERIFICATION_TOKEN / FEISHU_ENCRYPT_KEY
 #                    DINGTALK_SIGN_SECRET 或 DINGTALK_ACCESS_TOKEN / INGRESS_GENERIC_TOKEN
 #   4) wrangler deploy

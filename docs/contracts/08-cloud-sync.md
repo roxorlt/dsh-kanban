@@ -830,6 +830,20 @@ stateDiagram-v2
 
 ---
 
+## 13. 远程 Streamable HTTP MCP 控制面（`/v1/mcp`）
+
+为支持运行在远端容器/沙箱中的个人 AI Agent（如 Antigravity 远端会话、Claude / Cursor Remote MCP）在不穿透本地内网、且 MacBook 合盖休眠期间也能安全读写看板卡片，Worker 在同一套单写者契约之上暴露 MCP Streamable HTTP（`2025-06-18` / `2025-03-26` / `2024-11-05`）端点 `POST /v1/mcp`（别名 `POST /mcp`）：
+
+1. **读写职责严格遵守单写者边界（零 D1 结构迁移）**：
+   - **只读工具直查 D1 镜像**（`kanban_boards`、`kanban_cards`、`kanban_card`、`kanban_review_board`，以及 `kanban_merge_cards(dryRun:true)`、`kanban_archive_cards(dryRun:true)`）：即使本地 Mac 合盖休眠，云端 Agent 也可 7x24 秒级读取看板与卡片详情，响应额外附带 `pendingCloudWrites` 提示尚未被本地消费的离线写入条数。由于云端镜像已剥离 `cwd`，`kanban_review_board` 在云端自动屏蔽因缺 `cwd` 产生的假阳性 `orphans`。
+   - **写入工具入队回放**（`kanban_create_card`、`kanban_update_card`、`kanban_move_card`、`kanban_add_activity`、`kanban_request_approval`、`kanban_complete_card`、`kanban_merge_cards`、`kanban_archive_cards`）：Worker **不直接修改** D1 的 `cards`/`boards`/`activities` 表，而是在边缘完成参数校验后以 `provider='generic', event_type='mcp_tool_call'` 写入既有 `ingress_inbox`。`kanban_create_card` 在边缘预分配确定性 `card-xxxxxxxx`（写入 `preferredCardId`），支持离线期连续串联 `create → move → update → complete`；待本地 Mac 在线后由 C3 守护器按 `seq` 升序 claim → 交由 `handleIngressEvent` 写入 `~/.dsh-kanban/data.json` → 再增量 push 回 D1，彻底杜绝双写冲突。
+2. **开源与私有数据完全物理隔离**：
+   - 代码仓（含开源发布后）仅包含通用代码与占位符 `database_id = "<REPLACE_WITH_D1_DATABASE_ID>"`，不含任何个人 Worker 域名、D1 数据库 ID 或密钥。
+   - 每个部署者的数据仅存于其个人 Cloudflare 账号下的私有 D1 实例；`/v1/mcp` 在方法分发前强制执行常量时间 Bearer 校验（优先使用独立 Secret `MCP_BEARER_TOKEN`，未设置时回退 `CLOUD_SYNC_TOKEN`；两者均未配置时一律 `503 fail-closed`，缺/错令牌一律 `401`），外部第三方即使克隆开源仓库也无法连接或读取任何个人看板数据。
+   - **双向执行面脱敏**：本地 → D1 方向由 `toCloudCard` 剥离 `cwd`、`workspaceId`、`sessionIds`、`runtime`；云端 MCP → 本地方向由 `sanitizeCloudMcpWriteArgs` 在 Worker 边缘与本地 `handleMcpToolIngress` 双重剥离 `cwd`、`workspaceId`、`sessionId(s)`、`sessionMode`、`waitCondition` 与 `artifact.path`，防止远端调用篡改本机目录或会话绑定。
+
+---
+
 ## 附录 A：`~/.dsh-kanban/cloud-config.json` 示例
 
 ```json
