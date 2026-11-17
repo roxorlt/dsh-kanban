@@ -16,10 +16,12 @@ import { GitBranchSection } from './GitBranchSection';
 import { RelationSection } from './CardRelations';
 import { SessionSection } from './SessionSection';
 import { AgentBadge } from './AgentBadge';
+import { describeCardAgent } from '../lib/agentBadge';
 import { Timeline, TimelineLoadMore } from './Timeline';
 import type { CardActionHandlers } from './types';
 import type { CreateSessionOptions } from './SessionSection';
 import {
+  EXTERNAL_REPLY_TARGET,
   nextTargetAfterPrimaryChange,
   replyTargetOptions,
   resolveReplyTarget,
@@ -159,6 +161,8 @@ export function DetailDrawer({
   // v0.22 关系索引：用全量卡片算父子/依赖，避免详情抽屉里再请求接口
   const relations = useMemo(() => buildCardRelationIndex(allCards), [allCards]);
   const runtimeInfo = useMemo(() => describeCardRuntime(card, now), [card, now]);
+  const agentDesc = useMemo(() => describeCardAgent(card.agent), [card.agent]);
+  const isExternalAgent = agentDesc?.kind === 'external';
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -167,8 +171,9 @@ export function DetailDrawer({
   /** 遮罩 blur 只在进场动画播完后开启；离场立刻关掉（见 DRAWER_BLUR_SETTLE_MS） */
   const [blurSettled, setBlurSettled] = useState(false);
   const [targetSessionId, setTargetSessionId] = useState<string | null>(() =>
-    resolveReplyTarget(card.sessionIds, card.sessionIds[0] ?? null),
+    resolveReplyTarget(card.sessionIds, card.sessionIds[0] ?? null, isExternalAgent),
   );
+  const prevExternalRef = useRef(isExternalAgent);
   const [composerDirty, setComposerDirty] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [handoffCopied, setHandoffCopied] = useState(false);
@@ -199,14 +204,19 @@ export function DetailDrawer({
   const otherArtifacts = card.artifacts.filter((artifact) => !(artifact.kind === 'image' && artifact.url));
 
   useEffect(() => {
-    setTargetSessionId(resolveReplyTarget(card.sessionIds, card.sessionIds[0] ?? null));
+    prevExternalRef.current = isExternalAgent;
+    setTargetSessionId(resolveReplyTarget(card.sessionIds, card.sessionIds[0] ?? null, isExternalAgent));
     setComposerDirty(false);
     setDiscardOpen(false);
   }, [card.id]);
 
   useEffect(() => {
-    setTargetSessionId((current) => resolveReplyTarget(card.sessionIds, current));
-  }, [card.sessionIds]);
+    const flipped = prevExternalRef.current !== isExternalAgent;
+    prevExternalRef.current = isExternalAgent;
+    setTargetSessionId((current) =>
+      resolveReplyTarget(card.sessionIds, flipped ? null : current, isExternalAgent),
+    );
+  }, [card.sessionIds, isExternalAgent]);
 
   // —— 审批区块离场（docs/11-motion.md §6.3）——
   // 提交成功后服务端刷新会把该审批从 pendingApprovals 里移除；若直接 map pendingApprovals，
@@ -328,13 +338,17 @@ export function DetailDrawer({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const targetSession = resolveReplyTarget(card.sessionIds, targetSessionId);
-  const targetOptions = replyTargetOptions(card.sessionIds, sessions);
+  const externalReplyOption =
+    isExternalAgent && agentDesc
+      ? { label: t('drawer.replyTargetExternal', { agent: agentDesc.label }) }
+      : null;
+  const targetSession = resolveReplyTarget(card.sessionIds, targetSessionId, isExternalAgent);
+  const targetOptions = replyTargetOptions(card.sessionIds, sessions, externalReplyOption);
   const targetOption = targetOptions.find((option) => option.id === targetSession) ?? targetOptions[0];
   const targetLabel = targetOption?.title ?? null;
   // 设为主会话后按设计规范 §7.5 让默认目标跟随（用户手动选过其它会话则保持）
   const handleSetPrimary = (sessionId: string) => {
-    const previousPrimary = card.sessionIds[0] ?? null;
+    const previousPrimary = isExternalAgent ? EXTERNAL_REPLY_TARGET : (card.sessionIds[0] ?? null);
     setTargetSessionId((current) => nextTargetAfterPrimaryChange(current, previousPrimary, sessionId));
     onSetPrimary(card, sessionId);
   };

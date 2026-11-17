@@ -188,6 +188,8 @@ export interface CardAgent {
   name: string;
   id?: string;
   harness?: string;
+  /** 可选外部 Agent 会话 Web 链接（仅允许 http:// 或 https://） */
+  url?: string;
 }
 
 export interface Card {

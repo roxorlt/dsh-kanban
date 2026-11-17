@@ -173,6 +173,8 @@ export function KanbanCard({
   );
   const elapsed = elapsedMs(card, now);
   const runtimeInfo = useMemo(() => describeCardRuntime(card, now), [card, now]);
+  const agentDesc = useMemo(() => describeCardAgent(card.agent), [card.agent]);
+  const isExternalAgent = agentDesc?.kind === 'external';
   const primarySession = card.sessionIds[0]
     ? sessions.find((session) => session.id === card.sessionIds[0])
     : undefined;
@@ -450,9 +452,15 @@ export function KanbanCard({
           <button
             type="button"
             className="kb-link-btn kb-media-row__action"
-            onClick={() => (card.sessionIds.length ? onSessionClick(card) : onOpenDetail(card.id))}
+            onClick={() =>
+              (!isExternalAgent && card.sessionIds.length) || Boolean(agentDesc?.url)
+                ? onSessionClick(card)
+                : onOpenDetail(card.id)
+            }
           >
-            {card.sessionIds.length ? t('card.viewInSession') : t('card.viewInDetail')}
+            {(!isExternalAgent && card.sessionIds.length) || Boolean(agentDesc?.url)
+              ? t('card.viewInSession')
+              : t('card.viewInDetail')}
           </button>
         </div>
       ) : null}
@@ -473,7 +481,7 @@ export function KanbanCard({
             </span>
           </span>
         ) : null}
-        {card.status === 'running' && !card.sessionIds.length ? (
+        {card.status === 'running' && !card.sessionIds.length && !isExternalAgent ? (
           <span className="kb-foot-warn" title={t('drawer.runningNoSessionWarn')}>
             {t('card.noSessionWarn')}
           </span>
@@ -523,13 +531,25 @@ export function KanbanCard({
           ) : null}
           <button
             type="button"
-            className={`kb-metric kb-metric-link${primarySession?.running ? ' kb-metric--live' : ''}`}
-            title={primarySession?.title ?? card.sessionIds[0] ?? t('card.noSession')}
-            aria-label={t('card.sessionOpen')}
+            className={`kb-metric kb-metric-link${!isExternalAgent && primarySession?.running ? ' kb-metric--live' : ''}`}
+            title={
+              isExternalAgent
+                ? agentDesc?.url
+                  ? t('card.openExternalSession', { agent: agentDesc.label })
+                  : t('card.externalSessionDetail', { agent: agentDesc?.label ?? '' })
+                : (primarySession?.title ?? card.sessionIds[0] ?? t('card.noSession'))
+            }
+            aria-label={
+              isExternalAgent
+                ? agentDesc?.url
+                  ? t('card.openExternalSession', { agent: agentDesc.label })
+                  : t('card.externalSessionDetail', { agent: agentDesc?.label ?? '' })
+                : t('card.sessionOpen')
+            }
             onClick={() => onSessionClick(card)}
           >
             <span className="kb-icon" aria-hidden="true">
-              <IconLink />
+              {isExternalAgent && agentDesc?.url ? <IconOpen /> : <IconLink />}
             </span>
           </button>
         </span>

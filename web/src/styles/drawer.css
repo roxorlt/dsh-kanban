@@ -385,6 +385,39 @@
   gap: 8px;
 }
 
+.kb-session__external {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--kb-agent-ext-border);
+  border-radius: var(--kb-r-ctl);
+  background: var(--kb-agent-ext-bg);
+}
+
+.kb-session__external-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kb-session__external-title {
+  color: var(--kb-status-running-text);
+  font: var(--dsw-font-xxs-strong-12);
+}
+
+.kb-session__external-hint {
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.kb-session__external-open {
+  flex: none;
+}
+
 .kb-session__list {
   display: flex;
   flex-direction: column;

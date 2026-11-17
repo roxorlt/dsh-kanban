@@ -1326,6 +1326,7 @@ async function handleMcp(request, env, options) {
   const now = nowOf(options)
   const agentName = cleanString(request.headers.get('x-kanban-agent')).slice(0, 80) || 'Cloud MCP Agent'
   const harness = cleanString(request.headers.get('x-kanban-harness')).slice(0, 40) || 'cloud-mcp'
+  const agentUrl = cleanString(request.headers.get('x-kanban-agent-url')).slice(0, 800) || undefined
   const idempotencyHeader = cleanString(request.headers.get('x-kanban-mcp-call-id')).slice(0, 160)
   let writeCallIndex = 0
 
@@ -1335,6 +1336,7 @@ async function handleMcp(request, env, options) {
     preferredCardId,
     agentName: callAgentName,
     harness: callHarness,
+    agentUrl: callAgentUrl,
     now: callNow,
   }) => {
     writeCallIndex += 1
@@ -1347,6 +1349,7 @@ async function handleMcp(request, env, options) {
       preferredCardId,
       agentName: callAgentName || agentName,
       harness: callHarness || harness,
+      ...(callAgentUrl || agentUrl ? { agentUrl: callAgentUrl || agentUrl } : {}),
       ...(suppliedCallId ? { mcpCallId: suppliedCallId } : {}),
       now: callNow ?? now,
     })
@@ -1398,6 +1401,7 @@ async function handleMcp(request, env, options) {
     now,
     agentName,
     harness,
+    agentUrl,
   })
   if (rpcResponse === null) {
     return new Response(null, { status: 202, headers: { 'cache-control': 'no-store' } })

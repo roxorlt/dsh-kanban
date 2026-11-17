@@ -4,11 +4,15 @@ import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
+  DomainError,
   createCard,
+  linkSession,
+  patchCard,
   recordSessionTurnMetrics,
   recordSessionTurnStart,
   resolveAgentAttribution,
 } from '../lib/domain.js'
+import { sanitizeCloudMcpWriteArgs } from '../lib/cloud-mcp.js'
 import { toCloudCard } from '../lib/cloud-sync-protocol.js'
 import { handleMcpJsonRpc } from '../lib/mcp-server.js'
 import { createTools } from '../lib/tools.js'
@@ -270,5 +274,154 @@ cloudIt('Cloud Remote MCP + C3 回放：x-kanban-agent / x-kanban-harness 自动
   assert.deepEqual(queried.cards[0].agent, {
     name: 'Carbon · Gemini',
     harness: 'carbon',
+  })
+})
+
+test('agent.url：严格拦截非 http(s) 协议，同 harness 自动保留并在切换 harness 时清除', async t => {
+  const { store } = await testStore(t, { seedMode: 'empty' })
+
+  await store.update(draft => {
+    const { card } = createCard(draft, {
+      title: '协议校验卡片',
+      agent: {
+        name: 'Carbon · Gemini',
+        harness: 'carbon',
+        url: 'https://carbon.example/conversations/c-001',
+      },
+    })
+    assert.equal(card.agent.url, 'https://carbon.example/conversations/c-001')
+
+    assert.throws(
+      () => patchCard(draft, card.id, {
+        agent: { name: 'Carbon · Gemini', harness: 'carbon', url: 'javascript:alert(1)' },
+      }),
+      err => err instanceof DomainError && err.code === 'BAD_REQUEST',
+    )
+    assert.throws(
+      () => sanitizeCloudMcpWriteArgs('kanban_create_card', {
+        title: '非法协议',
+        agent: { name: 'Carbon · Gemini', harness: 'carbon', url: 'file:///etc/passwd' },
+      }),
+      err => err instanceof DomainError && err.code === 'BAD_REQUEST',
+    )
+  })
+
+  // 通过 MCP 请求头携带 x-kanban-agent-url 建卡，后续同 harness 未重传 url 时自动保留
+  const createRes = await handleMcpJsonRpc(store, {
+    jsonrpc: '2.0',
+    id: 10,
+    method: 'tools/call',
+    params: {
+      name: 'kanban_create_card',
+      arguments: { title: '带外部链接的跨端卡片', status: 'running' },
+    },
+  }, {
+    agentName: 'Carbon · Gemini',
+    harness: 'carbon',
+    agentUrl: 'https://carbon.example/conversations/c-002',
+  })
+  const created = JSON.parse(createRes.result.content[0].text)
+  assert.equal(created.card.agent.url, 'https://carbon.example/conversations/c-002')
+
+  await handleMcpJsonRpc(store, {
+    jsonrpc: '2.0',
+    id: 11,
+    method: 'tools/call',
+    params: {
+      name: 'kanban_update_card',
+      arguments: { cardId: created.card.id, currentAction: '推进单测' },
+    },
+  }, { agentName: 'Carbon · Gemini', harness: 'carbon' })
+
+  const preserved = (await store.read()).cards.find(item => item.id === created.card.id)
+  assert.equal(preserved.agent.url, 'https://carbon.example/conversations/c-002')
+
+  // 切换到另一外部 harness（如 Codex）且未传新 url 时自动清除旧链接
+  await handleMcpJsonRpc(store, {
+    jsonrpc: '2.0',
+    id: 12,
+    method: 'tools/call',
+    params: {
+      name: 'kanban_update_card',
+      arguments: { cardId: created.card.id, currentAction: 'Codex 接棒' },
+    },
+  }, { agentName: 'Codex', harness: 'codex' })
+
+  const switched = (await store.read()).cards.find(item => item.id === created.card.id)
+  assert.equal(switched.agent.harness, 'codex')
+  assert.equal(switched.agent.url, undefined)
+
+  // D1 脱敏保留合法 https agent.url，并对查询串 token 自动脱敏，同时剥离 id
+  const cloudCard = toCloudCard({
+    ...created.card,
+    agent: {
+      name: 'Carbon · Gemini',
+      id: 'carbon:local',
+      harness: 'carbon',
+      url: 'https://carbon.example/conversations/c-002?access_token=secret123456',
+    },
+  })
+  assert.equal('id' in cloudCard.agent, false)
+  assert.equal(cloudCard.agent.harness, 'carbon')
+  assert.match(cloudCard.agent.url, /^https:\/\/carbon\.example\/conversations\/c-002\?/)
+  assert.equal(cloudCard.agent.url.includes('secret123456'), false)
+})
+
+test('linkSession：用户显式绑定或转交既有本地 DSH 会话时，将外部 Agent 卡片归属切回 DSH 宿主', async t => {
+  const { store } = await testStore(t, { seedMode: 'empty' })
+
+  await store.update(draft => {
+    // 场景 1：最初由本地 DSH 建卡（sessionIds=['sess-dsh-1']），后由 Carbon 跨端接手推进
+    const { card: hybrid } = createCard(draft, {
+      title: '跨端交接后再转回本地会话',
+      status: 'running',
+      sessionId: 'sess-dsh-1',
+      agent: {
+        name: 'Carbon · Gemini',
+        harness: 'carbon',
+        url: 'https://carbon.example/conversations/c-hybrid',
+      },
+    })
+
+    // 即使 sess-dsh-1 已经是 sessionIds[0]，用户点击「转交接手」仍应触发宿主接管（而非空操作）
+    const takeoverSamePrimary = linkSession(draft, hybrid.id, {
+      sessionId: 'sess-dsh-1',
+      title: '原本地主会话',
+      actor: { kind: 'user', name: '你' },
+    })
+    assert.equal(takeoverSamePrimary.primaryChanged, true)
+    assert.equal(takeoverSamePrimary.activity?.data?.action, 'takeover')
+    assert.deepEqual(hybrid.agent, {
+      name: 'DeepSeek',
+      id: 'dsh:deepseek',
+      harness: 'dsh',
+    })
+
+    // 再次对已是 DSH 宿主归属的主会话重复 linkSession 保持幂等空操作
+    const idempotent = linkSession(draft, hybrid.id, {
+      sessionId: 'sess-dsh-1',
+      actor: { kind: 'user', name: '你' },
+    })
+    assert.equal(idempotent.activity, null)
+    assert.equal(idempotent.primaryChanged, false)
+
+    // 场景 2：纯外部无会话卡片，用户新绑一个本地 DSH 会话接手
+    const { card: pureExt } = createCard(draft, {
+      title: '纯外部卡片新绑本地会话',
+      status: 'running',
+      agent: { name: 'Codex', harness: 'codex' },
+    })
+    const linked = linkSession(draft, pureExt.id, {
+      sessionId: 'sess-dsh-new',
+      title: '新本地接手会话',
+      actor: { kind: 'user', name: '你' },
+    })
+    assert.equal(linked.linked, true)
+    assert.equal(linked.activity?.data?.action, 'takeover')
+    assert.deepEqual(pureExt.agent, {
+      name: 'DeepSeek',
+      id: 'dsh:deepseek',
+      harness: 'dsh',
+    })
   })
 })

@@ -126,7 +126,9 @@ export function Composer({
           }
         }}
       />
-      {!embedded ? <p className="kb-composer__hint">{t('composer.standaloneHint')}</p> : null}
+      {!embedded && target?.id !== '__external__' ? (
+        <p className="kb-composer__hint">{t('composer.standaloneHint')}</p>
+      ) : null}
       {error ? (
         <div className="kb-composer__error" role="alert">
           <span>{error}</span>
