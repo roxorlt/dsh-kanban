@@ -50,6 +50,8 @@ import { I18nContext, readStoredLang, resolveLang, storeLang, translate } from '
 import type { I18nKey, Lang, TranslateVars } from './i18n';
 import { copyText } from './lib/clipboard';
 import { hasActiveFilters, EMPTY_FILTERS, extractAgents, extractProjects, filterCards } from './lib/filter';
+import { describeCardAgent } from './lib/agentBadge';
+import { EXTERNAL_REPLY_TARGET } from './lib/replyTarget';
 import { cardIdForSession, consumeHighlightSession } from './lib/highlight';
 import type { CardFilters } from './lib/filter';
 import { countByColumn, groupCardsByColumn } from './lib/grouping';
@@ -1527,42 +1529,28 @@ export function App() {
               }
             : { optionIds: submission.optionIds, ...(comment ? { comment } : {}) },
         );
-        const text = formatApprovalSessionText(
-          approval,
-          submission.answers,
-          comment,
-          decision,
-          submission.optionIds,
-        );
-        const sessionId = sessionIdOverride ?? approval.sessionId ?? card.sessionIds[0];
-        // 若无绑定会话但处于嵌入宿主环境，尝试通过 sendToSession (session.ensure) 自动补建并绑定会话
-        if (!sessionId && !embedded) {
-          setUnsentDecision({
-            cardId: card.id,
-            cardTitle: card.title,
-            ...(card.cwd ? { cwd: card.cwd } : {}),
-            text,
-            reason: 'no_session',
-          });
-          notifyToast(t('toast.approvalRecordedNoSession'), 'info');
-          announce(t('toast.approvalRecordedNoSession'));
+        const agentDesc = describeCardAgent(resolved.card.agent ?? card.agent);
+        const isExternalTarget =
+          agentDesc?.kind === 'external' && (!sessionIdOverride || sessionIdOverride === EXTERNAL_REPLY_TARGET);
+        if (isExternalTarget) {
+          setUnsentDecision((prev) => (prev?.cardId === card.id ? null : prev));
+          const message = t('toast.approvalRecordedExternal', { agent: agentDesc.label });
+          notifyToast(message, 'success');
+          announce(`${message}：${approval.title}`);
         } else {
-          const sessionResult = await sendToSession({
-            text,
-            ...(sessionId ? { sessionId } : {}),
-            ...(card.cwd ? { cwd: card.cwd } : {}),
-          });
-          if (sessionResult.ok) {
-            if (!sessionId && sessionResult.sessionId) {
-              try {
-                await api.bindSession(card.id, sessionResult.sessionId);
-              } catch {
-                /* 绑定失败不阻塞审批完成 */
-              }
-            }
-            notifyToast(t('toast.approvalResolved'), 'success');
-            announce(`${t('toast.approvalResolved')}：${approval.title}`);
-          } else if (!sessionId) {
+          const text = formatApprovalSessionText(
+            approval,
+            submission.answers,
+            comment,
+            decision,
+            submission.optionIds,
+          );
+          const sessionId =
+            sessionIdOverride && sessionIdOverride !== EXTERNAL_REPLY_TARGET
+              ? sessionIdOverride
+              : (approval.sessionId ?? card.sessionIds[0]);
+          // 若无绑定会话但处于嵌入宿主环境，尝试通过 sendToSession (session.ensure) 自动补建并绑定会话
+          if (!sessionId && !embedded) {
             setUnsentDecision({
               cardId: card.id,
               cardTitle: card.title,
@@ -1572,18 +1560,45 @@ export function App() {
             });
             notifyToast(t('toast.approvalRecordedNoSession'), 'info');
             announce(t('toast.approvalRecordedNoSession'));
-          } else if (/SESSION_NOT_FOUND|not found|不存在|失效|invalid/i.test(sessionResult.error ?? '')) {
-            setUnsentDecision({
-              cardId: card.id,
-              cardTitle: card.title,
-              ...(card.cwd ? { cwd: card.cwd } : {}),
-              text,
-              reason: 'not_found',
-            });
-            notifyToast(t('toast.approvalRecordedInvalidSession'), 'info');
-            announce(t('toast.approvalRecordedInvalidSession'));
           } else {
-            notifyToast(sessionResult.error ?? t('toast.sessionFailed'), 'error');
+            const sessionResult = await sendToSession({
+              text,
+              ...(sessionId ? { sessionId } : {}),
+              ...(card.cwd ? { cwd: card.cwd } : {}),
+            });
+            if (sessionResult.ok) {
+              if (!sessionId && sessionResult.sessionId) {
+                try {
+                  await api.bindSession(card.id, sessionResult.sessionId);
+                } catch {
+                  /* 绑定失败不阻塞审批完成 */
+                }
+              }
+              notifyToast(t('toast.approvalResolved'), 'success');
+              announce(`${t('toast.approvalResolved')}：${approval.title}`);
+            } else if (!sessionId) {
+              setUnsentDecision({
+                cardId: card.id,
+                cardTitle: card.title,
+                ...(card.cwd ? { cwd: card.cwd } : {}),
+                text,
+                reason: 'no_session',
+              });
+              notifyToast(t('toast.approvalRecordedNoSession'), 'info');
+              announce(t('toast.approvalRecordedNoSession'));
+            } else if (/SESSION_NOT_FOUND|not found|不存在|失效|invalid/i.test(sessionResult.error ?? '')) {
+              setUnsentDecision({
+                cardId: card.id,
+                cardTitle: card.title,
+                ...(card.cwd ? { cwd: card.cwd } : {}),
+                text,
+                reason: 'not_found',
+              });
+              notifyToast(t('toast.approvalRecordedInvalidSession'), 'info');
+              announce(t('toast.approvalRecordedInvalidSession'));
+            } else {
+              notifyToast(sessionResult.error ?? t('toast.sessionFailed'), 'error');
+            }
           }
         }
         // 审批结果把卡片送进「已完成」时，同样给归档轻提示（Q1 manual-nudge）
@@ -1602,7 +1617,7 @@ export function App() {
         setResolvingApprovalId(null);
       }
     },
-    [announce, nudgeArchivableSessions, notifyToast, refresh, sendToSession, t],
+    [announce, embedded, nudgeArchivableSessions, notifyToast, refresh, sendToSession, t],
   );
 
   /** 把没发出去的决定补发：新建会话 → 绑定到卡片 → session.ensure。 */
@@ -1635,8 +1650,17 @@ export function App() {
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : t('composer.replyFailed') };
       }
+      const agentDesc = describeCardAgent(card.agent);
+      const isExternalTarget =
+        agentDesc?.kind === 'external' && (!sessionId || sessionId === EXTERNAL_REPLY_TARGET);
+      if (isExternalTarget) {
+        await refresh({ silent: true });
+        notifyToast(t('toast.replyRecordedExternal', { agent: agentDesc.label }), 'success');
+        return { ok: true };
+      }
       const prefixed = `【看板·卡片「${card.title}」】\n${text}`;
-      const targetSessionId = sessionId ?? card.sessionIds[0];
+      const targetSessionId =
+        sessionId && sessionId !== EXTERNAL_REPLY_TARGET ? sessionId : card.sessionIds[0];
       const result = await sendToSession({
         text: prefixed,
         ...(targetSessionId ? { sessionId: targetSessionId } : {}),
@@ -1790,6 +1814,15 @@ export function App() {
 
   const handleSessionClick = useCallback(
     (card: Card) => {
+      const agentDesc = describeCardAgent(card.agent);
+      if (agentDesc?.kind === 'external') {
+        if (agentDesc.url) {
+          window.open(agentDesc.url, '_blank', 'noopener,noreferrer');
+        } else {
+          setActiveCardId(card.id);
+        }
+        return;
+      }
       const sessionId = card.sessionIds[0];
       if (sessionId && embedded) void handleOpenSession(sessionId);
       else setActiveCardId(card.id);

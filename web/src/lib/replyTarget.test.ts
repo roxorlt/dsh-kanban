@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { nextTargetAfterPrimaryChange, replyTargetOptions, resolveReplyTarget } from './replyTarget';
+import {
+  EXTERNAL_REPLY_TARGET,
+  nextTargetAfterPrimaryChange,
+  replyTargetOptions,
+  resolveReplyTarget,
+} from './replyTarget';
 import type { SessionRow } from '../types';
 
 const session = (id: string, title: string, running = false): SessionRow => ({
@@ -30,6 +35,18 @@ describe('replyTargetOptions', () => {
     const options = replyTargetOptions(['s-1'], [session('s-1', '   ')]);
     expect(options.at(0)?.title).toBe('s-1');
   });
+
+  it('外部 Agent 跟进时把云端同步目标置顶，历史本地 DSH 会话不标主会话', () => {
+    const options = replyTargetOptions(
+      ['s-1'],
+      [session('s-1', '旧本地会话', true)],
+      { label: 'Carbon · Gemini（云端看板同步）' },
+    );
+    expect(options).toEqual([
+      { id: EXTERNAL_REPLY_TARGET, title: 'Carbon · Gemini（云端看板同步）', running: false, primary: false },
+      { id: 's-1', title: '旧本地会话', running: true, primary: false },
+    ]);
+  });
 });
 
 describe('resolveReplyTarget', () => {
@@ -45,11 +62,20 @@ describe('resolveReplyTarget', () => {
   it('无绑定会话返回 null', () => {
     expect(resolveReplyTarget([], 's-1')).toBeNull();
   });
+
+  it('外部 Agent 跟进卡片默认回到 EXTERNAL_REPLY_TARGET，显式选历史会话时保留', () => {
+    expect(resolveReplyTarget([], null, true)).toBe(EXTERNAL_REPLY_TARGET);
+    expect(resolveReplyTarget(['s-1', 's-2'], null, true)).toBe(EXTERNAL_REPLY_TARGET);
+    expect(resolveReplyTarget(['s-1', 's-2'], 's-gone', true)).toBe(EXTERNAL_REPLY_TARGET);
+    expect(resolveReplyTarget(['s-1', 's-2'], 's-2', true)).toBe('s-2');
+    expect(resolveReplyTarget(['s-1', 's-2'], EXTERNAL_REPLY_TARGET, true)).toBe(EXTERNAL_REPLY_TARGET);
+  });
 });
 
 describe('nextTargetAfterPrimaryChange', () => {
   it('目标就是旧主会话时跟随到新主会话', () => {
     expect(nextTargetAfterPrimaryChange('s-1', 's-1', 's-2')).toBe('s-2');
+    expect(nextTargetAfterPrimaryChange(EXTERNAL_REPLY_TARGET, EXTERNAL_REPLY_TARGET, 's-1')).toBe('s-1');
   });
 
   it('还没选过目标时默认到新主会话', () => {

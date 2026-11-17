@@ -1003,6 +1003,17 @@ const zh = {
   'im.rulesSavedToast': '已更新推送事件',
   'im.testSuccessToast': '测试消息已送达',
   'im.testFailedToast': '测试发送失败：{reason}',
+  'card.openExternalSession': '打开 {agent} 外部会话',
+  'card.externalSessionDetail': '由 {agent} 远程跟进（点击查看详情）',
+  'drawer.externalAgentTitle': '当前由外部 Agent（{agent}）远程跟进',
+  'drawer.externalAgentHint': '审批与回复会同步至云端看板供该 Agent 读取，不会自动唤醒或新建本地 DSH 会话。',
+  'drawer.openExternalSession': '打开外部会话',
+  'drawer.historicalLocalSessions': '历史关联的本地 DSH 会话（{count}）',
+  'drawer.takeoverWithSession': '转交接手',
+  'drawer.takeoverBindSession': '转交本地 DSH 会话接手',
+  'drawer.replyTargetExternal': '{agent}（云端看板同步）',
+  'toast.approvalRecordedExternal': '审批已记录并同步看板，等待 {agent} 读取',
+  'toast.replyRecordedExternal': '回复已写入时间线并同步看板，等待 {agent} 读取',
 } as const;
 
 export type I18nKey = keyof typeof zh;
@@ -2002,6 +2013,17 @@ const en: Record<I18nKey, string> = {
   'im.rulesSavedToast': 'Updated push events',
   'im.testSuccessToast': 'Test notification delivered',
   'im.testFailedToast': 'Test failed: {reason}',
+  'card.openExternalSession': 'Open {agent} external session',
+  'card.externalSessionDetail': 'Tracked remotely by {agent} (click for details)',
+  'drawer.externalAgentTitle': 'Tracked remotely by external agent ({agent})',
+  'drawer.externalAgentHint': 'Approvals and replies sync to the cloud board for this agent without waking or creating a local DSH session.',
+  'drawer.openExternalSession': 'Open external session',
+  'drawer.historicalLocalSessions': 'Previously linked local DSH sessions ({count})',
+  'drawer.takeoverWithSession': 'Take over here',
+  'drawer.takeoverBindSession': 'Hand back to a local DSH session',
+  'drawer.replyTargetExternal': '{agent} (cloud board sync)',
+  'toast.approvalRecordedExternal': 'Approval recorded and synced for {agent}',
+  'toast.replyRecordedExternal': 'Reply added to timeline and synced for {agent}',
 };
 
 const dictionaries: Record<Lang, Record<I18nKey, string>> = { zh, en };

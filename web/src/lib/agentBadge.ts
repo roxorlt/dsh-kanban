@@ -10,6 +10,8 @@ export interface AgentBadgeDescriptor {
   filterKey: string;
   /** 归一化后的 harness 标识（`dsh` / `carbon` / `codex` 等） */
   harness: string;
+  /** 经过 http/https 协议校验的外部会话链接（可选） */
+  url?: string;
   /** 供全文搜索匹配的词条集合 */
   searchTokens: string[];
 }
@@ -23,6 +25,18 @@ const GENERIC_EXTERNAL_NAMES = new Set([
   'cloud mcp agent',
   'mcp agent',
 ]);
+
+function sanitizeExternalAgentUrl(raw?: string): string | undefined {
+  const trimmed = raw?.trim() ?? '';
+  if (!trimmed) return undefined;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return undefined;
+    return trimmed;
+  } catch {
+    return undefined;
+  }
+}
 
 function inferHarness(name: string, rawHarness?: string): string {
   const explicit = (rawHarness ?? '').trim().toLowerCase();
@@ -60,6 +74,7 @@ export function describeCardAgent(agent?: CardAgent | null): AgentBadgeDescripto
   const harness = inferHarness(rawName, rawHarness);
   const kind: AgentKind = HOST_HARNESSES.has(harness) ? 'host' : 'external';
   const lowerName = rawName.toLowerCase();
+  const safeUrl = sanitizeExternalAgentUrl(agent?.url);
 
   let label = rawName;
   if (kind === 'host') {
@@ -95,6 +110,11 @@ export function describeCardAgent(agent?: CardAgent | null): AgentBadgeDescripto
     label,
     filterKey: label,
     harness,
+    ...(safeUrl ? { url: safeUrl } : {}),
     searchTokens: [...tokenSet],
   };
+}
+
+export function isExternalCardAgent(agent?: CardAgent | null): boolean {
+  return describeCardAgent(agent)?.kind === 'external';
 }

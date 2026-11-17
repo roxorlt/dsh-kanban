@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import type { Card, SessionRow, WorkspaceRow } from '../types';
 import { useI18n } from '../i18n';
+import { describeCardAgent } from '../lib/agentBadge';
 import { suggestCwds } from '../lib/suggestions';
 import { shortSessionId } from '../lib/sessionPicker';
 import { suggestSessionToBind, type SessionBindSuggestion } from '../lib/sessionSuggest';
@@ -49,7 +50,8 @@ interface SessionSectionProps {
 /**
  * 多会话绑定：列出卡片会话（标题、session id、主会话徽标、运行状态）、
  * 设为主会话、解绑、打开；回复/审批目标在 Composer 里的下拉选择。
- * 无会话进行中卡片显示警示；「新建会话」先展开内联表单选工作区/目录。
+ * 外部 Agent（Carbon / Codex 等）跟进时显示远程同步说明与可选「打开外部会话」，不报「未绑定会话」假警报，
+ * 历史本地 DSH 会话提供显式「转交接手」按钮。
  */
 export function SessionSection({
   card,
@@ -73,13 +75,16 @@ export function SessionSection({
   const { t, lang } = useI18n();
   const workspaceSelectId = useId();
   const cwdInputId = useId();
+  const agentDesc = useMemo(() => describeCardAgent(card.agent), [card.agent]);
+  const isExternalAgent = agentDesc?.kind === 'external';
   const byId = new Map(sessions.map((session) => [session.id, session]));
   const bound = card.sessionIds.map((id) => ({ id, session: byId.get(id) }));
-  const runningWithoutSession = card.status === 'running' && bound.length === 0;
+  const runningWithoutSession = card.status === 'running' && bound.length === 0 && !isExternalAgent;
   const runningSessionIds = useMemo(() => deriveRunningSessionIds(sessions), [sessions]);
   const archivedBound = bound.filter(({ id }) => archivedSessionIds.has(id));
-  // 非完成卡片上出现已归档会话：提醒「继续前需恢复」（docs/11 §6.1）
-  const showArchivedWarning = embedded && archiveAvailable && archivedBound.length > 0 && !isTerminalCardStatus(card.status);
+  // 非完成卡片上出现已归档会话：提醒「继续前需恢复」（docs/11 §6.1）；外部 Agent 远程推进时不误报
+  const showArchivedWarning =
+    embedded && !isExternalAgent && archiveAvailable && archivedBound.length > 0 && !isTerminalCardStatus(card.status);
 
   const blockReasonText = (readiness: ReturnType<typeof sessionArchiveReadiness>): string | null => {
     const summary = summarizeSessionArchiveBlocker(readiness.blockers);
@@ -105,21 +110,46 @@ export function SessionSection({
     [cards, sessions, workspaceId, workspaces],
   );
 
-  // 补绑推荐：只在「嵌入 DSH + 卡片还没绑任何会话」时计算。
+  // 补绑推荐：只在「嵌入 DSH + 非外部 Agent + 卡片还没绑任何会话」时计算。
   // 只是推荐，不自动绑定；没有足够相关的候选时返回 null，整块不渲染。
   const bindSuggestion = useMemo(
     () =>
-      embedded && card.sessionIds.length === 0
+      embedded && !isExternalAgent && card.sessionIds.length === 0
         ? suggestSessionToBind({ card, sessions, workspaces, archivedSessionIds })
         : null,
-    [archivedSessionIds, card, embedded, sessions, workspaces],
+    [archivedSessionIds, card, embedded, isExternalAgent, sessions, workspaces],
   );
+
+  const externalBanner =
+    isExternalAgent && agentDesc ? (
+      <div className="kb-session__external" role="status">
+        <div className="kb-session__external-main">
+          <span className="kb-session__external-title">
+            {t('drawer.externalAgentTitle', { agent: agentDesc.label })}
+          </span>
+          <span className="kb-session__external-hint">{t('drawer.externalAgentHint')}</span>
+        </div>
+        {agentDesc.url ? (
+          <a
+            className="kb-btn kb-btn--sm kb-btn--outline kb-session__external-open"
+            href={agentDesc.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span className="kb-icon" aria-hidden="true">
+              <IconOpen />
+            </span>
+            {t('drawer.openExternalSession')}
+          </a>
+        ) : null}
+      </div>
+    ) : null;
 
   if (!bound.length && !embedded) {
     return (
       <div className="kb-session">
-        <p className="kb-session__hint">{t('drawer.noSessionHint')}</p>
-        <p className="kb-session__hint">{t('drawer.standaloneSessionHint')}</p>
+        {externalBanner ?? <p className="kb-session__hint">{t('drawer.noSessionHint')}</p>}
+        {!isExternalAgent ? <p className="kb-session__hint">{t('drawer.standaloneSessionHint')}</p> : null}
       </div>
     );
   }
@@ -164,8 +194,12 @@ export function SessionSection({
     return t('sessionSuggest.reasonCwd');
   };
 
+  const bindGroupLabel = isExternalAgent ? t('drawer.takeoverBindSession') : t('drawer.bindSession');
+
   return (
     <div className="kb-session">
+      {externalBanner}
+
       {runningWithoutSession ? (
         <p className="kb-session__warn" role="status">
           <span className="kb-icon" aria-hidden="true">
@@ -186,13 +220,15 @@ export function SessionSection({
 
       {bound.length ? (
         <>
-          {bound.length > 1 ? (
+          {isExternalAgent ? (
+            <p className="kb-session__summary">{t('drawer.historicalLocalSessions', { count: bound.length })}</p>
+          ) : bound.length > 1 ? (
             <p className="kb-session__summary">{t('drawer.sessionCount', { count: bound.length })}</p>
           ) : null}
           <ul className="kb-session__list">
             {bound.map(({ id, session }, index) => {
-              const isPrimary = index === 0;
-              const selectedTarget = (targetSessionId ?? card.sessionIds[0]) === id;
+              const isPrimary = !isExternalAgent && index === 0;
+              const selectedTarget = (targetSessionId ?? (isExternalAgent ? null : card.sessionIds[0])) === id;
               const archived = archivedSessionIds.has(id);
               const pending = pendingSessionIds.has(id);
               const running = session?.running ?? runningSessionIds.has(id);
@@ -252,7 +288,16 @@ export function SessionSection({
                         </span>
                         {t('drawer.openSession')}
                       </button>
-                      {!isPrimary ? (
+                      {isExternalAgent ? (
+                        <button
+                          type="button"
+                          className="kb-btn kb-btn--sm kb-btn--outline"
+                          disabled={busy}
+                          onClick={() => onSetPrimary(id)}
+                        >
+                          {t('drawer.takeoverWithSession')}
+                        </button>
+                      ) : !isPrimary ? (
                         <button
                           type="button"
                           className="kb-btn kb-btn--sm kb-btn--ghost"
@@ -302,7 +347,7 @@ export function SessionSection({
             })}
           </ul>
         </>
-      ) : (
+      ) : !isExternalAgent ? (
         <>
           <p className="kb-session__hint">{t('drawer.noSessionHint')}</p>
           {embedded && bindSuggestion ? (
@@ -330,14 +375,13 @@ export function SessionSection({
             </div>
           ) : null}
         </>
-      )}
+      ) : null}
 
-
-      {!embedded ? <p className="kb-session__hint">{t('drawer.standaloneSessionHint')}</p> : null}
+      {!embedded && !isExternalAgent ? <p className="kb-session__hint">{t('drawer.standaloneSessionHint')}</p> : null}
 
       {embedded ? (
-        <div className="kb-session__bind" role="group" aria-label={t('drawer.bindSession')}>
-          <span className="kb-session__select-label">{t('drawer.bindSession')}</span>
+        <div className="kb-session__bind" role="group" aria-label={bindGroupLabel}>
+          <span className="kb-session__select-label">{bindGroupLabel}</span>
           <div className="kb-session__bind-row">
             <SessionPicker
               card={card}

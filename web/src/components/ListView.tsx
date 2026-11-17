@@ -18,6 +18,7 @@ import { EmptyState } from './feedback';
 import { WorklineBadge } from './WorklineBadge';
 import { CardRelationBadges } from './CardRelations';
 import { AgentBadge } from './AgentBadge';
+import { isExternalCardAgent } from '../lib/agentBadge';
 import { ArchiveBox } from './ArchiveBox';
 import type { ArchiveBoxProps } from './ArchiveBox';
 import { ApprovalPanel } from './ApprovalPanel';
@@ -408,7 +409,7 @@ function ListRow({
             </span>
           ) : null}
           <CardRelationBadges card={card} relations={shared.relations} parentClassName="kb-rel-parent--list" />
-          {card.status === 'running' && !card.sessionIds.length ? (
+          {card.status === 'running' && !card.sessionIds.length && !isExternalCardAgent(card.agent) ? (
             <span className="kb-list__session-warn" title={t('drawer.runningNoSessionWarn')}>
               {t('card.noSessionWarn')}
             </span>
