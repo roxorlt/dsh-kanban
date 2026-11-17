@@ -143,6 +143,11 @@ ul {
   --kb-surface-column: color-mix(in srgb, var(--dsw-alias-label-primary) 3%, var(--dsw-alias-bg-base));
   --kb-surface-card: var(--dsw-alias-bg-layer-1);
   --kb-hairline: var(--dsw-alias-border-l2);
+  /* Agent 归属徽章（DESIGN.md §2.5 / §3）：宿主中性表面 vs 外部 Harness 单一业务强调色浅底 */
+  --kb-agent-host-bg: color-mix(in srgb, var(--dsw-alias-label-primary) 5%, transparent);
+  --kb-agent-host-border: var(--dsw-alias-border-l2);
+  --kb-agent-ext-bg: var(--dsw-alias-state-business-tertiary);
+  --kb-agent-ext-border: color-mix(in srgb, var(--kb-status-running) 28%, var(--dsw-alias-border-l2));
 }
 
 .kb-app-scope {
@@ -1138,4 +1143,55 @@ ul {
   color: var(--kb-status-running-text);
   font: var(--dsw-font-xxxs-11);
   font-weight: 500;
+}
+
+/* --------------------------------------------------- Agent 归属徽章（宿主 vs 外部 Harness）*/
+
+.kb-agent-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  max-width: 148px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 0.5px solid var(--kb-agent-host-border);
+  background: var(--kb-agent-host-bg);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxxs-11);
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.kb-agent-badge .kb-icon {
+  flex: none;
+  width: 11px;
+  height: 11px;
+}
+
+.kb-agent-badge__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-agent-badge--host {
+  border-color: var(--kb-agent-host-border);
+  background: var(--kb-agent-host-bg);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.kb-agent-badge--external {
+  border-color: var(--kb-agent-ext-border);
+  background: var(--kb-agent-ext-bg);
+  color: var(--kb-status-running-text);
+  font-weight: 500;
+}
+
+.kb-agent-badge--compact {
+  max-width: 132px;
+  padding: 0 5px;
 }

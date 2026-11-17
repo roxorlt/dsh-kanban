@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Card } from '../types';
-import { EMPTY_FILTERS, extractProjects, filterCards, hasActiveFilters } from './filter';
+import { EMPTY_FILTERS, extractAgents, extractProjects, filterCards, hasActiveFilters } from './filter';
 
 function makeCard(overrides: Partial<Card> & { id: string }): Card {
   return {
@@ -24,10 +24,31 @@ function makeCard(overrides: Partial<Card> & { id: string }): Card {
 }
 
 const cards = [
-  makeCard({ id: 'a', title: '实现 SSE 重连', summary: '退避 1s→30s', project: 'dsh-kanban', labels: ['ui', 'realtime'] }),
-  makeCard({ id: 'b', title: '迁移 users 表', summary: 'Postgres 17', project: 'backend', labels: ['db'] }),
+  makeCard({
+    id: 'a',
+    title: '实现 SSE 重连',
+    summary: '退避 1s→30s',
+    project: 'dsh-kanban',
+    labels: ['ui', 'realtime'],
+    agent: { name: 'Carbon · Gemini', harness: 'carbon' },
+  }),
+  makeCard({
+    id: 'b',
+    title: '迁移 users 表',
+    summary: 'Postgres 17',
+    project: 'backend',
+    labels: ['db'],
+    agent: { name: 'DeepSeek', harness: 'dsh' },
+  }),
   makeCard({ id: 'c', title: '无关卡片', summary: '', project: 'dsh-kanban', labels: ['ui'] }),
-  makeCard({ id: 'd', title: '已归档', archived: true, project: 'dsh-kanban', labels: ['ui'] }),
+  makeCard({
+    id: 'd',
+    title: '已归档',
+    archived: true,
+    project: 'dsh-kanban',
+    labels: ['ui'],
+    agent: { name: 'Codex', harness: 'codex' },
+  }),
 ];
 
 describe('filterCards', () => {
@@ -44,13 +65,25 @@ describe('filterCards', () => {
     expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'backend' }).map((card) => card.id)).toEqual(['b']);
   });
 
+  it('搜索命中执行 Agent / Harness（如 carbon / gemini / deepseek）', () => {
+    expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'carbon' }).map((card) => card.id)).toEqual(['a']);
+    expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'gemini' }).map((card) => card.id)).toEqual(['a']);
+    expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'deepseek' }).map((card) => card.id)).toEqual(['b']);
+  });
+
   it('隐藏的标签不再参与搜索（v0.9.0 起 UI 隐藏优先级/标签）', () => {
     expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'REALTIME' })).toEqual([]);
     expect(filterCards(cards, { ...EMPTY_FILTERS, query: 'ui' })).toEqual([]);
   });
 
-  it('项目筛选（AND 组合）', () => {
+  it('项目与执行 Agent 筛选（AND 组合）', () => {
     expect(filterCards(cards, { query: '', project: 'dsh-kanban' }).map((card) => card.id)).toEqual(['a', 'c']);
+    expect(
+      filterCards(cards, { query: '', project: 'dsh-kanban', agent: 'Carbon · Gemini' }).map((card) => card.id),
+    ).toEqual(['a']);
+    expect(filterCards(cards, { query: '', project: null, agent: 'DSH · DeepSeek' }).map((card) => card.id)).toEqual([
+      'b',
+    ]);
     expect(filterCards(cards, { query: 'postgres', project: 'backend' }).map((card) => card.id)).toEqual(['b']);
     expect(filterCards(cards, { query: '', project: 'nope' })).toEqual([]);
   });
@@ -61,13 +94,15 @@ describe('filterCards', () => {
 });
 
 describe('筛选项提取', () => {
-  it('项目去重排序且忽略归档', () => {
+  it('项目与执行 Agent 去重排序且忽略归档', () => {
     expect(extractProjects(cards)).toEqual(['backend', 'dsh-kanban']);
+    expect(extractAgents(cards)).toEqual(['Carbon · Gemini', 'DSH · DeepSeek']);
   });
 
   it('hasActiveFilters', () => {
     expect(hasActiveFilters(EMPTY_FILTERS)).toBe(false);
     expect(hasActiveFilters({ ...EMPTY_FILTERS, query: ' ' })).toBe(false);
     expect(hasActiveFilters({ ...EMPTY_FILTERS, project: 'dsh-kanban' })).toBe(true);
+    expect(hasActiveFilters({ ...EMPTY_FILTERS, agent: 'Carbon · Gemini' })).toBe(true);
   });
 });

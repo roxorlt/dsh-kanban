@@ -19,6 +19,8 @@ import type { MenuEntry } from './MenuButton';
 import { Timeline, TimelineLoadMore } from './Timeline';
 import { WorklineBadge } from './WorklineBadge';
 import { CardRelationBadges } from './CardRelations';
+import { AgentBadge } from './AgentBadge';
+import { describeCardAgent } from '../lib/agentBadge';
 import {
   IconArchive,
   IconChevronDown,
@@ -392,6 +394,7 @@ export function KanbanCard({
             {card.project}
           </span>
         ) : null}
+        <AgentBadge agent={card.agent} />
         {card.handoff ? (
           <span
             className="kb-tag kb-tag--handoff"
@@ -581,7 +584,9 @@ export function KanbanCard({
             <div className="kb-card-expanded" id={`kb-exp-${card.id}`}>
               <div className="kb-exp-head">
                 <span>{t('card.importantNodes')}</span>
-                {card.agent?.name ? <span className="kb-exp-agent">{card.agent.name}</span> : null}
+                {card.agent?.name ? (
+                  <span className="kb-exp-agent">{describeCardAgent(card.agent)?.label ?? card.agent.name}</span>
+                ) : null}
                 <button type="button" className="kb-link-btn" onClick={() => onOpenDetail(card.id)}>
                   {t('card.openDetail')}
                   <span className="kb-icon" aria-hidden="true">

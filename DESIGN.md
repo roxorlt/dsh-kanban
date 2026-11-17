@@ -102,7 +102,9 @@
 | `--kb-status-failed` | 受阻/失败（红）**色点** | 点/图标/错误描边；不要用红色写长正文 |
 | `--kb-status-failed-text` | 受阻/失败**文字**（浅色 88% 收敛，暗色沿用 error） | 失败/风险文案；不要用于大面积背景 |
 | `--dsw-alias-state-warn-tertiary` | 审批分区浅底、待确认浅底 | 审批分区底；不要在卡里再包一层卡 |
-| `--dsw-alias-state-business-tertiary` | 主会话徽标、同步底 | 徽标/选中底；不要用于大块背景 |
+| `--dsw-alias-state-business-tertiary` | 主会话徽标、同步底、外部 Agent 徽标底 | 徽标/选中底；不要用于大块背景 |
+| `--kb-agent-host-bg` / `--kb-agent-host-border` | DSH 宿主 Agent（如 `DSH · DeepSeek`）只读徽标底与 0.5px 描边 | 折叠卡 `.kb-card-props`、列表 `.kb-list__row-meta`、抽屉头部；配终端图标 + `--dsw-alias-label-secondary` 文字 |
+| `--kb-agent-ext-bg` / `--kb-agent-ext-border` | 跨端外部 Agent（如 `Carbon · Gemini` / `Codex` / `Claude Code`）只读徽标底与 0.5px 业务调和描边 | 同上；配星芒图标 + `--kb-status-running-text` 文字，严守单一业务强调色，不引入第二品牌色 |
 | `--dsw-alias-state-success-tertiary` | 完成提示浅底 | 成功条 |
 | `--dsw-alias-brand-primary` / `--dsw-alias-brand-text` | 品牌色（与主按钮同值，黑） | 只与主按钮配套；不要引入第二品牌色 |
 | `--kb-git-lane-0` … `--kb-git-lane-7` | 抽屉内 Git 分支图 8 色槽 | **只用于图形**（连线/圆点/图例）；不要映射成状态语义 |
@@ -196,8 +198,8 @@
 | 组件 | 结构与样式约束 | 不可改项 |
 |---|---|---|
 | **看板列** `.kb-column` | 固定 4 列；`--kb-surface-column` + 0.5px `border-l1` + `--kb-r-col`；列头 min 40（状态图标 + 中文名 + 英文副标 + 计数 + 折叠 + 新建）；列内独立滚动；列底 3%/5%/9% 状态色公式；空列可投放 | 不增删列；受阻/失败不单独开列（归待你确认）；列头不悬浮、不加侧边导航 |
-| **卡片** `.kb-card` | 0.5px `border-l2` + `--kb-r-card` + `--kb-surface-card` + padding 10×12 + gap 6；标题→摘要→当前动作→属性→页脚；hover 1.5% 提亮 + `border-l3`；选中 `inset 2px` 业务蓝；失败/受阻卡 `inset 1px` 错误色；状态点标题首行中线、页脚 6px | 不加卡片阴影、不加彩色左边条、不把审批包成「卡中卡」；折叠卡承载 80% 信息 |
-| **列表行** `.kb-list__row` | 状态点 + 标题 + 摘要 + 指标 + 动作簇 + 详情；**状态文字只出现一处**；宽屏行高 58（56–64 区间）、内容收进 `max-width: 1180px` 主栏 + meta 右栏，390 堆叠单列；折叠行快捷动作固定宽右对齐、窄屏换行左对齐；展开后隐藏行首动作簇 | 不改瀑布流；不复制状态信息；不隐藏字段（可重排）；不把动作做成多级菜单 |
+| **卡片** `.kb-card` | 0.5px `border-l2` + `--kb-r-card` + `--kb-surface-card` + padding 10×12 + gap 6；标题→摘要→当前动作→属性（含项目与只读执行 Agent 徽章 `.kb-agent-badge`，区分宿主 `DSH · DeepSeek` 与外部 `Carbon · Gemini` 等）→页脚；hover 1.5% 提亮 + `border-l3`；选中 `inset 2px` 业务蓝；失败/受阻卡 `inset 1px` 错误色；状态点标题首行中线、页脚 6px | 不加卡片阴影、不加彩色左边条、不把审批包成「卡中卡」；折叠卡承载 80% 信息 |
+| **列表行** `.kb-list__row` | 状态点 + 标题 + 摘要 + 指标（含只读执行 Agent 徽章，单行不增行高）+ 动作簇 + 详情；**状态文字只出现一处**；宽屏行高 58（56–64 区间）、内容收进 `max-width: 1180px` 主栏 + meta 右栏，390 堆叠单列；折叠行快捷动作固定宽右对齐、窄屏换行左对齐；展开后隐藏行首动作簇 | 不改瀑布流；不复制状态信息；不隐藏字段（可重排）；不把动作做成多级菜单 |
 | **抽屉** `.kb-drawer` | 桌面右侧 `clamp(400px, 36vw, 520px)`，竖屏底部弹层；header = kicker + 标题 + 编辑/归档/关闭；摘要独占第二行且与正文同宽；footer 用 `env(safe-area-inset-bottom)`；`role=dialog aria-modal` + 焦点圈定 + Esc/蒙层关闭 + 关闭归还焦点；离场 140/180ms | 不改全屏 Modal；不移除摘要行或主操作；不改焦点/安全区行为 |
 | **审批** `.kb-decision*` + `.kb-approval-slot` | 作为卡片内**分区**，不再包卡；一张卡最多一个展开审批，其余一行摘要；单/多题字段、选项说明、备注、驳回/提交语义完整；风险文字用 `--kb-status-needs-text`；提交后 `.kb-approval-slot--leaving` 140ms 淡出 | 不折叠选项、不删选项说明、不改字段与提交语义；视觉权重低于卡片标题 |
 | **批量条** `.kb-batchbar` | 选择模式出现：已选 N / 全选当前视图 / 清空 / 移动到 / 归档 / 取消；0 选时移动与归档禁用；竖屏换行、按钮 ≥36 高；离场 140ms | 不拆多级菜单；不在选择模式启用拖拽；不改变已选项语义 |
@@ -339,6 +341,7 @@ npm --prefix web run build         # 交付前
 | 状态色点 | `--kb-status-backlog` / `--kb-status-running` / `--kb-status-needs` / `--kb-status-done` / `--kb-status-failed` | `base.css` | 状态点/图标（不是文字） |
 | 状态文字 | `--kb-status-running-text` / `--kb-status-needs-text` / `--kb-status-done-text` / `--kb-status-failed-text` | `base.css`（`light-dark()`） | 11–12px 可读状态文字 |
 | 链接文字 | `--kb-link-text` | `base.css`（`light-dark()`） | 11–12px 可读链接 |
+| Agent 徽标 | `--kb-agent-host-bg` / `--kb-agent-host-border` / `--kb-agent-ext-bg` / `--kb-agent-ext-border` | `base.css` | 区分 DSH 宿主与跨端外部 Agent 的只读徽章底与 0.5px 描边 |
 | 禁用 | `--kb-disabled-border` / `--kb-disabled-fill` | `base.css` | 禁用态可辨边界/浅底（≥3:1） |
 | 动效时长 | `--kb-dur-press` / `--kb-dur-fast` / `--kb-dur` / `--kb-dur-slow` / `--kb-dur-exit` / `--kb-dur-exit-slow` | `base.css` | 见 §5.2 |
 | 缓动 | `--kb-ease-out` / `--kb-ease-in-out` / `--kb-ease-drawer` | `base.css` | 见 §5.3 |

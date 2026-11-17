@@ -49,7 +49,7 @@ import type { HostInfo } from './types';
 import { I18nContext, readStoredLang, resolveLang, storeLang, translate } from './i18n';
 import type { I18nKey, Lang, TranslateVars } from './i18n';
 import { copyText } from './lib/clipboard';
-import { hasActiveFilters, EMPTY_FILTERS, extractProjects, filterCards } from './lib/filter';
+import { hasActiveFilters, EMPTY_FILTERS, extractAgents, extractProjects, filterCards } from './lib/filter';
 import { cardIdForSession, consumeHighlightSession } from './lib/highlight';
 import type { CardFilters } from './lib/filter';
 import { countByColumn, groupCardsByColumn } from './lib/grouping';
@@ -591,7 +591,7 @@ export function App() {
   /** 看板 / 列表的「有筛选」状态：搜索 / 项目 + 工作线筛选都算（清空时一起清）。 */
   const hasAnyFilter = hasActiveFilters(filters) || worklineFilter !== null;
   const clearAllFilters = useCallback(() => {
-    setFilters({ query: '', project: null });
+    setFilters(EMPTY_FILTERS);
     setWorklineFilter(null);
   }, []);
 
@@ -682,6 +682,7 @@ export function App() {
     [filteredCards, snapshot.board],
   );
   const projects = useMemo(() => extractProjects(snapshot.cards), [snapshot.cards]);
+  const agents = useMemo(() => extractAgents(snapshot.cards), [snapshot.cards]);
   const activeCard = activeCardId ? snapshot.cards.find((card) => card.id === activeCardId) ?? null : null;
   // 抽屉离场要保留最后一张卡的数据 180ms，否则数据先没了动画也没了（docs/11-motion.md §6.2）。
   // keepInReducedMotion：抽屉本体的位移在 RM 下即时，但遮罩的 120ms 淡变需要这个窗口（§4 B 级）。
@@ -2540,6 +2541,7 @@ export function App() {
           filters={filters}
           onFiltersChange={setFilters}
           projects={projects}
+          agents={agents}
           lang={lang}
           onToggleLang={toggleLang}
           onNewCard={handleCreateCard}
