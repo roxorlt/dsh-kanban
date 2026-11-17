@@ -198,9 +198,18 @@
   gap: 4px;
 }
 
+.kb-list__row-meta > .kb-agent-badge {
+  gap: 3px;
+}
+
 .kb-list__row-meta .kb-icon {
   width: 13px;
   height: 13px;
+}
+
+.kb-list__row-meta > .kb-agent-badge .kb-icon {
+  width: 11px;
+  height: 11px;
 }
 
 .kb-list__row-meta .kb-icon-btn {

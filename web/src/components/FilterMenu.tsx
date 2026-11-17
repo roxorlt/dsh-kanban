@@ -9,17 +9,18 @@ import { pushOverlay } from '../lib/overlayStack';
 interface FilterMenuProps {
   filters: CardFilters;
   projects: string[];
+  agents?: string[];
   onChange: (filters: CardFilters) => void;
 }
 
-/** 筛选浮层：项目单选，浮层 border:0 + elevation，Esc/外点关闭。 */
-export function FilterMenu({ filters, projects, onChange }: FilterMenuProps) {
+/** 筛选浮层：项目单选 + 执行 Agent 单选，浮层 border:0 + elevation，Esc/外点关闭。 */
+export function FilterMenu({ filters, projects, agents = [], onChange }: FilterMenuProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const activeCount = filters.project ? 1 : 0;
+  const activeCount = (filters.project ? 1 : 0) + (filters.agent ? 1 : 0);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -114,31 +115,81 @@ export function FilterMenu({ filters, projects, onChange }: FilterMenuProps) {
               <div className="kb-filter-group">
                 <span className="kb-filter-group__label">{t('app.filterProject')}</span>
                 <div className="kb-filter-group__list">
-                <label className={`kb-check${!filters.project ? ' kb-check--on' : ''}`}>
-                  <input
-                    type="radio"
-                    name="kb-filter-project"
-                    checked={!filters.project}
-                    onChange={() => onChange({ ...filters, project: null })}
-                  />
-                  <span className="kb-check__label">{t('app.allProjects')}</span>
-                  {!filters.project ? <span className="kb-icon" aria-hidden="true"><IconCheck /></span> : null}
-                </label>
-                {projects.map((project) => (
-                  <label className={`kb-check${filters.project === project ? ' kb-check--on' : ''}`} key={project}>
+                  <label className={`kb-check${!filters.project ? ' kb-check--on' : ''}`}>
                     <input
                       type="radio"
                       name="kb-filter-project"
-                      checked={filters.project === project}
-                      onChange={() => onChange({ ...filters, project })}
+                      checked={!filters.project}
+                      onChange={() => onChange({ ...filters, project: null })}
                     />
-                    <span className="kb-check__label" title={project}>{project}</span>
-                    {filters.project === project ? <span className="kb-icon" aria-hidden="true"><IconCheck /></span> : null}
+                    <span className="kb-check__label">{t('app.allProjects')}</span>
+                    {!filters.project ? (
+                      <span className="kb-icon" aria-hidden="true">
+                        <IconCheck />
+                      </span>
+                    ) : null}
                   </label>
-                ))}
-                {!projects.length ? (
-                  <p className="kb-filter-group__empty">{t('filter.noProjects')}</p>
-                ) : null}
+                  {projects.map((project) => (
+                    <label className={`kb-check${filters.project === project ? ' kb-check--on' : ''}`} key={project}>
+                      <input
+                        type="radio"
+                        name="kb-filter-project"
+                        checked={filters.project === project}
+                        onChange={() => onChange({ ...filters, project })}
+                      />
+                      <span className="kb-check__label" title={project}>
+                        {project}
+                      </span>
+                      {filters.project === project ? (
+                        <span className="kb-icon" aria-hidden="true">
+                          <IconCheck />
+                        </span>
+                      ) : null}
+                    </label>
+                  ))}
+                  {!projects.length ? <p className="kb-filter-group__empty">{t('filter.noProjects')}</p> : null}
+                </div>
+              </div>
+
+              <div className="kb-filter-group">
+                <span className="kb-filter-group__label">{t('app.filterAgent')}</span>
+                <div className="kb-filter-group__list">
+                  <label className={`kb-check${!filters.agent ? ' kb-check--on' : ''}`}>
+                    <input
+                      type="radio"
+                      name="kb-filter-agent"
+                      checked={!filters.agent}
+                      onChange={() => onChange({ ...filters, agent: null })}
+                    />
+                    <span className="kb-check__label">{t('app.allAgents')}</span>
+                    {!filters.agent ? (
+                      <span className="kb-icon" aria-hidden="true">
+                        <IconCheck />
+                      </span>
+                    ) : null}
+                  </label>
+                  {agents.map((agentLabel) => (
+                    <label
+                      className={`kb-check${filters.agent === agentLabel ? ' kb-check--on' : ''}`}
+                      key={agentLabel}
+                    >
+                      <input
+                        type="radio"
+                        name="kb-filter-agent"
+                        checked={filters.agent === agentLabel}
+                        onChange={() => onChange({ ...filters, agent: agentLabel })}
+                      />
+                      <span className="kb-check__label" title={agentLabel}>
+                        {agentLabel}
+                      </span>
+                      {filters.agent === agentLabel ? (
+                        <span className="kb-icon" aria-hidden="true">
+                          <IconCheck />
+                        </span>
+                      ) : null}
+                    </label>
+                  ))}
+                  {!agents.length ? <p className="kb-filter-group__empty">{t('filter.noAgents')}</p> : null}
                 </div>
               </div>
 
@@ -147,7 +198,7 @@ export function FilterMenu({ filters, projects, onChange }: FilterMenuProps) {
                   type="button"
                   className="kb-btn kb-btn--sm kb-btn--ghost"
                   disabled={!hasActiveFilters(filters)}
-                  onClick={() => onChange({ query: filters.query, project: null })}
+                  onClick={() => onChange({ query: filters.query, project: null, agent: null })}
                 >
                   {t('app.clearFilters')}
                 </button>

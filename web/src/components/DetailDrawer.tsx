@@ -15,6 +15,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { GitBranchSection } from './GitBranchSection';
 import { RelationSection } from './CardRelations';
 import { SessionSection } from './SessionSection';
+import { AgentBadge } from './AgentBadge';
 import { Timeline, TimelineLoadMore } from './Timeline';
 import type { CardActionHandlers } from './types';
 import type { CreateSessionOptions } from './SessionSection';
@@ -373,7 +374,7 @@ export function DetailDrawer({
                 {card.agent?.name ? (
                   <>
                     <span aria-hidden="true"> · </span>
-                    <span>{card.agent.name}</span>
+                    <AgentBadge agent={card.agent} />
                   </>
                 ) : null}
                 {isWarningStatus(card.status) ? (

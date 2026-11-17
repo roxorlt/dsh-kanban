@@ -17,6 +17,7 @@ import type { WorklineStatusMap } from '../lib/useWorklineStatuses';
 import { EmptyState } from './feedback';
 import { WorklineBadge } from './WorklineBadge';
 import { CardRelationBadges } from './CardRelations';
+import { AgentBadge } from './AgentBadge';
 import { ArchiveBox } from './ArchiveBox';
 import type { ArchiveBoxProps } from './ArchiveBox';
 import { ApprovalPanel } from './ApprovalPanel';
@@ -396,6 +397,7 @@ function ListRow({
             </span>
             {card.metadata.toolCalls}
           </span>
+          <AgentBadge agent={card.agent} compact />
           {card.handoff ? (
             <span
               className="kb-tag kb-tag--handoff"

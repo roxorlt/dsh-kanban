@@ -1329,7 +1329,14 @@ async function handleMcp(request, env, options) {
   const idempotencyHeader = cleanString(request.headers.get('x-kanban-mcp-call-id')).slice(0, 160)
   let writeCallIndex = 0
 
-  const enqueueWrite = async ({ tool, args, preferredCardId, agentName: callAgentName, now: callNow }) => {
+  const enqueueWrite = async ({
+    tool,
+    args,
+    preferredCardId,
+    agentName: callAgentName,
+    harness: callHarness,
+    now: callNow,
+  }) => {
     writeCallIndex += 1
     const suppliedCallId = idempotencyHeader
       ? (writeCallIndex === 1 ? idempotencyHeader : `${idempotencyHeader}-${writeCallIndex}`)
@@ -1339,6 +1346,7 @@ async function handleMcp(request, env, options) {
       args,
       preferredCardId,
       agentName: callAgentName || agentName,
+      harness: callHarness || harness,
       ...(suppliedCallId ? { mcpCallId: suppliedCallId } : {}),
       now: callNow ?? now,
     })

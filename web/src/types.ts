@@ -184,6 +184,12 @@ export interface CardRuntime {
   waitCondition?: CardWaitCondition;
 }
 
+export interface CardAgent {
+  name: string;
+  id?: string;
+  harness?: string;
+}
+
 export interface Card {
   id: string;
   boardId: string;
@@ -198,7 +204,7 @@ export interface Card {
   workspaceId?: string;
   cwd?: string;
   sessionIds: string[];
-  agent?: { name: string; id?: string };
+  agent?: CardAgent;
   progress?: Progress;
   checklists: ChecklistItem[];
   approvals: Approval[];

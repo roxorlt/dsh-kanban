@@ -6,6 +6,7 @@ import type {
   ApprovalQuestion,
   Board,
   Card,
+  CardAgent,
   CardWaitCondition,
   ColumnId,
   GitContext,
@@ -267,7 +268,7 @@ export interface CreateCardInput {
   sessionId?: string;
   sessionMode?: 'new' | 'reuse' | 'none';
   autoStart?: boolean;
-  agent?: { name: string };
+  agent?: CardAgent;
 }
 
 export type CardChanges = Partial<
@@ -1408,5 +1409,6 @@ export function filtersToQuery(filters: CardFilters): string {
   const params = new URLSearchParams();
   if (filters.query) params.set('q', filters.query);
   if (filters.project) params.set('project', filters.project);
+  if (filters.agent) params.set('agent', filters.agent);
   return params.toString();
 }
